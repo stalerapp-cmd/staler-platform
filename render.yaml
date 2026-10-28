@@ -33,9 +33,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: >-
-  cd apps/bank-web && npm ci --include=dev && npm run build &&
-  cd ../bank-api && npm ci --include=dev && npm run build && npm prune --omit=dev
+    buildCommand: "cd apps/bank-web && npm ci --include=dev && npm run build && cd ../bank-api && npm ci --include=dev && npm run build && npm prune --omit=dev"
     startCommand: cd apps/bank-api && node dist/server.js
     healthCheckPath: /health
     autoDeploy: true
@@ -85,9 +83,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: >-
-  cd apps/staler-web && npm ci --include=dev && npm run build &&
-  cd ../staler-api && npm ci --include=dev && npm run build && npm prune --omit=dev
+    buildCommand: "cd apps/staler-web && npm ci --include=dev && npm run build && cd ../staler-api && npm ci --include=dev && npm run build && npm prune --omit=dev"
     startCommand: cd apps/staler-api && node dist/server.js
     healthCheckPath: /health
     autoDeploy: true
