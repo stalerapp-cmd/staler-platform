@@ -94,7 +94,21 @@ function limiter(opts: Partial<Options>) {
 }
 
 export const globalLimiter = limiter({ windowMs: 60_000, limit: 300 });
-export const authLimiter = limiter({ windowMs: 15 * 60_000, limit: 20 });
+/** IPv6 clients are grouped by their /64 network (one device can hold many addresses there). */
+const ipKey = (ip: string | undefined) => {
+  const v = (ip ?? '').replace(/^::ffff:/, '');
+  return v.includes(':') ? v.split(':').slice(0, 4).join(':') : v;
+};
+const accountOf = (body: any) => String(body?.email ?? body?.login ?? body?.username ?? '').trim().toLowerCase().slice(0, 254);
+
+/**
+ * Sign-in attempts are counted per IP *and* account: guessing one account's password
+ * is stopped quickly, while people sharing an IP (campus Wi-Fi, mobile carriers) don't
+ * lock each other out. A looser per-IP cap still stops spraying many accounts.
+ */
+const authPerAccount = limiter({ windowMs: 15 * 60_000, limit: 10, keyGenerator: (req) => `${ipKey(req.ip)}|${accountOf(req.body)}`, validate: false });
+const authPerIp = limiter({ windowMs: 15 * 60_000, limit: 300, keyGenerator: (req) => ipKey(req.ip), validate: false });
+export const authLimiter = (req: Request, res: Response, next: NextFunction) => authPerIp(req, res, (err?: unknown) => (err ? next(err) : authPerAccount(req, res, next)));
 export const codeLimiter = limiter({ windowMs: 15 * 60_000, limit: 15 });
 export const registerLimiter = limiter({ windowMs: 60 * 60_000, limit: 10 });
 export const moneyLimiter = limiter({ windowMs: 60_000, limit: 30 });

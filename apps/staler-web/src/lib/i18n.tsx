@@ -262,7 +262,7 @@ const ar: Dict = {
   disp: { title: 'النزاعات', none: 'ما في نزاعات. الكل مبسوط.', buyer: 'المشتري', store: 'المتجر', reason: 'السبب', release: 'ادفع للمتجر', refund: 'رجّع للمشتري', note: 'ملاحظة القرار (بشوفها الطرفين)', releaseQ: 'تدفع للمتجر؟', refundQ: 'ترجّع المبلغ للمشتري؟', decideB: 'هيك الطلب بتسكّر نهائيًا.', resolved: 'محلول', open: 'مفتوح' },
   shop: {
     storesTitle: 'المتاجر', storesLead: 'متاجر حقيقية من كل فلسطين — وكل دفعة محفوظة بأمان لحتى يوصلك طلبك.',
-    searchStores: 'ابحث عن متجر أو صاحبه أو مدينة', allStores: 'كل المتاجر', products: 'منتج', branches: 'فروع', by: 'لصاحبه',
+    searchStores: 'ابحث عن متجر أو صاحبه أو مدينة', allStores: 'كل المتاجر', products: 'منتجات', branches: 'فروع', by: 'لصاحبه',
     cat: { food: 'أكل', fashion: 'أزياء', electronics: 'إلكترونيات', books: 'كتب', beauty: 'تجميل', home: 'بيت', crafts: 'حِرف يدوية', digital: 'رقمي', services: 'خدمات', other: 'غير ذلك' },
     visit: 'زور المتجر', share: 'شارك', shareStore: 'شارك المتجر', shareProduct: 'شارك المنتج', copy: 'انسخ الرابط', copied: 'انتسخ الرابط',
     sendToContact: 'ابعته لحدا على S-Taler', sent: 'انبعت', shareText: 'شوف {name} على S-Taler',

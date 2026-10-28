@@ -65,7 +65,9 @@ export function createApp(): Express {
     }),
   );
   app.use(cookieParser());
-  app.use(globalLimiter);
+  // Only API calls count — pages, scripts, fonts and icons never do (shared IPs like campus
+  // Wi-Fi or mobile carriers would otherwise lock everyone out of loading the site).
+  app.use('/api', globalLimiter);
 
   app.get('/health', async (_req, res) => {
     try {

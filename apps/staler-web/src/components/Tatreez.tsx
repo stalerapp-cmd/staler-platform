@@ -120,30 +120,28 @@ export function StitchBand({ width = 48, cell = 8, className, colors = ['rgb(var
   );
 }
 
-/** Brand mark: a small stitched star. */
-/** Brand mark: the tatreez star struck on a gold coin, with a banknote behind it. */
+/** Brand mark: an embroidered wallet — cream cloth, a tatreez star in cross-stitch, a banknote peeking out. */
 export function Logo({ className = 'h-9 w-9', animate = false }: { className?: string; animate?: boolean }) {
   const reduce = useReducedMotion();
   const play = animate && !reduce;
+  const draw = (delay: number) => (play ? { initial: { pathLength: 0 }, animate: { pathLength: 1 }, transition: { duration: 0.9, delay, ease: 'easeInOut' as const } } : {});
   return (
     <svg viewBox="0 0 64 64" className={`shrink-0 ${className}`} role="img" aria-label="S-Taler">
       <rect width="64" height="64" rx="16" fill="#141B3D" />
-      <motion.g
-        initial={play ? { rotate: -4, y: 4, opacity: 0 } : false}
-        animate={{ rotate: -14, y: 0, opacity: 1 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-        style={{ originX: '32px', originY: '32px' }}
-      >
-        <rect x="11" y="13" width="42" height="22" rx="4" fill="#C8344A" />
-        <rect x="14" y="16" width="36" height="16" rx="2.5" fill="none" stroke="#141B3D" strokeOpacity=".35" strokeWidth="1.2" />
+      <motion.g initial={play ? { y: 10, opacity: 0 } : false} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring', bounce: 0.4, delay: 0.1 }}>
+        <rect x="17" y="10" width="30" height="16" rx="3" fill="#E2506A" transform="rotate(-8 32 18)" />
+        <rect x="20" y="12.5" width="24" height="11" rx="2" fill="none" stroke="#141B3D" strokeOpacity=".3" strokeWidth="1" transform="rotate(-8 32 18)" />
       </motion.g>
-      <motion.g initial={play ? { scale: 0.6, opacity: 0 } : false} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', bounce: 0.45, duration: 0.7, delay: 0.15 }} style={{ originX: '32px', originY: '38px' }}>
-        <circle cx="32" cy="38" r="17" fill="#E3B448" />
-        <circle cx="32" cy="38" r="14.2" fill="none" stroke="#141B3D" strokeWidth="1.4" strokeDasharray="1.6 1.6" />
-        <path d="M32 27.5l3.6 3.6-3.6 3.6-3.6-3.6zM32 41.3l3.6 3.6-3.6 3.6-3.6-3.6zM21.5 38l3.6-3.6 3.6 3.6-3.6 3.6zM35.3 38l3.6-3.6 3.6 3.6-3.6 3.6z" fill="#C8344A" />
-        <path d="M32 33l5 5-5 5-5-5z" fill="#141B3D" />
-        <path d="M32 36l2 2-2 2-2-2z" fill="#E3B448" />
-      </motion.g>
+      <rect x="8" y="19" width="48" height="36" rx="8" fill="#F4E7C9" />
+      <rect x="10.5" y="21.5" width="43" height="31" rx="6" fill="none" stroke="#C8344A" strokeWidth="1" strokeDasharray="1.6 1.4" />
+      <g fill="none" strokeLinecap="round" strokeWidth="1.25">
+        <motion.path d="M13.51 34.91L15.69 37.09M15.69 34.91L13.51 37.09M16.11 34.91L18.29 37.09M18.29 34.91L16.11 37.09M18.71 32.31L20.89 34.49M20.89 32.31L18.71 34.49M18.71 37.51L20.89 39.69M20.89 37.51L18.71 39.69M21.31 29.71L23.49 31.89M23.49 29.71L21.31 31.89M21.31 40.11L23.49 42.29M23.49 40.11L21.31 42.29M23.91 27.11L26.09 29.29M26.09 27.11L23.91 29.29M23.91 42.71L26.09 44.89M26.09 42.71L23.91 44.89M26.51 29.71L28.69 31.89M28.69 29.71L26.51 31.89M26.51 40.11L28.69 42.29M28.69 40.11L26.51 42.29M29.11 32.31L31.29 34.49M31.29 32.31L29.11 34.49M29.11 37.51L31.29 39.69M31.29 37.51L29.11 39.69M31.71 34.91L33.89 37.09M33.89 34.91L31.71 37.09M34.31 34.91L36.49 37.09M36.49 34.91L34.31 37.09" stroke="#C8344A" {...draw(0.2)} />
+        <motion.path d="M21.31 34.91L23.49 37.09M23.49 34.91L21.31 37.09M23.91 32.31L26.09 34.49M26.09 32.31L23.91 34.49M23.91 34.91L26.09 37.09M26.09 34.91L23.91 37.09M23.91 37.51L26.09 39.69M26.09 37.51L23.91 39.69M26.51 34.91L28.69 37.09M28.69 34.91L26.51 37.09" stroke="#C7911F" {...draw(0.6)} />
+        <motion.path d="M13.11 47.91L15.29 50.09M15.29 47.91L13.11 50.09M18.31 47.91L20.49 50.09M20.49 47.91L18.31 50.09M23.51 47.91L25.69 50.09M25.69 47.91L23.51 50.09M28.71 47.91L30.89 50.09M30.89 47.91L28.71 50.09M33.91 47.91L36.09 50.09M36.09 47.91L33.91 50.09M15.71 45.31L17.89 47.49M17.89 45.31L15.71 47.49M20.91 45.31L23.09 47.49M23.09 45.31L20.91 47.49M26.11 45.31L28.29 47.49M28.29 45.31L26.11 47.49M31.31 45.31L33.49 47.49M33.49 45.31L31.31 47.49" stroke="#3B5A1E" {...draw(0.9)} />
+      </g>
+      <path d="M43 30h13v14H43a7 7 0 0 1 0-14z" fill="#141B3D" />
+      <motion.circle cx="45.5" cy="37" r="3.2" fill="#E9C060" initial={play ? { scale: 0 } : false} animate={{ scale: 1 }} transition={{ delay: 1.1, type: 'spring' }} />
+      <circle cx="45.5" cy="37" r="1.2" fill="#141B3D" />
     </svg>
   );
 }

@@ -8,6 +8,7 @@ export interface Notice {
   body: string | null;
   is_read: boolean;
   created_at: string;
+  metadata?: { ar?: { title: string; body: string }; [k: string]: unknown } | null;
 }
 
 /**
@@ -16,6 +17,7 @@ export interface Notice {
  */
 export function localize(n: Notice, lang: Lang): { title: string; body: string | null } {
   if (lang !== 'ar') return { title: n.title, body: n.body };
+  if (n.metadata?.ar?.title) return { title: n.metadata.ar.title, body: n.metadata.ar.body ?? null };
   const body = n.body ?? '';
   const m = /(\d+(?:\.\d+)?)\s+([A-Z]{2,11})/.exec(body);
   const amt = m ? money(m[1]!, lang, m[2]!) : '';

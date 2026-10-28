@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Download, Landmark, Lock, QrCode, ShoppingBag } from 'lucide-react';
 import { isNative } from '../lib/api';
 import { AppDownloads } from '../components/AppDownloads';
+import { Reveal, ScrollThread } from '../components/Reveal';
 import { useI18n } from '../lib/i18n';
 import { Logo, StarMotif, StitchBand } from '../components/Tatreez';
 import { BalanceCard } from '../components/Wallet';
@@ -25,6 +26,7 @@ export default function Landing() {
 
   return (
     <div className="overflow-x-clip">
+      <ScrollThread className="bg-gradient-to-r from-stitch via-gold to-olive" />
       <header className="safe-top relative z-20">
         <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5">
           <Link to="/" className="flex items-center gap-3">
@@ -118,18 +120,11 @@ export default function Landing() {
       <section className="mx-auto max-w-6xl px-5 py-24">
         <div className="grid gap-x-12 gap-y-14 md:grid-cols-2">
           {features.map((f, i) => (
-            <motion.div
-              key={f.title}
-              initial={reduce ? false : { opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-80px' }}
-              transition={{ duration: 0.5, delay: (i % 2) * 0.08 }}
-              className={i % 2 ? 'md:translate-y-12' : ''}
-            >
+            <Reveal key={f.title} delay={(i % 2) * 0.1} className={i % 2 ? 'md:translate-y-12' : ''}>
               <f.icon className={`h-8 w-8 ${f.tone}`} strokeWidth={1.6} />
               <h2 className="mt-4 text-2xl">{f.title}</h2>
               <p className="mt-2 max-w-md text-muted">{f.d}</p>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -140,17 +135,17 @@ export default function Landing() {
           <StarMotif size={19} cell={20} className="h-full w-full" colors={['#E2506A', '#E9C060']} animate={false} />
         </div>
         <div className="relative mx-auto max-w-6xl px-5 pt-20">
-          <div className="flex flex-col items-start gap-6 md:flex-row md:items-end md:justify-between">
+          <Reveal className="flex flex-col items-start gap-6 md:flex-row md:items-end md:justify-between">
             <p className="max-w-xl font-display text-3xl leading-tight sm:text-5xl">{t.brand.tagline}</p>
             <Link to="/register">
               <Button size="lg" variant="stitch">
                 {t.landing.start}
               </Button>
             </Link>
-          </div>
-          <div className="mt-16 sm:mt-20">
+          </Reveal>
+          <Reveal className="mt-16 sm:mt-20" amount={0.1}>
             <AppDownloads self="staler" />
-          </div>
+          </Reveal>
           <footer className="safe-bottom mt-16 flex flex-col gap-6 border-t border-white/10 py-8 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <Logo className="h-10 w-10" />

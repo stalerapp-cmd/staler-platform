@@ -6,6 +6,7 @@ import { isNative } from '../lib/api';
 import { AccountCard } from '../components/Bank';
 import { Emblem, Guilloche } from '../components/Guilloche';
 import { AppDownloads } from '../components/AppDownloads';
+import { Reveal, ScrollThread } from '../components/Reveal';
 import { Button } from '../components/ui';
 import { TopControls } from '../layouts/Shell';
 
@@ -23,6 +24,7 @@ export default function Landing() {
   ];
   return (
     <div className="min-h-dvh overflow-x-clip bg-bg">
+      <ScrollThread className="bg-gradient-to-r from-gold via-[#E2C27E] to-gold" />
       <header className="safe-top relative z-20">
         <div className="mx-auto flex h-20 max-w-6xl items-center justify-between gap-2 px-5">
           <Link to="/" className="flex items-center gap-2.5">
@@ -99,20 +101,13 @@ export default function Landing() {
       <section className="border-y border-line bg-surface/60">
         <div className="mx-auto grid max-w-6xl gap-px overflow-hidden px-5 py-20 sm:grid-cols-2 lg:grid-cols-4 lg:gap-10">
           {features.map((f, i) => (
-            <motion.div
-              key={f.title}
-              initial={reduce ? false : { opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-60px' }}
-              transition={{ duration: 0.5, delay: i * 0.06 }}
-              className="py-6 sm:pe-6"
-            >
+            <Reveal key={f.title} delay={i * 0.07} className="py-6 sm:pe-6">
               <span className="grid h-12 w-12 place-items-center rounded-2xl border border-gold/30 bg-gold/10 text-gold">
                 <f.icon className="h-6 w-6" strokeWidth={1.6} />
               </span>
               <h2 className="mt-5 text-xl">{f.title}</h2>
               <p className="mt-2 text-muted">{f.d}</p>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -120,15 +115,15 @@ export default function Landing() {
       <section className="engraved relative overflow-hidden bg-night text-[#ECE6D8]">
         <Guilloche className="pointer-events-none absolute -bottom-72 -start-60 h-[640px] w-[640px] opacity-40" spin={false} />
         <div className="relative mx-auto max-w-6xl px-5 pt-20">
-          <div className="flex flex-col items-start gap-6 md:flex-row md:items-end md:justify-between">
+          <Reveal className="flex flex-col items-start gap-6 md:flex-row md:items-end md:justify-between">
             <p className="max-w-xl font-display text-3xl leading-tight sm:text-5xl">{t.brand.tagline}</p>
             <Link to="/register">
               <Button size="lg">{L.open}</Button>
             </Link>
-          </div>
-          <div className="mt-16 sm:mt-20">
+          </Reveal>
+          <Reveal className="mt-16 sm:mt-20" amount={0.1}>
             <AppDownloads self="bank" />
-          </div>
+          </Reveal>
           <footer className="safe-bottom mt-16 flex flex-col gap-6 border-t border-white/10 py-8 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <Emblem className="h-10 w-10" />
