@@ -9,6 +9,8 @@ import { safeEqual, sha256 } from '../lib/crypto.js';
 export interface AuthContext {
   userId: string;
   role: 'user' | 'admin' | 'exchange';
+  adminLevel: string | null;
+  permissions: string[];
   sid: string;
 }
 export interface LinkContext {
@@ -50,16 +52,16 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     } catch (e: any) {
       throw unauthorized(e?.expired ? 'Session expired' : 'Invalid session', e?.expired ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN');
     }
-    type Row = { role: string; status: string; token_version: number };
+    type Row = { role: string; status: string; token_version: number; admin_level: string | null; admin_permissions: string[] | null };
     // A cached row is only trusted if it still matches the token's version.
     let u = cachedUser<Row>(claims.sub);
     if (!u || u.token_version !== claims.tv) {
-      u = (await one<Row>(`SELECT role, status, token_version FROM ${S}.users WHERE id = $1`, [claims.sub])) ?? undefined;
+      u = (await one<Row>(`SELECT role, status, token_version, admin_level, admin_permissions FROM ${S}.users WHERE id = $1`, [claims.sub])) ?? undefined;
       if (u) rememberUser(claims.sub, u);
     }
     if (!u || u.token_version !== claims.tv) throw unauthorized('Session revoked', 'SESSION_REVOKED');
     if (u.status !== 'active') throw forbidden('Account is suspended', 'ACCOUNT_SUSPENDED');
-    req.auth = { userId: claims.sub, role: u.role as AuthContext['role'], sid: claims.sid };
+    req.auth = { userId: claims.sub, role: u.role as AuthContext['role'], adminLevel: u.admin_level, permissions: u.admin_permissions ?? [], sid: claims.sid };
     next();
   } catch (e) {
     next(e);

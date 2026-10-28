@@ -1,16 +1,16 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { CheckCircle2, RefreshCw, Scale, Search, UserPlus } from 'lucide-react';
-import { del, get, patch, post, put } from '../lib/api';
-import { useAuth } from '../lib/auth';
+import { CheckCircle2, RefreshCw, Scale } from 'lucide-react';
+import { del, patch, post, put } from '../lib/api';
+import { usePerm } from '../lib/perm';
+import { useConfirm } from '../components/Confirm';
+import { BroadcastCard } from './AdminPeople';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
-import { date, money, relative } from '../lib/format';
+import { money, relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { AreaChart } from '../components/Chart';
-import { Avatar, Badge, Button, ErrorNote, Field, PageHeader, PasswordStrength, Segmented, Sheet, Skeleton, Toggle, cx } from '../components/ui';
-import { TxRow } from '../components/Wallet';
+import { Badge, Button, ErrorNote, Field, PageHeader, Segmented, Skeleton, Toggle, cx } from '../components/ui';
 
 function Tile({ label, value, tone = 'text-ink', i = 0 }: { label: string; value: string; tone?: string; i?: number }) {
   return (
@@ -24,8 +24,9 @@ function Tile({ label, value, tone = 'text-ink', i = 0 }: { label: string; value
 export function AdminOverview() {
   const { t, lang, err } = useI18n();
   const toast = useToast();
+  const { can } = usePerm();
   const ov = useData<any>('/api/admin/overview');
-  const rec = useData<any>('/api/admin/reconciliation');
+  const rec = useData<any>(can('bank.ops') ? '/api/admin/reconciliation' : null);
   const d = ov.data;
   const r = rec.data;
   const inSystem = r ? Number(r.walletsTotal) + Number(r.vouchersInEscrow) + Number(r.escrowHeld) + Number(r.pendingDeposits) : 0;
@@ -66,6 +67,7 @@ export function AdminOverview() {
             </div>
           )}
         </section>
+        {can('bank.ops') && (
         <section className="card p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg">
@@ -121,241 +123,15 @@ export function AdminOverview() {
             </p>
           )}
         </section>
-      </div>
-    </div>
-  );
-}
-
-export function AdminUsers() {
-  const { t, lang, err } = useI18n();
-  const { user } = useAuth();
-  const toast = useToast();
-  const [q, setQ] = useState('');
-  const [role, setRole] = useState('');
-  const [data, setData] = useState<{ users: any[]; total: number } | null>(null);
-  const [create, setCreate] = useState(false);
-  const [f, setF] = useState({ fullName: '', email: '', password: '', role: 'user', adminLevel: 'admin' });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const load = async () => {
-    const p = new URLSearchParams({ limit: '50' });
-    if (q.trim()) p.set('q', q.trim());
-    if (role) p.set('role', role);
-    try {
-      setData(await get(`/api/admin/users?${p}`));
-    } catch (e) {
-      toast(err(e), 'error');
-    }
-  };
-  useEffect(() => {
-    const h = setTimeout(load, 250);
-    return () => clearTimeout(h);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, role]);
-  const isSuper = user?.admin_level === 'super_admin';
-  return (
-    <div>
-      <PageHeader title={t.admin.users} actions={<Button icon={<UserPlus className="h-4 w-4" />} onClick={() => setCreate(true)}>{t.admin.createUser}</Button>} />
-      <div className="mb-4 flex flex-wrap gap-3">
-        <label className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.common.search} className="field ps-9" />
-        </label>
-        <select value={role} onChange={(e) => setRole(e.target.value)} className="field w-auto" aria-label={t.admin.role}>
-          <option value="">{t.common.all}</option>
-          {Object.entries(t.admin.roles).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="card overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="text-start text-muted">
-            <tr className="border-b border-line">
-              <th className="p-3 text-start font-medium">{t.auth.fullName}</th>
-              <th className="p-3 text-start font-medium">{t.admin.role}</th>
-              <th className="p-3 text-start font-medium">{t.common.status}</th>
-              <th className="p-3 text-end font-medium">{t.home.balance}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!data
-              ? null
-              : data.users.map((u) => (
-                  <tr key={u.id} className="border-b border-line/60 last:border-0 hover:bg-sunk/60">
-                    <td className="p-3">
-                      <Link to={`/app/admin/users/${u.id}`} className="flex items-center gap-3">
-                        <Avatar name={u.full_name} src={u.profile_image} size={34} />
-                        <span className="min-w-0">
-                          <span className="block truncate font-medium">{u.full_name}</span>
-                          <span className="block truncate text-xs text-muted">{u.email}</span>
-                        </span>
-                      </Link>
-                    </td>
-                    <td className="p-3">
-                      {t.admin.roles[u.role] ?? u.role}
-                      {u.admin_level === 'super_admin' && ' ★'}
-                    </td>
-                    <td className="p-3">
-                      <Badge tone={u.status === 'active' ? 'good' : 'bad'}>{u.status === 'active' ? t.admin.active : t.admin.suspended}</Badge>
-                    </td>
-                    <td className="num p-3 text-end">{money(u.balance ?? 0, lang)}</td>
-                  </tr>
-                ))}
-          </tbody>
-        </table>
-        {!data && <Skeleton className="m-4 h-24" />}
-      </div>
-      <Sheet open={create} onClose={() => setCreate(false)} title={t.admin.createUser}>
-        <form
-          className="space-y-4"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            setError(null);
-            try {
-              await post('/api/admin/users', { fullName: f.fullName.trim(), email: f.email.trim(), password: f.password, role: f.role, ...(f.role === 'admin' ? { adminLevel: f.adminLevel } : {}) });
-              setCreate(false);
-              void load();
-              toast(t.common.saved);
-            } catch (e2) {
-              setError(err(e2));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <Field label={t.auth.fullName} value={f.fullName} onChange={(e) => setF({ ...f, fullName: e.target.value })} required />
-          <Field label={t.auth.email} type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} dir="ltr" required />
-          <div>
-            <Field label={t.auth.password} type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} dir="ltr" required autoComplete="new-password" />
-            <PasswordStrength value={f.password} />
-          </div>
-          <select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })} className="field" aria-label={t.admin.role}>
-            {Object.entries(t.admin.roles)
-              .filter(([k]) => k !== 'admin' || isSuper)
-              .map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-          </select>
-          {f.role === 'admin' && (
-            <select value={f.adminLevel} onChange={(e) => setF({ ...f, adminLevel: e.target.value })} className="field" aria-label={t.admin.adminLevel}>
-              <option value="admin">admin</option>
-              <option value="super_admin">super_admin</option>
-            </select>
-          )}
-          <ErrorNote>{error}</ErrorNote>
-          <Button block loading={busy}>
-            {t.admin.createUser}
-          </Button>
-        </form>
-      </Sheet>
-    </div>
-  );
-}
-
-export function AdminUserDetail() {
-  const { id } = useParams();
-  const { t, lang, err } = useI18n();
-  const { user: me } = useAuth();
-  const toast = useToast();
-  const { data, reload } = useData<any>(`/api/admin/users/${id}`, [id]);
-  const run = async (fn: () => Promise<unknown>) => {
-    try {
-      await fn();
-      toast(t.common.done);
-      void reload();
-    } catch (e) {
-      toast(err(e), 'error');
-    }
-  };
-  if (!data) return <Skeleton className="h-64 rounded-2xl" />;
-  const u = data.user;
-  const self = String(u.id) === String(me?.id);
-  return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-      <section className="card h-fit p-6">
-        <div className="flex items-center gap-4">
-          <Avatar name={u.full_name} src={u.profile_image} size={64} />
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl">{u.full_name}</h1>
-            <p className="truncate text-muted">{u.email}</p>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Badge>{t.admin.roles[u.role]}</Badge>
-          <Badge tone={u.status === 'active' ? 'good' : 'bad'}>{u.status === 'active' ? t.admin.active : t.admin.suspended}</Badge>
-          {u.totp_enabled && <Badge tone="good">2FA</Badge>}
-        </div>
-        {data.wallet && (
-          <div className="mt-6 rounded-2xl bg-sunk p-4">
-            <p className="num text-sm text-muted">{data.wallet.wallet_id}</p>
-            <p className="num font-display text-3xl">{money(data.wallet.balance, lang)}</p>
-            {data.wallet.is_frozen && <Badge tone="bad">frozen</Badge>}
-          </div>
         )}
-        {data.bankLink && (
-          <p className="num mt-3 text-sm text-muted">
-            TalerBank · {data.bankLink.bank_iban}
-          </p>
-        )}
-        {!self && (
-          <div className="mt-6 grid gap-2">
-            <select
-              value={u.role}
-              onChange={(e) => run(() => patch(`/api/admin/users/${u.id}`, { role: e.target.value }))}
-              className="field"
-              aria-label={t.admin.role}
-            >
-              {Object.entries(t.admin.roles).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-            <Button variant={u.status === 'active' ? 'danger' : 'primary'} onClick={() => run(() => patch(`/api/admin/users/${u.id}`, { status: u.status === 'active' ? 'suspended' : 'active' }))}>
-              {u.status === 'active' ? t.admin.suspend : t.admin.activate}
-            </Button>
-            {data.wallet && (
-              <Button variant="secondary" onClick={() => run(() => post(`/api/admin/wallets/${data.wallet.wallet_id}/freeze`, { frozen: !data.wallet.is_frozen }))}>
-                {data.wallet.is_frozen ? t.admin.unfreeze : t.admin.freeze}
-              </Button>
-            )}
-            <Button variant="secondary" onClick={() => run(() => post(`/api/admin/users/${u.id}/revoke-sessions`))}>
-              {t.admin.revokeSessions}
-            </Button>
-            <Button variant="secondary" onClick={() => run(() => post(`/api/admin/users/${u.id}/send-reset`))}>
-              {t.admin.sendReset}
-            </Button>
-            {u.totp_enabled && (
-              <Button variant="secondary" onClick={() => run(() => post(`/api/admin/users/${u.id}/reset-2fa`, {}))}>
-                {t.admin.reset2fa}
-              </Button>
-            )}
-            <Button variant="danger" onClick={() => run(() => del(`/api/admin/users/${u.id}`))}>
-              {t.admin.deleteUser}
-            </Button>
-          </div>
-        )}
-      </section>
-      <section className="card h-fit p-3">
-        <h2 className="px-3 pt-2 text-lg">{t.home.recent}</h2>
-        <ul>
-          {data.transactions.map((tx: any, i: number) => (
-            <TxRow key={tx.id} index={i} tx={{ ...tx, counterparty_name: null, from_account: null, to_account: null, balance_after: null, reference: null }} />
-          ))}
-        </ul>
-        <p className="px-3 pb-2 text-xs text-muted">{date(u.created_at, lang)}</p>
-      </section>
+        {can('notify') && <BroadcastCard />}
+      </div>
     </div>
   );
 }
 
 export function AdminStores() {
+  const confirm = useConfirm();
   const { t, lang, err } = useI18n();
   const toast = useToast();
   const { data, reload } = useData<{ stores: any[] }>('/api/admin/stores');
@@ -382,6 +158,7 @@ export function AdminStores() {
               className="mt-4"
               variant={s.status === 'active' ? 'danger' : 'secondary'}
               onClick={async () => {
+                if (!(await confirm({ title: s.store_name, body: t.common.areYouSure, confirmLabel: s.status === 'active' ? t.admin.suspend : t.admin.activate, tone: s.status === 'active' ? 'danger' : 'primary' }))) return;
                 try {
                   await patch(`/api/admin/stores/${s.id}`, { status: s.status === 'active' ? 'suspended' : 'active' });
                   void reload();
@@ -400,11 +177,26 @@ export function AdminStores() {
 }
 
 export function AdminPending() {
+  const confirm = useConfirm();
   const { t, lang } = useI18n();
   const { data, reload } = useData<{ pendingUsers: any[] }>('/api/admin/pending-users');
   return (
     <div>
-      <PageHeader title={t.nav.pending} actions={<Button variant="secondary" onClick={() => del('/api/admin/pending-users').then(reload)}>{t.admin.clearExpired}</Button>} />
+      <PageHeader
+        title={t.nav.pending}
+        actions={
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              if (!(await confirm({ title: t.admin.clearExpired, body: t.common.areYouSure, confirmLabel: t.admin.clearExpired, tone: 'danger' }))) return;
+              await del('/api/admin/pending-users');
+              void reload();
+            }}
+          >
+            {t.admin.clearExpired}
+          </Button>
+        }
+      />
       <div className="card divide-y divide-line">
         {data?.pendingUsers.length ? (
           data.pendingUsers.map((p) => (
@@ -416,7 +208,11 @@ export function AdminPending() {
               <span className="text-sm text-muted">
                 {t.admin.attempts}: <span className="num">{p.attempts}</span> · {t.admin.expires} {p.expires_at ? relative(p.expires_at, lang) : '—'}
               </span>
-              <Button size="sm" variant="danger" onClick={() => del(`/api/admin/pending-users/${p.id}`).then(reload)}>
+              <Button size="sm" variant="danger" onClick={async () => {
+                if (!(await confirm({ title: p.email, body: t.common.areYouSure, confirmLabel: t.common.delete, tone: 'danger' }))) return;
+                await del(`/api/admin/pending-users/${p.id}`);
+                void reload();
+              }}>
                 {t.common.delete}
               </Button>
             </div>
@@ -493,6 +289,7 @@ export function AdminAudit() {
 }
 
 export function AdminSettings() {
+  const confirm = useConfirm();
   const { t, err } = useI18n();
   const toast = useToast();
   const { data } = useData<{ settings: any }>('/api/admin/settings');
@@ -509,6 +306,7 @@ export function AdminSettings() {
         onSubmit={async (e) => {
           e.preventDefault();
           try {
+            if (!(await confirm({ title: t.ask.saveTitle, body: t.ask.saveBody, confirmLabel: t.ask.saveOk }))) return;
             await put('/api/admin/settings', {
               siteName: s.site_name,
               maintenanceMode: s.maintenance_mode,

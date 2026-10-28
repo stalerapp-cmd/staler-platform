@@ -147,7 +147,7 @@ export async function exchangeAccount(c?: pg.PoolClient) {
 export async function centralAccount(c?: pg.PoolClient) {
   const acc = await one<{ id: string; iban: string; balance: string }>(
     `SELECT a.id, a.iban, a.balance FROM ${S}.bank_accounts a JOIN ${S}.users u ON u.id = a.user_id
-      WHERE u.role = 'admin' AND a.is_taler_exchange = false ORDER BY a.created_at ASC LIMIT 1`,
+      WHERE u.role = 'admin' AND a.is_taler_exchange = false ORDER BY (u.admin_level = 'super_admin') DESC NULLS LAST, a.created_at ASC LIMIT 1`,
     [],
     c,
   );

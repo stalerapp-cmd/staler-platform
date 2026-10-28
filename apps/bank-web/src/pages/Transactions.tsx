@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { BookText, FileSpreadsheet, Search } from 'lucide-react';
+import { BookText, FileSpreadsheet, ListFilter, Search } from 'lucide-react';
 import { downloadFile, get } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useAccounts } from '../lib/accounts';
 import { BankTxDetails, BankTxRow, type BankTx } from '../components/Bank';
 import { useToast } from '../components/Toast';
-import { Button, EmptyState, ErrorNote, PageHeader, Segmented, Sheet, Skeleton } from '../components/ui';
+import { Button, EmptyState, ErrorNote, PageHeader, Segmented, Select, Sheet, Skeleton } from '../components/ui';
 
 const PAGE = 30;
 
@@ -84,14 +84,15 @@ export default function Transactions() {
             ]}
           />
         </div>
-        <select value={type} onChange={(e) => setType(e.target.value)} className="field sm:col-span-2" aria-label="Type">
-          <option value="">{t.common.all}</option>
-          {Object.entries(t.tx.types).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
+        <Select
+          className="sm:col-span-2"
+          block
+          label={t.tx.typeLabel}
+          value={type || 'all'}
+          onChange={(v) => setType(v === 'all' ? '' : v)}
+          icon={<ListFilter className="h-4 w-4" />}
+          options={[{ value: 'all', label: t.common.all }, ...Object.entries(t.tx.types).map(([k, v]) => ({ value: k, label: v }))]}
+        />
         <label className="text-sm">
           <span className="mb-1 block text-muted">{t.tx.from}</span>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="field" />

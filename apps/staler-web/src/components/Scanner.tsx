@@ -21,7 +21,7 @@ export function Scanner({ onResult }: { onResult: (text: string) => void }) {
       /* already stopped */
     }
   };
-  useEffect(() => () => void stop(), []);
+  useEffect(() => () => void stop(), []); // cleanup: release the camera
 
   const start = async () => {
     done.current = false;

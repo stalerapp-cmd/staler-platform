@@ -13,6 +13,7 @@ import { I18nProvider } from './lib/i18n';
 import { ThemeProvider } from './lib/theme';
 import { AuthProvider } from './lib/auth';
 import { ToastProvider } from './components/Toast';
+import { ConfirmProvider } from './components/Confirm';
 import { CartProvider } from './pages/Store';
 import { isNative } from './lib/api';
 
@@ -31,11 +32,13 @@ createRoot(document.getElementById('root')!).render(
     <I18nProvider>
       <ThemeProvider>
         <ToastProvider>
+          <ConfirmProvider>
           <AuthProvider>
             <CartProvider>
               <App />
             </CartProvider>
           </AuthProvider>
+          </ConfirmProvider>
         </ToastProvider>
       </ThemeProvider>
     </I18nProvider>

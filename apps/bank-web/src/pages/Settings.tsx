@@ -9,6 +9,7 @@ import { useData } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { Avatar, Badge, Button, CodeInput, CopyButton, ErrorNote, Field, PageHeader, PasswordStrength, Segmented, Sheet } from '../components/ui';
+import { useConfirm } from '../components/Confirm';
 
 function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
@@ -29,6 +30,7 @@ export default function Settings() {
   const toast = useToast();
   const nav = useNavigate();
   const sessions = useData<{ sessions: any[] }>('/api/auth/me/sessions');
+  const confirm = useConfirm();
 
   const [name, setName] = useState(user?.full_name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
@@ -36,6 +38,7 @@ export default function Settings() {
   const [error, setError] = useState<Record<string, string | null>>({});
   const [cur, setCur] = useState('');
   const [next, setNext] = useState('');
+  const [next2, setNext2] = useState('');
   const [totp, setTotp] = useState<{ qr: string; secret: string } | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [recovery, setRecovery] = useState<string[] | null>(null);
@@ -105,10 +108,12 @@ export default function Settings() {
           className="grid gap-4 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
+            if (next !== next2) return setError((x) => ({ ...x, password: t.auth.mismatch }));
             void act('password', async () => {
               await applySession(await post('/api/auth/me/password', { currentPassword: cur, newPassword: next }));
               setCur('');
               setNext('');
+              setNext2('');
               toast(t.settings.changed);
               void sessions.reload();
             });
@@ -119,6 +124,16 @@ export default function Settings() {
             <Field label={t.auth.newPassword} type="password" value={next} onChange={(e) => setNext(e.target.value)} dir="ltr" required autoComplete="new-password" />
             <PasswordStrength value={next} />
           </div>
+          <Field
+            label={t.auth.confirmPassword}
+            type="password"
+            value={next2}
+            onChange={(e) => setNext2(e.target.value)}
+            dir="ltr"
+            required
+            autoComplete="new-password"
+            error={next2 && !next.startsWith(next2) ? t.auth.mismatch : undefined}
+          />
           <div className="sm:col-span-2">
             <ErrorNote>{error.password}</ErrorNote>
             <Button loading={busy === 'password'}>{t.settings.change}</Button>
@@ -193,6 +208,7 @@ export default function Settings() {
             variant="secondary"
             icon={<LogOut className="h-4 w-4 flip-rtl" />}
             onClick={async () => {
+              if (!(await confirm({ title: t.ask.allOutTitle, body: t.ask.allOutBody, confirmLabel: t.ask.allOutOk, tone: 'danger' }))) return;
               await post('/api/auth/logout-all').catch(() => {});
               await logout();
               nav('/login');
@@ -215,7 +231,11 @@ export default function Settings() {
               {s.current ? (
                 <Badge tone="info">{t.settings.thisDevice}</Badge>
               ) : (
-                <Button size="sm" variant="ghost" onClick={() => del(`/api/auth/me/sessions/${s.id}`).then(() => sessions.reload())}>
+                <Button size="sm" variant="ghost" onClick={async () => {
+                    if (!(await confirm({ title: t.ask.deviceTitle, body: t.ask.deviceBody, confirmLabel: t.ask.deviceOk, tone: 'danger' }))) return;
+                    await del(`/api/auth/me/sessions/${s.id}`);
+                    void sessions.reload();
+                  }}>
                   {t.common.revoke}
                 </Button>
               )}

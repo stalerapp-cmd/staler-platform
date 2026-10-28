@@ -37,7 +37,7 @@ const lang = z.enum(['en', 'ar']).default('en');
 
 export async function publicUser(userId: string) {
   return one(
-    `SELECT u.id, u.full_name, u.email, u.username, u.role, u.status, u.language, u.phone, u.email_verified,
+    `SELECT u.id, u.full_name, u.email, u.username, u.role, u.admin_level, u.admin_permissions, u.status, u.language, u.phone, u.email_verified,
             u.totp_enabled, u.created_at, u.last_login_at,
             COALESCE(cardinality(u.totp_recovery_hashes), 0) AS recovery_codes_left
        FROM ${S}.users u WHERE u.id = $1`,

@@ -10,6 +10,8 @@ import { fmtIban } from '../components/Bank';
 import { QRImage } from '../components/QR';
 import { useSecureAction } from '../components/SecureAction';
 import { AmountInput, Badge, Button, CopyButton, EmptyState, ErrorNote, Field, PageHeader, Sheet, Skeleton, SuccessMark, Toggle } from '../components/ui';
+import { useConfirm } from '../components/Confirm';
+import { fill } from '../lib/format';
 
 export default function Requests() {
   const { t, lang, err } = useI18n();
@@ -116,6 +118,7 @@ export function Pay() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const secure = useSecureAction();
+  const confirm = useConfirm();
   const r = data?.request;
   const [key] = useState(newIdempotencyKey);
   if (done)
@@ -152,6 +155,8 @@ export function Pay() {
             loading={busy}
             disabled={r.status !== 'pending' || !primary || (!r.amount && !AMOUNT_RE.test(amount))}
             onClick={async () => {
+              const m = money(r.amount ?? amount, lang);
+              if (!(await confirm({ title: t.ask.payTitle, body: fill(t.ask.payBody, { amount: m, payee: r.payee }), confirmLabel: fill(t.ask.payOk, { amount: m }) }))) return;
               setBusy(true);
               setError(null);
               try {

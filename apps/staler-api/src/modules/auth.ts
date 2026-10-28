@@ -31,7 +31,7 @@ const phone = z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, 'Invalid phone number
 
 export async function publicUser(userId: string) {
   return one(
-    `SELECT u.id, u.email, u.full_name, u.role, u.admin_level, u.profile_image, u.phone_number, u.language,
+    `SELECT u.id, u.email, u.full_name, u.role, u.admin_level, u.admin_permissions, u.profile_image, u.phone_number, u.language,
             u.totp_enabled, u.email_verified, u.created_at, u.last_login_at,
             COALESCE(cardinality(u.totp_recovery_hashes), 0) AS recovery_codes_left,
             w.wallet_id, w.balance, w.currency, w.is_frozen AS wallet_frozen,

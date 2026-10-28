@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import crypto from 'node:crypto';
@@ -45,7 +47,8 @@ describe('migrations on the legacy schema', () => {
 
   it('records each migration once and enables row level security everywhere', async () => {
     const m = await pool.query(`SELECT count(*)::int AS n FROM talerbank.schema_migrations`);
-    expect(m.rows[0].n).toBe(1);
+    const files = readdirSync(join(__dirname, '..', 'src', 'db', 'migrations')).filter((f) => f.endsWith('.sql'));
+    expect(m.rows[0].n).toBe(files.length);
     const rls = await pool.query(`SELECT count(*)::int AS n FROM pg_tables WHERE schemaname='talerbank' AND NOT rowsecurity`);
     expect(rls.rows[0].n).toBe(0);
   });
@@ -567,7 +570,39 @@ describe('administration', () => {
     expect((await request(app).get('/api/accounts').set(auth(d.token))).status).toBe(401);
     const self = await pool.query(`SELECT id FROM talerbank.users WHERE email='admin@talerbank.local'`);
     expect((await request(app).patch(`/api/admin/users/${self.rows[0].id}`).set(auth(adminToken)).send({ status: 'suspended' })).status).toBe(403);
-    expect((await request(app).patch(`/api/admin/users/${d.userId}`).set(auth(adminToken)).send({ role: 'exchange' })).status).toBe(400);
+    expect((await request(app).patch(`/api/admin/users/${d.userId}`).set(auth(adminToken)).send({ role: 'admin' })).status).toBe(400);
+  });
+
+  it('only the super admin creates admins; each admin is limited to granted permissions', async () => {
+    const supRow = await pool.query(`SELECT admin_level FROM talerbank.users WHERE email='admin@talerbank.local'`);
+    expect(supRow.rows[0].admin_level).toBe('super_admin');
+    const mail = `${uniq('adm')}@bank.test`;
+    const made = await request(app).post('/api/admin/admins').set(auth(adminToken)).send({ email: mail, fullName: 'Desk Admin', password: STRONG, permissions: ['customers.view'] });
+    expect(made.status).toBe(201);
+    const desk = (await request(app).post('/api/auth/login').send({ login: mail, password: STRONG })).body.data.accessToken;
+    const c = await registerCustomer(app);
+    expect((await request(app).get(`/api/admin/users/${c.userId}`).set(auth(desk))).status).toBe(200);
+    expect((await request(app).post('/api/admin/teller').set(auth(desk)).send({ accountId: c.accountId, amount: '5', direction: 'in', note: 'not allowed' })).status).toBe(403);
+    expect((await request(app).post('/api/admin/admins').set(auth(desk)).send({ email: `${uniq()}@x.com`, fullName: 'Y', password: STRONG, permissions: [] })).status).toBe(403);
+    await request(app).patch(`/api/admin/admins/${made.body.data.id}`).set(auth(adminToken)).send({ permissions: ['customers.view', 'customers.edit', 'customers.password'] });
+    expect((await request(app).patch(`/api/admin/users/${c.userId}`).set(auth(desk)).send({ fullName: 'Renamed Customer', phone: '+970 599 000 000' })).status).toBe(200);
+    expect((await request(app).post(`/api/admin/users/${c.userId}/password`).set(auth(desk)).send({ password: 'Brand-New#Pass2026' })).status).toBe(200);
+    expect((await request(app).post('/api/auth/login').send({ login: c.email, password: 'Brand-New#Pass2026' })).status).toBe(200);
+    // nobody but the super admin touches admins; the super admin cannot be removed
+    const supId = (await pool.query(`SELECT id FROM talerbank.users WHERE email='admin@talerbank.local'`)).rows[0].id;
+    expect((await request(app).patch(`/api/admin/users/${supId}`).set(auth(desk)).send({ fullName: 'Taken Over' })).status).toBe(403);
+    expect((await request(app).delete(`/api/admin/admins/${supId}`).set(auth(adminToken))).status).toBe(403);
+    expect((await pool.query(`SELECT count(*)::int AS n FROM talerbank.users WHERE admin_level='super_admin'`)).rows[0].n).toBe(1);
+    expect((await request(app).delete(`/api/admin/admins/${made.body.data.id}`).set(auth(adminToken))).status).toBe(200);
+    expect((await request(app).get('/api/admin/overview').set(auth(desk))).status).toBe(401);
+  });
+
+  it('closes an empty customer account and refuses one that still holds money', async () => {
+    const c = await registerCustomer(app);
+    expect((await request(app).delete(`/api/admin/users/${c.userId}`).set(auth(adminToken))).body.error.code).toBe('BALANCE_NOT_ZERO');
+    await request(app).post('/api/admin/teller').set(auth(adminToken)).send({ accountId: c.accountId, amount: '1000', direction: 'out', note: 'Paid out in cash' });
+    expect((await request(app).delete(`/api/admin/users/${c.userId}`).set(auth(adminToken))).status).toBe(200);
+    expect((await request(app).post('/api/auth/login').send({ login: c.email, password: STRONG })).status).toBe(401);
   });
 
   it('keeps an append-only audit trail', async () => {

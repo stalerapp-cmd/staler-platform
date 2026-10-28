@@ -518,15 +518,42 @@ describe('messages', () => {
 
 // ======================================================================= admin
 describe('administration', () => {
-  it('only a super admin can create or manage admins', async () => {
+  it('only the single super admin can create admins and choose their permissions', async () => {
     const oldAdmin = await login(app, 'old.admin@example.com', LEGACY_PASS);
-    const r = await request(app).post('/api/admin/users').set(auth(oldAdmin)).send({ fullName: 'New Admin', email: `${uniq()}@x.com`, password: STRONG, role: 'admin' });
-    expect(r.status).toBe(403);
+    // regular admins cannot create admins, by any route
+    expect((await request(app).post('/api/admin/users').set(auth(oldAdmin)).send({ fullName: 'X Admin', email: `${uniq()}@x.com`, password: STRONG, role: 'admin' })).status).toBe(400);
+    expect((await request(app).post('/api/admin/admins').set(auth(oldAdmin)).send({ email: `${uniq()}@x.com`, fullName: 'X', password: STRONG, permissions: [] })).status).toBe(403);
+    expect((await request(app).get('/api/admin/admins').set(auth(oldAdmin))).status).toBe(403);
     const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
-    const ok = await request(app).post('/api/admin/users').set(auth(sup)).send({ fullName: 'New Admin', email: `${uniq()}@x.com`, password: STRONG, role: 'admin' });
-    expect(ok.status).toBe(201);
+    const mail = `${uniq()}@x.com`;
+    const made = await request(app).post('/api/admin/admins').set(auth(sup)).send({ email: mail, fullName: 'Viewer Admin', password: STRONG, permissions: ['users.view'] });
+    expect(made.status).toBe(201);
+    // there is still exactly one super admin and it cannot be suspended or removed
+    expect((await q(`SELECT count(*)::int AS n FROM public.users WHERE admin_level = 'super_admin'`)).rows[0].n).toBe(1);
     const me = await q(`SELECT id FROM public.users WHERE email = 'super@staler.test'`);
-    expect((await request(app).patch(`/api/admin/users/${me.rows[0].id}`).set(auth(sup)).send({ status: 'suspended' })).status).toBe(403);
+    expect((await request(app).patch(`/api/admin/users/${me.rows[0].id}`).set(auth(oldAdmin)).send({ status: 'suspended' })).status).toBe(403);
+    expect((await request(app).delete(`/api/admin/admins/${me.rows[0].id}`).set(auth(sup))).status).toBe(403);
+    // the new admin can only do what it was allowed to
+    const viewer = await login(app, mail, STRONG);
+    const target = await walletUser(app, 'Managed Person');
+    expect((await request(app).get(`/api/admin/users/${target.userId}`).set(auth(viewer))).status).toBe(200);
+    expect((await request(app).patch(`/api/admin/users/${target.userId}`).set(auth(viewer)).send({ status: 'suspended' })).status).toBe(403);
+    expect((await request(app).get('/api/admin/settings').set(auth(viewer))).status).toBe(403);
+    // super admin grants more; it applies immediately
+    await request(app).patch(`/api/admin/admins/${made.body.data.id}`).set(auth(sup)).send({ permissions: ['users.view', 'users.edit', 'users.password', 'notify'] });
+    const edited = await request(app).patch(`/api/admin/users/${target.userId}`).set(auth(viewer)).send({ fullName: 'Renamed Person', email: `${uniq()}@renamed.com` });
+    expect(edited.status).toBe(200);
+    // admins cannot manage other admins
+    expect((await request(app).patch(`/api/admin/users/${made.body.data.id}`).set(auth(oldAdmin)).send({ fullName: 'Hacked Name' })).status).toBe(403);
+    // set a password: the user is signed out and the new password works
+    expect((await request(app).post(`/api/admin/users/${target.userId}/password`).set(auth(viewer)).send({ password: 'Brand-New#Pass2026' })).status).toBe(200);
+    expect((await request(app).get('/api/wallet').set(auth(target.token))).status).toBe(401);
+    // notifications
+    expect((await request(app).post(`/api/admin/users/${target.userId}/notify`).set(auth(viewer)).send({ title: 'Hello', body: 'A note from support' })).status).toBe(200);
+    expect((await request(app).post('/api/admin/broadcast').set(auth(viewer)).send({ title: 'News', body: 'Scheduled maintenance tonight' })).status).toBe(200);
+    // demote: the account loses admin access at once
+    expect((await request(app).delete(`/api/admin/admins/${made.body.data.id}`).set(auth(sup))).status).toBe(200);
+    expect((await request(app).get('/api/admin/overview').set(auth(viewer))).status).toBe(401);
     const u = await walletUser(app, 'Normal Person');
     expect((await request(app).get('/api/admin/overview').set(auth(u.token))).status).toBe(403);
   });

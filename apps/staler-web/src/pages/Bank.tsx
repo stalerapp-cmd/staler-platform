@@ -11,6 +11,8 @@ import { useSecureAction } from '../components/SecureAction';
 import { useToast } from '../components/Toast';
 import { AmountInput, Badge, Button, CopyButton, ErrorNote, Field, PageHeader, Segmented, Sheet, Skeleton, SuccessMark, cx } from '../components/ui';
 import { StitchBand } from '../components/Tatreez';
+import { useConfirm } from '../components/Confirm';
+import { fill } from '../lib/format';
 
 function LinkPanel({ onLinked }: { onLinked: () => void }) {
   const { t, err } = useI18n();
@@ -96,9 +98,17 @@ function MoveSheet({ kind, open, onClose, onDone }: { kind: 'topup' | 'tobank'; 
       key.current = newIdempotencyKey();
     }
   }, [open]);
+  const confirm = useConfirm();
   const go = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!AMOUNT_RE.test(amount) || Number(amount) <= 0) return;
+    const m = money(amount, lang);
+    const ok = await confirm(
+      kind === 'topup'
+        ? { title: t.ask.topupTitle, body: fill(t.ask.topupBody, { amount: m }), confirmLabel: fill(t.ask.topupOk, { amount: m }) }
+        : { title: t.ask.toBankTitle, body: fill(t.ask.toBankBody, { amount: m }), confirmLabel: fill(t.ask.toBankOk, { amount: m }) },
+    );
+    if (!ok) return;
     setBusy(true);
     setError(null);
     try {

@@ -3,6 +3,8 @@ import { applySession, clearSession, post, get, refreshSession, session } from '
 
 export interface User {
   id: string;
+  admin_level?: string | null;
+  admin_permissions?: string[] | null;
   full_name: string;
   email: string;
   username: string;

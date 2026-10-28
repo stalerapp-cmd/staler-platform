@@ -26,7 +26,9 @@ export default function Send() {
   const secure = useSecureAction();
   const fixedAmount = isPayment && !!params.get('amount');
 
-  useEffect(() => setRecipient(null), [to]);
+  useEffect(() => {
+    setRecipient(null);
+  }, [to]);
 
   const review = async (e: React.FormEvent) => {
     e.preventDefault();

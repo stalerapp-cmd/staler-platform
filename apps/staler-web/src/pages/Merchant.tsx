@@ -10,6 +10,7 @@ import { useToast } from '../components/Toast';
 import { AreaChart, BarList } from '../components/Chart';
 import { AmountInput, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Sheet, Skeleton, TextArea, Toggle, cx } from '../components/ui';
 import { StarMotif } from '../components/Tatreez';
+import { useConfirm } from '../components/Confirm';
 
 function StoreSetup({ onDone }: { onDone: () => void }) {
   const { t, err } = useI18n();
@@ -310,7 +311,14 @@ export function MerchantOrders() {
   const toast = useToast();
   const { data, loading, reload } = useData<{ orders: any[] }>('/api/merchant/orders');
   const [busy, setBusy] = useState<string | null>(null);
+  const confirm = useConfirm();
   const act = async (id: string, action: 'ship' | 'cancel') => {
+    const ok = await confirm(
+      action === 'ship'
+        ? { title: t.ask.shipTitle, body: t.ask.shipBody, confirmLabel: t.ask.shipOk }
+        : { title: t.ask.merchCancelTitle, body: t.ask.merchCancelBody, confirmLabel: t.ask.merchCancelOk, tone: 'danger' },
+    );
+    if (!ok) return;
     setBusy(id + action);
     try {
       await post(`/api/merchant/orders/${id}/${action}`);

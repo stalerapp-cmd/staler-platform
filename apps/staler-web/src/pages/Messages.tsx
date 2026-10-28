@@ -9,6 +9,7 @@ import { useData, usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { Avatar, Button, EmptyState, PageHeader, Sheet, Skeleton, cx } from '../components/ui';
+import { useConfirm } from '../components/Confirm';
 
 function title(c: any, t: any) {
   if (c.type === 'support') return t.messages.supportTitle;
@@ -37,7 +38,9 @@ function Chat({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
   usePolling(load, 4000);
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [msgs?.length]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [msgs?.length]);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +156,7 @@ export default function Messages() {
   const convs = useData<{ conversations: any[] }>('/api/messages/conversations');
   usePolling(() => convs.reload(), 10_000);
   const [newOpen, setNewOpen] = useState(false);
+  const confirm = useConfirm();
   const current = convs.data?.conversations.find((c) => String(c.id) === id);
 
   return (
@@ -214,7 +218,11 @@ export default function Messages() {
                   <p className="font-medium">{current ? title(current, t) : '…'}</p>
                 </div>
                 {current?.status === 'active' && current.type === 'support' && (
-                  <button className="text-sm text-muted hover:text-stitch" onClick={() => patch(`/api/messages/conversations/${id}/close`).then(() => convs.reload())}>
+                  <button className="text-sm text-muted hover:text-stitch" onClick={async () => {
+                      if (!(await confirm({ title: t.ask.closeChatTitle, body: t.ask.closeChatBody, confirmLabel: t.ask.closeChatOk, tone: 'danger' }))) return;
+                      await patch(`/api/messages/conversations/${id}/close`);
+                      void convs.reload();
+                    }}>
                     {t.messages.closeChat}
                   </button>
                 )}

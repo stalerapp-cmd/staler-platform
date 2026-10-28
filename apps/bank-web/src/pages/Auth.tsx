@@ -52,7 +52,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
   );
 }
 
-function Secret({ label, value, onChange, autoComplete }: { label: string; value: string; onChange: (v: string) => void; autoComplete: string }) {
+function Secret({ label, value, onChange, autoComplete, error }: { label: string; value: string; onChange: (v: string) => void; autoComplete: string; error?: string | null }) {
   const [show, setShow] = useState(false);
   return (
     <Field
@@ -62,6 +62,7 @@ function Secret({ label, value, onChange, autoComplete }: { label: string; value
       onChange={(e) => onChange(e.target.value)}
       autoComplete={autoComplete}
       required
+      error={error ?? undefined}
       dir="ltr"
       trailing={
         <button type="button" onClick={() => setShow((s) => !s)} className="rounded-lg p-2 text-muted hover:text-ink" aria-label={show ? 'Hide password' : 'Show password'}>
@@ -150,6 +151,7 @@ export function Register() {
   const [error, setError] = useState<string | null>(null);
   const [fe, setFe] = useState<Record<string, string>>({});
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const [pw2, setPw2] = useState('');
   return (
     <AuthLayout>
       <h1 className="text-4xl">{t.auth.registerTitle}</h1>
@@ -158,6 +160,7 @@ export function Register() {
         className="mt-8 space-y-4"
         onSubmit={async (e) => {
           e.preventDefault();
+          if (f.password !== pw2) return setFe({ password2: t.auth.mismatch });
           setBusy(true);
           setError(null);
           setFe({});
@@ -179,6 +182,13 @@ export function Register() {
           <Secret label={t.auth.password} value={f.password} onChange={(v) => setF({ ...f, password: v })} autoComplete="new-password" />
           <PasswordStrength value={f.password} />
         </div>
+        <Secret
+          label={t.auth.confirmPassword}
+          value={pw2}
+          onChange={setPw2}
+          autoComplete="new-password"
+          error={fe.password2 ?? (pw2 && !f.password.startsWith(pw2) ? t.auth.mismatch : null)}
+        />
         <ErrorNote>{error}</ErrorNote>
         <Button block size="lg" loading={busy}>
           {t.auth.create}
@@ -257,6 +267,7 @@ export function Forgot() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -274,6 +285,7 @@ export function Forgot() {
               await post('/api/auth/forgot-password', { email: email.trim() });
               setStep('reset');
             } else {
+              if (pw !== pw2) throw new Error(t.auth.mismatch);
               await post('/api/auth/reset-password', { email: email.trim(), code, newPassword: pw });
               toast(t.auth.resetDone);
               nav('/login');
@@ -294,6 +306,7 @@ export function Forgot() {
               <Secret label={t.auth.newPassword} value={pw} onChange={setPw} autoComplete="new-password" />
               <PasswordStrength value={pw} />
             </div>
+            <Secret label={t.auth.confirmPassword} value={pw2} onChange={setPw2} autoComplete="new-password" error={pw2 && !pw.startsWith(pw2) ? t.auth.mismatch : null} />
           </>
         )}
         <ErrorNote>{error}</ErrorNote>

@@ -12,6 +12,12 @@ import { centralAccount, exchangeAccount, move, notify } from './ledger.js';
 import { requireSecondFactor } from './mfa.js';
 import { revokeAllSessions } from './sessions.js';
 import { forgetUser } from '../lib/authCache.js';
+import { PERMISSIONS, assertCanManage, isSuper, requirePerm } from '../lib/permissions.js';
+import { codeHash, numericCode } from '../lib/crypto.js';
+import { codeMail, noticeMail, sendMail } from '../lib/mailer.js';
+import { hashPassword, passwordSchema } from '../lib/passwords.js';
+import { email, fullName, username } from '../lib/validate.js';
+import { conflict } from '../lib/errors.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth, requireRole('admin'));
@@ -33,7 +39,7 @@ adminRouter.get(
       one(
         `SELECT COALESCE(SUM(a.balance) FILTER (WHERE u.role = 'user'), 0)::text AS customer_deposits,
                 COALESCE(SUM(a.balance) FILTER (WHERE a.is_taler_exchange), 0)::text AS exchange_balance,
-                COALESCE(SUM(a.balance) FILTER (WHERE u.role = 'admin' AND NOT a.is_taler_exchange), 0)::text AS central_balance,
+                COALESCE(SUM(a.balance) FILTER (WHERE u.admin_level = 'super_admin' AND NOT a.is_taler_exchange), 0)::text AS central_balance,
                 count(*) FILTER (WHERE a.is_locked)::int AS frozen_accounts,
                 count(*)::int AS accounts
            FROM ${S}.bank_accounts a JOIN ${S}.users u ON u.id = a.user_id`,
@@ -62,6 +68,7 @@ adminRouter.get(
 
 adminRouter.get(
   '/users',
+  requirePerm('customers.view'),
   validate({
     query: pageQuery.extend({ q: z.string().trim().max(64).optional(), status: z.enum(['active', 'suspended', 'pending']).optional() }).strict(),
   }),
@@ -92,10 +99,11 @@ adminRouter.get(
 
 adminRouter.get(
   '/users/:id',
+  requirePerm('customers.view'),
   validate({ params: z.object({ id: uuid }).strict() }),
   ah(async (req, res) => {
     const user = await one(
-      `SELECT id, full_name, email, username, role, status, phone, language, totp_enabled, email_verified, failed_login_count,
+      `SELECT id, full_name, email, username, role, admin_level, admin_permissions, status, phone, language, totp_enabled, email_verified, failed_login_count,
               locked_until, created_at, last_login_at FROM ${S}.users WHERE id = $1 AND role <> 'exchange'`,
       [req.params.id],
     );
@@ -121,32 +129,235 @@ adminRouter.get(
   }),
 );
 
+/** Edit a customer: profile, e-mail, username and status. Each field needs its permission. */
 adminRouter.patch(
   '/users/:id',
   validate({
     params: z.object({ id: uuid }).strict(),
-    body: z.object({ status: z.enum(['active', 'suspended']).optional(), role: z.enum(['user', 'admin']).optional() }).strict(),
+    body: z
+      .object({
+        fullName: fullName.optional(),
+        email: email.optional(),
+        username: username.optional(),
+        phone: z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, 'Invalid phone number').nullable().optional(),
+        language: z.enum(['en', 'ar']).optional(),
+        status: z.enum(['active', 'suspended']).optional(),
+      })
+      .strict(),
   }),
   ah(async (req, res) => {
-    if (req.params.id === req.auth!.userId) throw forbidden('You cannot change your own status or role');
-    const target = await one<any>(`SELECT id, role FROM ${S}.users WHERE id = $1`, [req.params.id]);
-    if (!target || target.role === 'exchange') throw notFound('User not found');
+    const b = req.body;
+    const target = await one<any>(`SELECT id, email, role, admin_level, language FROM ${S}.users WHERE id = $1 AND role <> 'exchange'`, [req.params.id]);
+    if (!target) throw notFound('User not found');
+    assertCanManage(req, target);
+    const need: string[] = [];
+    if (b.fullName !== undefined || b.email !== undefined || b.username !== undefined || b.phone !== undefined || b.language !== undefined) need.push('customers.edit');
+    if (b.status !== undefined) need.push('customers.status');
+    for (const p of need) if (!isSuper(req) && !(req.auth!.permissions ?? []).includes(p)) throw forbidden('You do not have permission for this action', 'NO_PERMISSION');
+    if (b.email && b.email !== target.email.toLowerCase() && (await one(`SELECT 1 FROM ${S}.users WHERE lower(email) = $1 AND id <> $2`, [b.email, target.id]))) {
+      throw conflict('EMAIL_TAKEN', 'This e-mail is already registered');
+    }
+    if (b.username && (await one(`SELECT 1 FROM ${S}.users WHERE username = $1 AND id <> $2`, [b.username, target.id]))) throw conflict('USERNAME_TAKEN', 'This username is taken');
     await pool.query(
-      `UPDATE ${S}.users SET status = COALESCE($2, status), role = COALESCE($3, role),
-              token_version = token_version + CASE WHEN $2 IS NOT NULL OR $3 IS NOT NULL THEN 1 ELSE 0 END WHERE id = $1`,
-      [req.params.id, req.body.status ?? null, req.body.role ?? null],
+      `UPDATE ${S}.users SET full_name = COALESCE($2, full_name), email = COALESCE($3, email), username = COALESCE($4, username),
+              phone = CASE WHEN $5 THEN $6 ELSE phone END, language = COALESCE($7, language), status = COALESCE($8, status),
+              email_verified = CASE WHEN $3::text IS NOT NULL THEN true ELSE email_verified END,
+              token_version = token_version + CASE WHEN $8::text IS NOT NULL THEN 1 ELSE 0 END
+        WHERE id = $1`,
+      [target.id, b.fullName ?? null, b.email ?? null, b.username ?? null, b.phone !== undefined, b.phone ?? null, b.language ?? null, b.status ?? null],
     );
-    forgetUser(req.params.id);
-    if (req.body.status === 'suspended') await revokeAllSessions(req.params.id!);
-    await audit({ userId: req.auth!.userId, action: 'admin.user_updated', entityType: 'user', entityId: req.params.id, details: req.body }, req);
+    forgetUser(target.id);
+    if (b.status === 'suspended') await revokeAllSessions(target.id);
+    if (b.email && b.email !== target.email.toLowerCase()) {
+      await sendMail(noticeMail(target.email, 'E-mail changed', `The bank changed the e-mail on your account to ${b.email}.`, target.language ?? 'en'));
+    }
+    await audit({ userId: req.auth!.userId, action: 'admin.user_updated', entityType: 'user', entityId: target.id, details: b }, req);
+    res.json({ success: true });
+  }),
+);
+
+adminRouter.post(
+  '/users/:id/password',
+  requirePerm('customers.password'),
+  validate({ params: z.object({ id: uuid }).strict(), body: z.object({ password: passwordSchema }).strict() }),
+  ah(async (req, res) => {
+    const t = await one<any>(`SELECT id, email, role, admin_level, language FROM ${S}.users WHERE id = $1 AND role <> 'exchange'`, [req.params.id]);
+    if (!t) throw notFound('User not found');
+    assertCanManage(req, t);
+    await pool.query(`UPDATE ${S}.users SET password_hash = $2, password_changed_at = now(), failed_login_count = 0, locked_until = NULL WHERE id = $1`, [
+      t.id,
+      await hashPassword(req.body.password),
+    ]);
+    await revokeAllSessions(t.id);
+    await sendMail(noticeMail(t.email, 'Password changed', 'The bank set a new password on your account. You were signed out everywhere.', t.language ?? 'en'));
+    await audit({ userId: req.auth!.userId, action: 'admin.password_set', entityType: 'user', entityId: t.id }, req);
+    res.json({ success: true });
+  }),
+);
+
+adminRouter.post(
+  '/users/:id/send-reset',
+  requirePerm('customers.password'),
+  validate({ params: z.object({ id: uuid }).strict() }),
+  ah(async (req, res) => {
+    const t = await one<any>(`SELECT id, email, role, admin_level, language FROM ${S}.users WHERE id = $1 AND status = 'active' AND role <> 'exchange'`, [req.params.id]);
+    if (!t) throw notFound('User not found');
+    assertCanManage(req, t);
+    const mail = t.email.toLowerCase();
+    const code = numericCode(6);
+    await pool.query(`UPDATE ${S}.verification_codes SET used = true WHERE lower(email) = $1 AND type = 'reset_password' AND used = false`, [mail]);
+    await pool.query(
+      `INSERT INTO ${S}.verification_codes (email, code, type, expires_at, user_id) VALUES ($1, $2, 'reset_password', now() + interval '15 minutes', $3)`,
+      [mail, codeHash('reset', mail, code), t.id],
+    );
+    await sendMail(codeMail(mail, 'reset', code, t.language ?? 'en'));
+    await audit({ userId: req.auth!.userId, action: 'admin.reset_sent', entityType: 'user', entityId: t.id }, req);
+    res.json({ success: true });
+  }),
+);
+
+/** Close a customer: accounts must be empty; data is anonymised, the ledger stays intact. */
+adminRouter.delete(
+  '/users/:id',
+  requirePerm('customers.delete'),
+  validate({ params: z.object({ id: uuid }).strict() }),
+  ah(async (req, res) => {
+    const t = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE id = $1 AND role <> 'exchange'`, [req.params.id]);
+    if (!t) throw notFound('User not found');
+    assertCanManage(req, t);
+    if (await one(`SELECT 1 FROM ${S}.bank_accounts WHERE user_id = $1 AND balance <> 0`, [t.id])) throw conflict('BALANCE_NOT_ZERO', 'The accounts still hold money');
+    await pool.query(`UPDATE ${S}.bank_accounts SET is_locked = true WHERE user_id = $1`, [t.id]);
+    await pool.query(`UPDATE ${S}.api_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, [t.id]);
+    await pool.query(
+      `UPDATE ${S}.users SET status = 'suspended', email = 'deleted+' || id::text || '@deleted.invalid', full_name = 'Closed account', username = NULL,
+              phone = NULL, password_hash = '!', totp_enabled = false, totp_secret_enc = NULL, totp_recovery_hashes = '{}' WHERE id = $1`,
+      [t.id],
+    );
+    await revokeAllSessions(t.id);
+    await audit({ userId: req.auth!.userId, action: 'admin.user_deleted', entityType: 'user', entityId: t.id }, req);
+    res.json({ success: true });
+  }),
+);
+
+const message = z.object({ title: z.string().trim().min(2).max(80), body: z.string().trim().min(2).max(500) }).strict();
+
+adminRouter.post(
+  '/users/:id/notify',
+  requirePerm('notify'),
+  validate({ params: z.object({ id: uuid }).strict(), body: message }),
+  ah(async (req, res) => {
+    const t = await one<any>(`SELECT id FROM ${S}.users WHERE id = $1`, [req.params.id]);
+    if (!t) throw notFound('User not found');
+    await notify(undefined, t.id, 'admin_message', req.body.title, req.body.body);
+    await audit({ userId: req.auth!.userId, action: 'admin.user_notified', entityType: 'user', entityId: t.id }, req);
+    res.json({ success: true });
+  }),
+);
+
+adminRouter.post(
+  '/broadcast',
+  requirePerm('notify'),
+  validate({ body: message }),
+  ah(async (req, res) => {
+    const r = await pool.query(
+      `INSERT INTO ${S}.notifications (user_id, type, title, body, metadata)
+       SELECT id, 'admin_message', $1, $2, '{}'::jsonb FROM ${S}.users WHERE status = 'active' AND role <> 'exchange'`,
+      [req.body.title, req.body.body],
+    );
+    await audit({ userId: req.auth!.userId, action: 'admin.broadcast', details: { title: req.body.title, count: r.rowCount } }, req);
+    res.json({ success: true, data: { sent: r.rowCount } });
+  }),
+);
+
+// ---------------------------------------------------------- administrators
+adminRouter.get('/permissions', (_req, res) => res.json({ success: true, data: { permissions: PERMISSIONS } }));
+
+adminRouter.get(
+  '/admins',
+  requirePerm('admins.manage'),
+  ah(async (_req, res) => {
+    const r = await pool.query(
+      `SELECT id, full_name, email, username, admin_level, admin_permissions, status, totp_enabled, last_login_at, created_at
+         FROM ${S}.users WHERE role = 'admin' ORDER BY (admin_level = 'super_admin') DESC, created_at`,
+    );
+    res.json({ success: true, data: { admins: r.rows } });
+  }),
+);
+
+const permList = z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length);
+
+adminRouter.post(
+  '/admins',
+  requirePerm('admins.manage'),
+  validate({
+    body: z.object({ email, fullName: fullName.optional(), password: passwordSchema.optional(), permissions: permList, totp: totpCode.optional() }).strict(),
+  }),
+  ah(async (req, res) => {
+    await requireSecondFactor(req.auth!.userId, req.body.totp);
+    const b = req.body;
+    const perms = [...new Set(b.permissions)];
+    const existing = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE lower(email) = $1`, [b.email]);
+    let id: string;
+    if (existing) {
+      if (existing.role === 'exchange') throw forbidden('System accounts cannot become administrators');
+      if (existing.admin_level === 'super_admin') throw forbidden('The super admin account cannot be changed here', 'SUPER_ADMIN');
+      await pool.query(`UPDATE ${S}.users SET role = 'admin', admin_level = 'admin', admin_permissions = $2, token_version = token_version + 1 WHERE id = $1`, [existing.id, perms]);
+      id = existing.id;
+    } else {
+      if (!b.password || !b.fullName) throw conflict('NEW_ADMIN_DETAILS', 'Name and password are required for a new account');
+      const u = await one<any>(
+        `INSERT INTO ${S}.users (full_name, email, username, password_hash, role, admin_level, admin_permissions, status, email_verified, password_changed_at)
+         VALUES ($1, $2, NULL, $3, 'admin', 'admin', $4, 'active', true, now()) RETURNING id`,
+        [b.fullName, b.email, await hashPassword(b.password), perms],
+      );
+      id = u.id;
+    }
+    forgetUser(id);
+    await audit({ userId: req.auth!.userId, action: 'admin.admin_granted', entityType: 'user', entityId: id, details: { permissions: perms } }, req);
+    res.status(201).json({ success: true, data: { id } });
+  }),
+);
+
+adminRouter.patch(
+  '/admins/:id',
+  requirePerm('admins.manage'),
+  validate({ params: z.object({ id: uuid }).strict(), body: z.object({ permissions: permList }).strict() }),
+  ah(async (req, res) => {
+    const t = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE id = $1`, [req.params.id]);
+    if (!t || t.role !== 'admin') throw notFound('Administrator not found');
+    if (t.admin_level === 'super_admin') throw forbidden('The super admin always has every permission', 'SUPER_ADMIN');
+    const perms = [...new Set(req.body.permissions)];
+    await pool.query(`UPDATE ${S}.users SET admin_permissions = $2 WHERE id = $1`, [t.id, perms]);
+    forgetUser(t.id);
+    await audit({ userId: req.auth!.userId, action: 'admin.permissions_changed', entityType: 'user', entityId: t.id, details: { permissions: perms } }, req);
+    res.json({ success: true });
+  }),
+);
+
+adminRouter.delete(
+  '/admins/:id',
+  requirePerm('admins.manage'),
+  validate({ params: z.object({ id: uuid }).strict() }),
+  ah(async (req, res) => {
+    const t = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE id = $1`, [req.params.id]);
+    if (!t || t.role !== 'admin') throw notFound('Administrator not found');
+    if (t.admin_level === 'super_admin') throw forbidden('The super admin cannot be removed', 'SUPER_ADMIN');
+    await pool.query(`UPDATE ${S}.users SET role = 'user', admin_level = NULL, admin_permissions = '{}', token_version = token_version + 1 WHERE id = $1`, [t.id]);
+    forgetUser(t.id);
+    await revokeAllSessions(t.id);
+    await audit({ userId: req.auth!.userId, action: 'admin.admin_revoked', entityType: 'user', entityId: t.id }, req);
     res.json({ success: true });
   }),
 );
 
 adminRouter.post(
   '/users/:id/revoke-sessions',
+  requirePerm('customers.security'),
   validate({ params: z.object({ id: uuid }).strict() }),
   ah(async (req, res) => {
+    const t = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE id = $1`, [req.params.id]);
+    if (!t) throw notFound('User not found');
+    assertCanManage(req, t);
     await revokeAllSessions(req.params.id!);
     await audit({ userId: req.auth!.userId, action: 'admin.sessions_revoked', entityType: 'user', entityId: req.params.id }, req);
     res.json({ success: true });
@@ -155,9 +366,13 @@ adminRouter.post(
 
 adminRouter.post(
   '/users/:id/reset-2fa',
+  requirePerm('customers.security'),
   validate({ params: z.object({ id: uuid }).strict(), body: z.object({ totp: totpCode.optional() }).strict() }),
   ah(async (req, res) => {
     await requireSecondFactor(req.auth!.userId, req.body.totp);
+    const t = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE id = $1`, [req.params.id]);
+    if (!t) throw notFound('User not found');
+    assertCanManage(req, t);
     await pool.query(
       `UPDATE ${S}.users SET totp_enabled = false, totp_secret_enc = NULL, totp_last_step = NULL, totp_recovery_hashes = '{}',
               token_version = token_version + 1 WHERE id = $1 AND role <> 'exchange'`,
@@ -171,6 +386,7 @@ adminRouter.post(
 
 adminRouter.post(
   '/accounts/:id/freeze',
+  requirePerm('accounts.freeze'),
   validate({ params: z.object({ id: uuid }).strict(), body: z.object({ frozen: z.boolean() }).strict() }),
   ah(async (req, res) => {
     const r = await pool.query(
@@ -187,6 +403,7 @@ adminRouter.post(
 /** Teller desk: physical cash in/out, booked against the bank's central account. */
 adminRouter.post(
   '/teller',
+  requirePerm('teller'),
   validate({
     body: z
       .object({
@@ -226,6 +443,7 @@ adminRouter.post(
 
 adminRouter.get(
   '/transactions',
+  requirePerm('ledger.view'),
   validate({ query: pageQuery.extend({ q: z.string().trim().max(64).optional(), type: z.string().max(20).optional() }).strict() }),
   ah(async (req, res) => {
     const q = req.query as any;
@@ -255,6 +473,7 @@ adminRouter.get(
 
 adminRouter.get(
   '/audit',
+  requirePerm('audit.view'),
   validate({ query: pageQuery.extend({ action: z.string().max(64).optional() }).strict() }),
   ah(async (req, res) => {
     const q = req.query as any;
@@ -277,6 +496,7 @@ adminRouter.get(
 
 adminRouter.get(
   '/exchange',
+  requirePerm('exchange.view'),
   ah(async (_req, res) => {
     const ex = await exchangeAccount();
     const reserves = await pool.query(
@@ -301,6 +521,7 @@ const SETTINGS_SCHEMA = z
 
 adminRouter.get(
   '/settings',
+  requirePerm('settings.manage'),
   ah(async (_req, res) => {
     const r = await pool.query(`SELECT key, value FROM ${S}.settings WHERE key = ANY($1)`, [['allow_registrations', 'maintenance_mode', 'bank_name']]);
     res.json({ success: true, data: { settings: Object.fromEntries(r.rows.map((x) => [x.key, x.value])) } });
@@ -309,6 +530,7 @@ adminRouter.get(
 
 adminRouter.put(
   '/settings',
+  requirePerm('settings.manage'),
   validate({ body: SETTINGS_SCHEMA }),
   ah(async (req, res) => {
     for (const [key, value] of Object.entries(req.body)) {

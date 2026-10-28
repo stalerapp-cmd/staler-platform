@@ -150,8 +150,10 @@ export function Register() {
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
+  const [pw2, setPw2] = useState('');
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (f.password !== pw2) return setFieldErr({ password2: t.auth.mismatch });
     setBusy(true);
     setError(null);
     setFieldErr({});
@@ -209,6 +211,13 @@ export function Register() {
           <PasswordField label={t.auth.password} value={f.password} onChange={(v) => setF({ ...f, password: v })} autoComplete="new-password" error={fieldErr.password} />
           <PasswordStrength value={f.password} />
         </div>
+        <PasswordField
+          label={t.auth.confirmPassword}
+          value={pw2}
+          onChange={setPw2}
+          autoComplete="new-password"
+          error={fieldErr.password2 ?? (pw2 && !f.password.startsWith(pw2) ? t.auth.mismatch : null)}
+        />
         <ErrorNote>{error}</ErrorNote>
         <Button block size="lg" loading={busy}>
           {t.auth.register}
@@ -294,8 +303,10 @@ export function Forgot() {
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pw2, setPw2] = useState('');
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (step === 'reset' && pw !== pw2) return setError(t.auth.mismatch);
     setBusy(true);
     setError(null);
     try {
@@ -327,6 +338,7 @@ export function Forgot() {
               <PasswordField label={t.auth.newPassword} value={pw} onChange={setPw} autoComplete="new-password" />
               <PasswordStrength value={pw} />
             </div>
+            <PasswordField label={t.auth.confirmPassword} value={pw2} onChange={setPw2} autoComplete="new-password" error={pw2 && !pw.startsWith(pw2) ? t.auth.mismatch : null} />
           </>
         )}
         <ErrorNote>{error}</ErrorNote>

@@ -8,7 +8,7 @@ import { useAccounts, useConfig } from '../lib/accounts';
 import { AMOUNT_RE, money } from '../lib/format';
 import { fmtIban } from '../components/Bank';
 import { useSecureAction } from '../components/SecureAction';
-import { AmountInput, Button, ErrorNote, Field, PageHeader, SuccessMark } from '../components/ui';
+import { AmountInput, Button, ErrorNote, Field, PageHeader, Select, SuccessMark } from '../components/ui';
 
 export default function Transfer() {
   const { t, lang, err } = useI18n();
@@ -60,16 +60,13 @@ export default function Transfer() {
           >
             <PageHeader title={t.transfer.title} />
             {accounts.length > 1 && (
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-ink/80">{t.transfer.fromAcc}</span>
-                <select value={from} onChange={(e) => setFrom(e.target.value)} className="field">
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.nickname ?? a.account_number} — {money(a.balance, lang)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <Select
+                block
+                label={t.transfer.fromAcc}
+                value={from}
+                onChange={setFrom}
+                options={accounts.map((a) => ({ value: a.id, label: a.nickname ?? a.account_number, hint: money(a.balance, lang) }))}
+              />
             )}
             {fromAcc && (
               <p className="text-sm text-muted">

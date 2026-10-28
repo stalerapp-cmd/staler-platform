@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
+  Crown,
   Activity,
   Bell,
   ClipboardList,
@@ -29,6 +30,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { usePerm } from '../lib/perm';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import { get, post } from '../lib/api';
@@ -38,6 +40,7 @@ import { localize, type Notice } from '../lib/notifications';
 import { Logo } from '../components/Tatreez';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
+import { useConfirm } from '../components/Confirm';
 
 interface NavItem {
   to: string;
@@ -49,6 +52,7 @@ interface NavItem {
 function useNav() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { can } = usePerm();
   const main: NavItem[] = [
     { to: '/app', label: t.nav.home, icon: Home, end: true },
     { to: '/app/send', label: t.nav.send, icon: Send },
@@ -70,15 +74,18 @@ function useNav() {
   }
   if (user?.role === 'exchange') role.push({ to: '/app/vouchers', label: t.nav.vouchers, icon: Ticket });
   if (user?.role === 'admin') {
-    role.push(
+    // Each admin sees only the sections their permissions open.
+    const items: (NavItem & { perm?: string })[] = [
       { to: '/app/admin', label: t.nav.overview, icon: LayoutDashboard, end: true },
-      { to: '/app/admin/users', label: t.nav.users, icon: Users },
-      { to: '/app/admin/stores', label: t.nav.stores, icon: Store },
-      { to: '/app/admin/pending', label: t.nav.pending, icon: UserPlus },
-      { to: '/app/admin/bank', label: t.nav.bankOps, icon: Landmark },
-      { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock },
-      { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck },
-    );
+      { to: '/app/admin/users', label: t.nav.users, icon: Users, perm: 'users.view' },
+      { to: '/app/admin/stores', label: t.nav.stores, icon: Store, perm: 'stores.manage' },
+      { to: '/app/admin/pending', label: t.nav.pending, icon: UserPlus, perm: 'pending.manage' },
+      { to: '/app/admin/bank', label: t.nav.bankOps, icon: Landmark, perm: 'bank.ops' },
+      { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
+      { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
+      { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },
+    ];
+    role.push(...items.filter((i) => !i.perm || can(i.perm)));
   }
   return { main, role, settings: { to: '/app/settings', label: t.nav.settings, icon: Cog } as NavItem };
 }
@@ -224,7 +231,10 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const loc = useLocation();
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
-  useEffect(() => setMenu(false), [loc.pathname]);
+  const confirm = useConfirm();
+  useEffect(() => {
+    setMenu(false);
+  }, [loc.pathname]);
   useEffect(() => {
     if (!menu) return;
     const prev = document.body.style.overflow;
@@ -257,6 +267,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         <SideLink item={settings} onClick={onClick} animated={animated} />
         <button
           onClick={async () => {
+            if (!(await confirm({ title: t.ask.signOutTitle, body: t.ask.signOutBody, confirmLabel: t.ask.signOutOk }))) return;
             await logout();
             navigate('/login');
           }}

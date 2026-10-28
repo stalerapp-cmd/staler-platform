@@ -58,3 +58,6 @@ export function passwordScore(p: string): number {
   if (/\d/.test(p) && /[^A-Za-z0-9]/.test(p)) s++;
   return Math.min(4, p.length < 8 ? 0 : s);
 }
+
+/** Fills {placeholders} in a translated sentence. */
+export const fill = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ''));

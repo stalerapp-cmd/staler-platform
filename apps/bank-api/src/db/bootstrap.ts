@@ -20,14 +20,14 @@ export async function bootstrap(): Promise<void> {
 
     // ---- admin
     let admin = await one<{ id: string; password_hash: string; email: string }>(
-      `SELECT id, password_hash, email FROM ${S}.users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1`,
+      `SELECT id, password_hash, email FROM ${S}.users WHERE role = 'admin' ORDER BY (admin_level = 'super_admin') DESC NULLS LAST, created_at ASC LIMIT 1`,
       [],
       c,
     );
     if (!admin && env.BANK_ADMIN_EMAIL && env.BANK_ADMIN_PASSWORD) {
       admin = await one(
-        `INSERT INTO ${S}.users (full_name, email, username, password_hash, role, status, email_verified, password_changed_at)
-         VALUES ('Bank Administrator', $1, 'admin', $2, 'admin', 'active', true, now())
+        `INSERT INTO ${S}.users (full_name, email, username, password_hash, role, admin_level, status, email_verified, password_changed_at)
+         VALUES ('Bank Administrator', $1, 'admin', $2, 'admin', 'super_admin', 'active', true, now())
          ON CONFLICT DO NOTHING RETURNING id, password_hash, email`,
         [env.BANK_ADMIN_EMAIL.toLowerCase(), await hashPassword(env.BANK_ADMIN_PASSWORD)],
         c,
@@ -44,6 +44,9 @@ export async function bootstrap(): Promise<void> {
       } else {
         logger.warn('admin still has the published default password: login is DISABLED until BANK_ADMIN_PASSWORD is set');
       }
+    }
+    if (admin && !(await one(`SELECT 1 FROM ${S}.users WHERE admin_level = 'super_admin'`, [], c))) {
+      await c.query(`UPDATE ${S}.users SET admin_level = 'super_admin' WHERE id = $1`, [admin.id]);
     }
     if (admin) {
       const acc = await one(`SELECT id FROM ${S}.bank_accounts WHERE user_id = $1 LIMIT 1`, [admin.id], c);

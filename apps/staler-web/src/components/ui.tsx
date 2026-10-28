@@ -10,7 +10,7 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
 } from 'react';
-import { Check, Copy, Loader2, X } from 'lucide-react';
+import { Check, ChevronDown, Copy, Loader2, X } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { assetUrl } from '../lib/api';
 import { initials, normalizeAmountInput, passwordScore } from '../lib/format';
@@ -18,13 +18,14 @@ import { initials, normalizeAmountInput, passwordScore } from '../lib/format';
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 
 // --------------------------------------------------------------------- Button
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'stitch';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-solid' | 'stitch';
 const variants: Record<Variant, string> = {
   primary: 'bg-night text-white hover:bg-night/90 dark:bg-white dark:text-night dark:hover:bg-white/90',
   stitch: 'bg-stitch text-white hover:brightness-110',
   secondary: 'bg-surface text-ink border border-line hover:border-ink/30',
   ghost: 'text-ink hover:bg-sunk',
   danger: 'bg-stitch/10 text-stitch hover:bg-stitch/15',
+  'danger-solid': 'bg-stitch text-white hover:brightness-110',
 };
 
 interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -453,6 +454,178 @@ export function SuccessMark() {
           <motion.path d="M5 12.5l4.5 4.5L19 7.5" initial={{ pathLength: reduce ? 1 : 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, delay: 0.25 }} />
         </svg>
       </motion.div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Select
+export interface SelectOption<T extends string> {
+  value: T;
+  label: string;
+  hint?: string;
+}
+
+/**
+ * Styled replacement for <select>: a button plus an animated listbox.
+ * Keyboard: arrows move, Enter/Space choose, Escape closes, typing jumps.
+ */
+export function Select<T extends string>({
+  value,
+  onChange,
+  options,
+  label,
+  icon,
+  className,
+  block,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: SelectOption<T>[];
+  label: string;
+  icon?: ReactNode;
+  className?: string;
+  block?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const wrap = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  const id = useId();
+  const current = options.find((o) => o.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+    const away = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  useEffect(() => {
+    if (open) list.current?.querySelectorAll('li')[active]?.scrollIntoView({ block: 'nearest' });
+  }, [open, active]);
+
+  const choose = (i: number) => {
+    const o = options[i];
+    if (o) onChange(o.value);
+    setOpen(false);
+  };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
+      e.preventDefault();
+      setOpen(true);
+      return;
+    }
+    if (!open) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpen(false);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive((a) => Math.min(options.length - 1, a + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive((a) => Math.max(0, a - 1));
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      choose(active);
+    } else if (e.key.length === 1) {
+      const i = options.findIndex((o) => o.label.toLowerCase().startsWith(e.key.toLowerCase()));
+      if (i >= 0) setActive(i);
+    }
+  };
+
+  return (
+    <div ref={wrap} className={cx('relative', block ? 'w-full' : 'w-auto', className)}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={`${id}-list`}
+        aria-label={`${label}: ${current?.label ?? ''}`}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={onKey}
+        className={cx(
+          'flex h-12 w-full items-center gap-2 rounded-xl border bg-surface px-4 text-start transition',
+          open ? 'border-sky shadow-[0_0_0_4px_rgb(var(--sky)/0.15)]' : 'border-line hover:border-ink/25',
+        )}
+      >
+        {icon && <span className="shrink-0 text-muted">{icon}</span>}
+        <span className="min-w-0 flex-1 truncate">
+          <span className="block text-[11px] leading-none text-muted">{label}</span>
+          <span className="mt-0.5 block truncate text-[15px] font-medium leading-tight">{current?.label}</span>
+        </span>
+        <ChevronDown className={cx('h-4 w-4 shrink-0 text-muted transition-transform duration-200', open && 'rotate-180')} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.ul
+            ref={list}
+            id={`${id}-list`}
+            role="listbox"
+            aria-label={label}
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98, pointerEvents: 'none', transition: { duration: 0.12 } }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+            className="absolute start-0 top-[calc(100%+6px)] z-40 max-h-72 min-w-full overflow-auto rounded-2xl border border-line bg-surface p-1.5 shadow-card"
+            style={{ transformOrigin: 'top' }}
+          >
+            {options.map((o, i) => {
+              const selected = o.value === value;
+              return (
+                <li
+                  key={o.value}
+                  role="option"
+                  aria-selected={selected}
+                  onPointerEnter={() => setActive(i)}
+                  onClick={() => choose(i)}
+                  className={cx(
+                    'flex cursor-pointer items-center justify-between gap-6 whitespace-nowrap rounded-xl px-3 py-2.5 text-[15px] transition-colors',
+                    i === active ? 'bg-sunk' : '',
+                    selected ? 'font-semibold text-ink' : 'text-ink/85',
+                  )}
+                >
+                  <span>
+                    {o.label}
+                    {o.hint && <span className="num ms-2 text-xs font-normal text-muted">{o.hint}</span>}
+                  </span>
+                  {selected && <Check className="h-4 w-4 text-sky" />}
+                </li>
+              );
+            })}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** Pill filters for 2–6 choices: one tap, everything visible. */
+export function Chips<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: SelectOption<T>[]; label: string }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o.value)}
+            className={cx(
+              'relative h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition active:scale-[0.97]',
+              on ? 'border-transparent text-bg' : 'border-line bg-surface text-ink/80 hover:border-ink/25',
+            )}
+          >
+            {on && <motion.span layoutId={`chip-${label}`} className="absolute inset-0 rounded-full bg-ink" transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }} />}
+            <span className="relative">{o.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

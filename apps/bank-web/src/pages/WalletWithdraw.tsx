@@ -11,6 +11,8 @@ import { QRImage } from '../components/QR';
 import { useSecureAction } from '../components/SecureAction';
 import { AmountInput, Badge, Button, CopyButton, ErrorNote, PageHeader, SuccessMark } from '../components/ui';
 import { Guilloche } from '../components/Guilloche';
+import { useConfirm } from '../components/Confirm';
+import { fill } from '../lib/format';
 
 /**
  * Bank -> S-Taler withdrawal (Taler integration flow):
@@ -26,6 +28,16 @@ export default function WalletWithdraw() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const secure = useSecureAction();
+  const confirm = useConfirm();
+  const abort = async () => {
+    if (!(await confirm({ title: t.ask.abortTitle, body: t.ask.abortBody, confirmLabel: t.ask.abortOk, tone: 'danger' }))) return;
+    try {
+      setOp((await post(`/api/withdrawals/${op.operation_id}/abort`)).withdrawal);
+      void list.reload();
+    } catch (e) {
+      setError(err(e));
+    }
+  };
 
   useEffect(() => {
     if (opId) get(`/api/withdrawals/${opId}`).then((d) => setOp(d.withdrawal)).catch((e) => setError(err(e)));
@@ -102,7 +114,7 @@ export default function WalletWithdraw() {
                 <motion.p className="mt-4 text-sm text-muted" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 2, repeat: Infinity }}>
                   {t.wallet.waiting}
                 </motion.p>
-                <Button variant="ghost" className="mt-2" onClick={() => post(`/api/withdrawals/${op.operation_id}/abort`).then((d) => setOp(d.withdrawal))}>
+                <Button variant="ghost" className="mt-2" onClick={abort}>
                   {t.wallet.abort}
                 </Button>
               </motion.div>
@@ -119,12 +131,14 @@ export default function WalletWithdraw() {
                 </div>
                 <ErrorNote>{error}</ErrorNote>
                 <div className="mt-5 grid grid-cols-2 gap-3">
-                  <Button variant="secondary" onClick={() => post(`/api/withdrawals/${op.operation_id}/abort`).then((d) => setOp(d.withdrawal))}>
+                  <Button variant="secondary" onClick={abort}>
                     {t.wallet.abort}
                   </Button>
                   <Button
                     loading={busy}
                     onClick={async () => {
+                      const m = money(op.amount_value, lang);
+                      if (!(await confirm({ title: t.ask.sendWalletTitle, body: fill(t.ask.sendWalletBody, { amount: m }), confirmLabel: fill(t.ask.sendWalletOk, { amount: m }) }))) return;
                       setBusy(true);
                       setError(null);
                       try {

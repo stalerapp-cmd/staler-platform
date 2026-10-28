@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Download, FileDown, Minus, Package, Plus, Search, ShoppingCart, Trash2, Truck } from 'lucide-react';
+import { ArrowDownUp, Download, FileDown, Minus, Package, Plus, Search, ShoppingCart, Trash2, Truck } from 'lucide-react';
 import { ApiError, assetUrl, downloadFile, get, newIdempotencyKey, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -9,8 +9,10 @@ import { useData } from '../lib/hooks';
 import { date, money } from '../lib/format';
 import { useSecureAction } from '../components/SecureAction';
 import { useToast } from '../components/Toast';
-import { Badge, Button, EmptyState, ErrorNote, PageHeader, Sheet, Skeleton, SuccessMark, cx } from '../components/ui';
+import { Badge, Button, Chips, EmptyState, ErrorNote, PageHeader, Select, Sheet, Skeleton, SuccessMark, cx } from '../components/ui';
 import { StarMotif } from '../components/Tatreez';
+import { useConfirm } from '../components/Confirm';
+import { fill } from '../lib/format';
 
 export interface Product {
   id: string;
@@ -165,24 +167,32 @@ export default function Store({ publicMode = false }: { publicMode?: boolean }) 
           </Button>
         }
       />
-      <div className="mb-6 flex flex-wrap gap-3">
-        <label className="relative min-w-[220px] flex-1">
-          <span className="sr-only">{t.common.search}</span>
-          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.store.search} className="field ps-9" />
-        </label>
-        <select value={type} onChange={(e) => setType(e.target.value as any)} className="field w-auto" aria-label={t.tx.filter}>
-          <option value="">{t.common.all}</option>
-          <option value="digital">{t.store.digital}</option>
-          <option value="physical">{t.store.physical}</option>
-        </select>
-        <select value={sort} onChange={(e) => setSort(e.target.value)} className="field w-auto" aria-label="Sort">
-          {Object.entries(t.store.sort).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
+      <div className="mb-6 space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="relative min-w-[220px] flex-1">
+            <span className="sr-only">{t.common.search}</span>
+            <Search className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.store.search} className="field h-12 ps-10" type="search" />
+          </label>
+          <Select
+            label={t.store.sortBy}
+            value={sort as any}
+            onChange={(v) => setSort(v)}
+            icon={<ArrowDownUp className="h-4 w-4" />}
+            options={Object.entries(t.store.sort).map(([k, v]) => ({ value: k, label: v }))}
+            className="min-w-[200px]"
+          />
+        </div>
+        <Chips
+          label={t.tx.filter}
+          value={(type || 'all') as any}
+          onChange={(v: string) => setType((v === 'all' ? '' : v) as any)}
+          options={[
+            { value: 'all', label: t.common.all },
+            { value: 'digital', label: t.store.digital },
+            { value: 'physical', label: t.store.physical },
+          ]}
+        />
       </div>
       <ErrorNote>{error}</ErrorNote>
       {!items ? (
@@ -267,9 +277,17 @@ function CartSheet({ open, onClose, publicMode }: { open: boolean; onClose: () =
   const key = useRef(newIdempotencyKey());
   const secure = useSecureAction();
   const total = lines.reduce((s, l) => s + Math.round(Number(l.product.price) * 100) * l.qty, 0) / 100;
+  const confirm = useConfirm();
 
   const checkout = async () => {
     if (!user) return nav('/login', { state: { from: '/app/store' } });
+    const count = lines.reduce((n, l) => n + l.qty, 0);
+    const ok = await confirm({
+      title: t.ask.buyTitle,
+      body: fill(t.ask.buyBody, { total: money(total, lang), count }),
+      confirmLabel: fill(t.ask.buyOk, { total: money(total, lang) }),
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     try {

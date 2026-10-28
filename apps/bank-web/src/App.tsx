@@ -18,7 +18,8 @@ const Apps = lazyRetry(() => import('./pages/Apps'));
 const Settings = lazyRetry(() => import('./pages/Settings'));
 const AdminOverview = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminOverview })));
 const AdminCustomers = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminCustomers })));
-const AdminCustomer = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminCustomer })));
+const AdminCustomer = lazyRetry(() => import('./pages/AdminPeople').then((m) => ({ default: m.AdminCustomer })));
+const AdminAdmins = lazyRetry(() => import('./pages/AdminPeople').then((m) => ({ default: m.AdminAdmins })));
 const AdminLedger = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminLedger })));
 const AdminExchange = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminExchange })));
 const AdminAudit = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminAudit })));
@@ -89,6 +90,7 @@ export default function App() {
           <Route path="admin/exchange" element={admin(<AdminExchange />)} />
           <Route path="admin/audit" element={admin(<AdminAudit />)} />
           <Route path="admin/settings" element={admin(<AdminSettings />)} />
+          <Route path="admin/admins" element={admin(<AdminAdmins />)} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,16 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Banknote, ChevronLeft, Search, Users } from 'lucide-react';
-import { ApiError, get, patch, post, put } from '../lib/api';
+import { Link } from 'react-router-dom';
+import { Search, Users } from 'lucide-react';
+import { get, put } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
-import { useAuth } from '../lib/auth';
-import { AMOUNT_RE, date, money, relative } from '../lib/format';
+import { date, money, relative } from '../lib/format';
 import { fmtIban } from '../components/Bank';
+import { useConfirm } from '../components/Confirm';
+import { usePerm } from '../lib/perm';
+import { BroadcastCard } from './AdminPeople';
 import { AreaChart } from '../components/Chart';
-import { useSecureAction } from '../components/SecureAction';
 import { useToast } from '../components/Toast';
-import { AmountInput, Avatar, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Segmented, Sheet, Skeleton, Toggle, cx } from '../components/ui';
+import { Avatar, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Segmented, Select, Sheet, Skeleton, Toggle, cx } from '../components/ui';
 
 function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: 'gold' | 'olive' | 'stitch' }) {
   return (
@@ -67,6 +68,7 @@ function usePaged<T>(path: string, key: string, params: Record<string, string>) 
 export function AdminOverview() {
   const { t, lang } = useI18n();
   const { data: d } = useData<any>('/api/admin/overview');
+  const { can } = usePerm();
   if (!d) return <Loading />;
   return (
     <div>
@@ -105,6 +107,11 @@ export function AdminOverview() {
           </ul>
         </section>
       </div>
+      {can('notify') && (
+        <div className="mt-6">
+          <BroadcastCard />
+        </div>
+      )}
     </div>
   );
 }
@@ -174,166 +181,6 @@ export function AdminCustomers() {
   );
 }
 
-export function AdminCustomer() {
-  const { id } = useParams();
-  const { t, lang, err } = useI18n();
-  const { user: me } = useAuth();
-  const toast = useToast();
-  const secure = useSecureAction();
-  const { data, reload, error } = useData<any>(`/api/admin/users/${id}`, [id]);
-  const [teller, setTeller] = useState<any>(null);
-  const [dir, setDir] = useState<'in' | 'out'>('in');
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [tErr, setTErr] = useState<string | null>(null);
-
-  const run = async (fn: () => Promise<unknown>) => {
-    try {
-      await fn();
-      toast(t.common.saved);
-      void reload();
-    } catch (e) {
-      if (!(e instanceof ApiError && e.code === 'CANCELLED')) toast(err(e), 'error');
-    }
-  };
-  if (error) return <ErrorNote>{err(error)}</ErrorNote>;
-  if (!data) return <Loading />;
-  const u = data.user;
-  const self = me?.id === u.id;
-  return (
-    <div>
-      {secure.element}
-      <Link to="/app/admin/customers" className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
-        <ChevronLeft className="h-4 w-4 flip-rtl" /> {t.admin.customers}
-      </Link>
-      <div className="card engraved flex flex-wrap items-center gap-4 p-6">
-        <Avatar name={u.full_name} size={64} />
-        <div className="min-w-0 flex-1">
-          <h1 className="font-display text-3xl">{u.full_name}</h1>
-          <p className="num text-sm text-muted">
-            @{u.username} · {u.email} {u.phone ? `· ${u.phone}` : ''}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <Badge tone={u.status === 'active' ? 'good' : 'bad'}>{u.status === 'active' ? t.admin.active : t.admin.suspended}</Badge>
-            <Badge tone="info">{t.admin.roles[u.role] ?? u.role}</Badge>
-            {u.totp_enabled && <Badge tone="good">2FA</Badge>}
-          </div>
-        </div>
-        {!self && (
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant={u.status === 'active' ? 'danger' : 'secondary'} onClick={() => run(() => patch(`/api/admin/users/${u.id}`, { status: u.status === 'active' ? 'suspended' : 'active' }))}>
-              {u.status === 'active' ? t.admin.suspend : t.admin.activate}
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => run(() => post(`/api/admin/users/${u.id}/revoke-sessions`))}>
-              {t.admin.revokeSessions}
-            </Button>
-            {u.totp_enabled && (
-              <Button size="sm" variant="secondary" onClick={() => run(() => secure.run((totp) => post(`/api/admin/users/${u.id}/reset-2fa`, totp ? { totp } : {})))}>
-                {t.admin.reset2fa}
-              </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={() => run(() => patch(`/api/admin/users/${u.id}`, { role: u.role === 'admin' ? 'user' : 'admin' }))}>
-              {u.role === 'admin' ? t.admin.makeCustomer : t.admin.makeAdmin}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <h2 className="mb-3 mt-8 text-xl">{t.admin.accounts}</h2>
-      <div className="grid gap-4 md:grid-cols-2">
-        {data.accounts.map((a: any) => (
-          <div key={a.id} className="card p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="num text-sm text-muted">{a.account_number}</p>
-                <p className="num truncate text-sm">{fmtIban(a.iban)}</p>
-              </div>
-              {a.is_locked && <Badge tone="bad">{t.admin.freeze}</Badge>}
-            </div>
-            <p className="num mt-3 font-display text-3xl">{money(a.balance, lang, a.currency)}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button size="sm" icon={<Banknote className="h-4 w-4" />} onClick={() => (setTeller(a), setTErr(null))}>
-                {t.admin.teller}
-              </Button>
-              <Button size="sm" variant={a.is_locked ? 'secondary' : 'danger'} onClick={() => run(() => post(`/api/admin/accounts/${a.id}/freeze`, { frozen: !a.is_locked }))}>
-                {a.is_locked ? t.admin.unfreeze : t.admin.freeze}
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <section className="card p-4">
-          <h2 className="mb-2 px-1 text-xl">{t.nav.transactions}</h2>
-          <ul className="divide-y divide-line text-sm">
-            {data.transactions.map((x: any) => (
-              <li key={x.id} className="flex items-center justify-between gap-3 px-1 py-2.5">
-                <div className="min-w-0">
-                  <p className="truncate">{x.subject || t.tx.types[x.type] || x.type}</p>
-                  <p className="text-xs text-muted">{date(x.created_at, lang)}</p>
-                </div>
-                <span className={cx('num shrink-0 font-medium', x.direction === 'in' ? 'text-olive' : '')}>
-                  {x.direction === 'in' ? '+' : '−'}
-                  {money(x.amount, lang)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section className="card h-fit p-4">
-          <h2 className="mb-2 px-1 text-xl">{t.admin.apps}</h2>
-          {data.linkedApps.length ? (
-            <ul className="divide-y divide-line text-sm">
-              {data.linkedApps.map((a: any) => (
-                <li key={a.id} className="px-1 py-2.5">
-                  <p className="font-medium">{a.client_name}</p>
-                  <p className="text-xs text-muted">{a.last_used_at ? relative(a.last_used_at, lang) : '—'}</p>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-1 text-sm text-muted">{t.common.empty}</p>
-          )}
-        </section>
-      </div>
-
-      <Sheet open={!!teller} onClose={() => setTeller(null)} title={t.admin.teller}>
-        <form
-          className="space-y-4"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!AMOUNT_RE.test(amount) || Number(amount) <= 0) return setTErr(t.common.amount);
-            setBusy(true);
-            setTErr(null);
-            try {
-              await secure.run((totp) => post('/api/admin/teller', { accountId: teller.id, amount, direction: dir, note: note.trim(), ...(totp ? { totp } : {}) }));
-              setTeller(null);
-              setAmount('');
-              setNote('');
-              toast(t.common.saved);
-              void reload();
-            } catch (e2) {
-              if (!(e2 instanceof ApiError && e2.code === 'CANCELLED')) setTErr(err(e2));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <Segmented value={dir} onChange={setDir} options={[{ value: 'in', label: t.admin.cashIn }, { value: 'out', label: t.admin.cashOut }]} />
-          <AmountInput label={t.common.amount} value={amount} onChange={setAmount} />
-          <Field label={t.admin.tellerNote} value={note} onChange={(e) => setNote(e.target.value)} minLength={3} maxLength={140} required />
-          <ErrorNote>{tErr}</ErrorNote>
-          <Button block size="lg" loading={busy}>
-            {t.admin.book}
-          </Button>
-        </form>
-      </Sheet>
-    </div>
-  );
-}
-
 export function AdminLedger() {
   const { t, lang, err } = useI18n();
   const [q, setQ] = useState('');
@@ -348,14 +195,13 @@ export function AdminLedger() {
           <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.tx.searchPh} className="field ps-9" />
         </label>
-        <select value={type} onChange={(e) => setType(e.target.value)} className="field" aria-label="Type">
-          <option value="">{t.common.all}</option>
-          {Object.entries(t.tx.types).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
+        <Select
+          block
+          label={t.tx.typeLabel}
+          value={type || 'all'}
+          onChange={(v) => setType(v === 'all' ? '' : v)}
+          options={[{ value: 'all', label: t.common.all }, ...Object.entries(t.tx.types).map(([k, v]) => ({ value: k, label: v }))]}
+        />
       </div>
       {list.error ? <ErrorNote>{err(list.error)}</ErrorNote> : null}
       <div className="card overflow-x-auto">
@@ -498,6 +344,7 @@ export function AdminAudit() {
 export function AdminSettings() {
   const { t, err } = useI18n();
   const toast = useToast();
+  const confirm = useConfirm();
   const { data, reload } = useData<{ settings: Record<string, any> }>('/api/admin/settings');
   const [s, setS] = useState<Record<string, any> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -512,6 +359,7 @@ export function AdminSettings() {
         className="card space-y-5 p-6"
         onSubmit={async (e) => {
           e.preventDefault();
+          if (!(await confirm({ title: t.ask.saveTitle, body: t.ask.saveBody, confirmLabel: t.common.save }))) return;
           setBusy(true);
           try {
             await put('/api/admin/settings', { ...s, bank_name: String(s.bank_name).trim() });

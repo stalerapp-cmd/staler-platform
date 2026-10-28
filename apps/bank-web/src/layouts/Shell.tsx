@@ -23,7 +23,9 @@ import {
   Vault,
   Wallet,
   X,
+  Crown,
 } from 'lucide-react';
+import { usePerm } from '../lib/perm';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
@@ -34,17 +36,20 @@ import { localize, type Notice } from '../lib/notifications';
 import { Emblem } from '../components/Guilloche';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
+import { useConfirm } from '../components/Confirm';
 
 interface NavItem {
   to: string;
   label: string;
   icon: typeof Home;
   end?: boolean;
+  perm?: string;
 }
 
 function useNav() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { can } = usePerm();
   const main: NavItem[] = [
     { to: '/app', label: t.nav.overview, icon: Home, end: true },
     { to: '/app/transfer', label: t.nav.transfer, icon: ArrowRightLeft },
@@ -58,11 +63,14 @@ function useNav() {
   if (user?.role === 'admin') {
     role.push(
       { to: '/app/admin', label: t.nav.admin, icon: LayoutDashboard, end: true },
-      { to: '/app/admin/customers', label: t.nav.customers, icon: Users },
-      { to: '/app/admin/ledger', label: t.nav.ledger, icon: Landmark },
-      { to: '/app/admin/exchange', label: t.nav.exchange, icon: Vault },
-      { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock },
-      { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck },
+      ...([
+        { to: '/app/admin/customers', label: t.nav.customers, icon: Users, perm: 'customers.view' },
+        { to: '/app/admin/ledger', label: t.nav.ledger, icon: Landmark, perm: 'ledger.view' },
+        { to: '/app/admin/exchange', label: t.nav.exchange, icon: Vault, perm: 'exchange.view' },
+        { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
+        { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
+        { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },
+      ] as NavItem[]).filter((i) => can(i.perm!)),
     );
   }
   return { main, role, settings: { to: '/app/settings', label: t.nav.settings, icon: Settings2 } as NavItem };
@@ -167,7 +175,10 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const loc = useLocation();
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
-  useEffect(() => setMenu(false), [loc.pathname]);
+  const confirm = useConfirm();
+  useEffect(() => {
+    setMenu(false);
+  }, [loc.pathname]);
   useEffect(() => {
     if (!menu) return;
     const prev = document.body.style.overflow;
@@ -200,6 +211,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         <SideLink item={settings} onClick={onClick} animated={animated} />
         <button
           onClick={async () => {
+            if (!(await confirm({ title: t.ask.signOutTitle, body: t.ask.signOutBody, confirmLabel: t.ask.signOutOk }))) return;
             await logout();
             navigate('/login');
           }}

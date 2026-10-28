@@ -25,8 +25,9 @@ const MerchantDashboard = lazyRetry(() => import('./pages/Merchant').then((m) =>
 const MerchantProducts = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantProducts })));
 const MerchantOrders = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantOrders })));
 const AdminOverview = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminOverview })));
-const AdminUsers = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminUsers })));
-const AdminUserDetail = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminUserDetail })));
+const AdminUsers = lazyRetry(() => import('./pages/AdminPeople').then((m) => ({ default: m.AdminUsers })));
+const AdminUserDetail = lazyRetry(() => import('./pages/AdminPeople').then((m) => ({ default: m.AdminUserDetail })));
+const AdminAdmins = lazyRetry(() => import('./pages/AdminPeople').then((m) => ({ default: m.AdminAdmins })));
 const AdminStores = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminStores })));
 const AdminPending = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminPending })));
 const AdminBankOps = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminBankOps })));
@@ -106,6 +107,7 @@ export default function App() {
           <Route path="admin/bank" element={<Private roles={['admin']}>{page(<AdminBankOps />)}</Private>} />
           <Route path="admin/audit" element={<Private roles={['admin']}>{page(<AdminAudit />)}</Private>} />
           <Route path="admin/settings" element={<Private roles={['admin']}>{page(<AdminSettings />)}</Private>} />
+          <Route path="admin/admins" element={<Private roles={['admin']}>{page(<AdminAdmins />)}</Private>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

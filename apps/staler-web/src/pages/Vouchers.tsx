@@ -8,9 +8,12 @@ import { AMOUNT_RE, money, relative } from '../lib/format';
 import { QRImage } from '../components/QR';
 import { useToast } from '../components/Toast';
 import { AmountInput, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Sheet } from '../components/ui';
+import { useConfirm } from '../components/Confirm';
+import { fill } from '../lib/format';
 
 export default function Vouchers() {
   const { t, lang, err } = useI18n();
+  const confirm = useConfirm();
   const toast = useToast();
   const { reload: reloadUser } = useAuth();
   const list = useData<{ vouchers: any[] }>('/api/exchange/vouchers');
@@ -78,6 +81,13 @@ export default function Vouchers() {
                       className="rounded-lg p-2 text-muted hover:bg-stitch/10 hover:text-stitch"
                       aria-label={t.vouchers.cancel}
                       onClick={async () => {
+                        const ok = await confirm({
+                          title: t.ask.voucherCancelTitle,
+                          body: fill(t.ask.voucherCancelBody, { amount: money(v.amount, lang) }),
+                          confirmLabel: t.ask.voucherCancelOk,
+                          tone: 'danger',
+                        });
+                        if (!ok) return;
                         try {
                           await del(`/api/exchange/vouchers/${v.id}`);
                           void list.reload();
