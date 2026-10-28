@@ -68,14 +68,16 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
 export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field({ label, hint, error, trailing, className, id, ...rest }, ref) {
   const auto = useId();
   const fid = id ?? auto;
+  const ltr = rest.dir === 'ltr';
   return (
     <div className={className}>
       <label htmlFor={fid} className="mb-1.5 block text-sm font-medium text-ink/80">
         {label}
       </label>
       <div className="relative">
-        <input ref={ref} id={fid} aria-invalid={error ? true : undefined} aria-describedby={error || hint ? `${fid}-d` : undefined} className={cx('field', trailing ? 'pe-12' : undefined)} {...rest} />
-        {trailing && <div className="absolute inset-y-0 end-0 flex items-center pe-2">{trailing}</div>}
+        <input ref={ref} id={fid} aria-invalid={error ? true : undefined} aria-describedby={error || hint ? `${fid}-d` : undefined} className={cx('field', trailing ? (ltr ? 'pr-12' : 'pe-12') : undefined)} {...rest} />
+        {/* Left-to-right fields (passwords, IBANs, IDs) keep their button on the right, where the text ends. */}
+        {trailing && <div className={cx('absolute inset-y-0 flex items-center', ltr ? 'right-0 pr-2' : 'end-0 pe-2')}>{trailing}</div>}
       </div>
       {(error || hint) && (
         <p id={`${fid}-d`} className={cx('mt-1.5 text-sm', error ? 'text-stitch' : 'text-muted')}>

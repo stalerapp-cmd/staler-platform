@@ -79,3 +79,25 @@
 .safe-x { padding-left: max(env(safe-area-inset-left), 0px); padding-right: max(env(safe-area-inset-right), 0px); }
 html, body { overflow-x: clip; }
 body { overscroll-behavior-y: none; }
+
+/* ---------------------------------------------------------------- pointer
+   S-Taler: indigo arrow with gold edge, ruby pointer. Only for real mice/trackpads; touch screens are untouched. */
+@media (hover: hover) and (pointer: fine) {
+  html { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M4.2 2.6 L4.2 20.2 L8.9 16 L12 22.6 L15 21.3 L11.9 14.8 L18.3 14.6 Z' fill='%23141B3D' stroke='%23E3B448' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 4 3, auto; }
+  a, button, summary, label[for], select, [role='button'], [role='tab'], [role='switch'], input[type='checkbox'], input[type='radio'], input[type='range'] {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M4.2 2.6 L4.2 20.2 L8.9 16 L12 22.6 L15 21.3 L11.9 14.8 L18.3 14.6 Z' fill='%23C8344A' stroke='%23FFFFFF' stroke-width='1.6' stroke-linejoin='round'/%3E%3Ccircle cx='19.5' cy='19.5' r='3' fill='%23E3B448' stroke='%23FFFFFF' stroke-width='1.2'/%3E%3C/svg%3E") 4 3, pointer;
+  }
+  input:not([type='checkbox']):not([type='radio']):not([type='range']), textarea, [contenteditable='true'] { cursor: text; }
+  button:disabled, [aria-disabled='true'] { cursor: not-allowed; }
+}
+
+/* -------------------------------------------------------------- scrollbars */
+* { scrollbar-width: thin; scrollbar-color: rgb(var(--stitch) / 0.55) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgb(var(--stitch) / 0.55); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--stitch) / 0.8); background-clip: padding-box; border: 2px solid transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* One show-password button only: hide the browser's own (Edge / old IE). */
+input::-ms-reveal, input::-ms-clear { display: none; }
