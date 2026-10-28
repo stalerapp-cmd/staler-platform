@@ -1,7 +1,8 @@
-import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
+  ArrowLeft,
   Activity,
   Bell,
   ClipboardList,
@@ -35,6 +36,7 @@ import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { Logo } from '../components/Tatreez';
 import { Avatar, Sheet, cx } from '../components/ui';
+import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 
 interface NavItem {
   to: string;
@@ -80,23 +82,53 @@ function useNav() {
   return { main, role, settings: { to: '/app/settings', label: t.nav.settings, icon: Cog } as NavItem };
 }
 
-function SideLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
+function SideLink({ item, onClick, animated = true }: { item: NavItem; onClick?: () => void; animated?: boolean }) {
   return (
     <NavLink
       to={item.to}
       end={item.end}
       onClick={onClick}
       className={({ isActive }) =>
-        cx('group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition', isActive ? 'text-ink' : 'text-muted hover:bg-sunk hover:text-ink')
+        cx('group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition', isActive ? (animated ? 'text-ink' : 'bg-sunk font-medium text-ink') : 'text-muted hover:bg-sunk hover:text-ink')
       }
     >
       {({ isActive }) => (
         <>
-          {isActive && <motion.span layoutId="side-active" className="absolute inset-0 rounded-xl bg-sunk" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />}
-          {isActive && <motion.span layoutId="side-thread" className="absolute inset-y-2 start-0 w-1 rounded-full bg-stitch" />}
+          {isActive && animated && <motion.span layoutId="side-active" className="absolute inset-0 rounded-xl bg-sunk" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />}
+          {isActive && animated && <motion.span layoutId="side-thread" className="absolute inset-y-2 start-0 w-1 rounded-full bg-stitch" />}
           <item.icon className="relative h-5 w-5" />
           <span className="relative">{item.label}</span>
         </>
+      )}
+    </NavLink>
+  );
+}
+
+/** Messages shortcut with unread badge, always visible in the top bar. */
+function MessagesButton() {
+  const { t } = useI18n();
+  const [unread, setUnread] = useState(0);
+  const load = async () => {
+    try {
+      setUnread((await get<{ unread: number }>('/api/messages/unread-count')).unread);
+    } catch {
+      /* offline */
+    }
+  };
+  useEffect(() => void load(), []);
+  usePolling(load, 30_000);
+  return (
+    <NavLink
+      to="/app/messages"
+      onClick={() => setUnread(0)}
+      className={({ isActive }) => cx('relative rounded-xl p-2.5 transition hover:bg-sunk hover:text-ink', isActive ? 'text-ink' : 'text-muted')}
+      aria-label={t.nav.messages}
+    >
+      <MessageCircle className="h-5 w-5" />
+      {unread > 0 && (
+        <span className="absolute end-1.5 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-stitch px-1 text-[10px] font-bold text-white">
+          {unread > 9 ? '9+' : unread}
+        </span>
       )}
     </NavLink>
   );
@@ -186,6 +218,17 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
   useEffect(() => setMenu(false), [loc.pathname]);
+  useEffect(() => {
+    if (!menu) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenu(false);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menu]);
 
   const bottom: NavItem[] = [
     { to: '/app', label: t.nav.home, icon: Home, end: true },
@@ -194,17 +237,17 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     { to: '/app/store', label: t.nav.store, icon: ShoppingBag },
   ];
 
-  const sidebar = (onClick?: () => void) => (
+  const sidebar = (onClick?: () => void, animated = true) => (
     <nav className="flex h-full flex-col gap-1" aria-label="Main">
       {main.map((i) => (
-        <SideLink key={i.to} item={i} onClick={onClick} />
+        <SideLink key={i.to} item={i} onClick={onClick} animated={animated} />
       ))}
       {role.length > 0 && <div className="mx-3 my-3 border-t border-dashed border-line" />}
       {role.map((i) => (
-        <SideLink key={i.to} item={i} onClick={onClick} />
+        <SideLink key={i.to} item={i} onClick={onClick} animated={animated} />
       ))}
       <div className="mt-auto pt-4">
-        <SideLink item={settings} onClick={onClick} />
+        <SideLink item={settings} onClick={onClick} animated={animated} />
         <button
           onClick={async () => {
             await logout();
@@ -220,7 +263,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   );
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[260px_1fr]">
+    <div className="safe-x min-h-dvh lg:grid lg:grid-cols-[260px_1fr]">
       <aside className="sticky top-0 hidden h-dvh flex-col border-e border-line bg-surface/60 px-4 py-6 backdrop-blur lg:flex">
         <NavLink to="/app" className="mb-8 flex items-center gap-3 px-2">
           <Logo animate />
@@ -232,20 +275,27 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       <div className="min-w-0">
         <Announcement />
         <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-bg/80 backdrop-blur-md">
-          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-            <div className="flex items-center gap-2 lg:hidden">
-              <button onClick={() => setMenu(true)} className="rounded-xl p-2.5 text-muted hover:bg-sunk" aria-label={t.common.menu}>
-                <Menu className="h-5 w-5" />
-              </button>
-              <Logo className="h-8 w-8" />
+          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
+            <div className="flex min-w-0 items-center gap-1">
+              {loc.pathname !== '/app' && <BackButton />}
+              <div className="flex items-center gap-2 lg:hidden">
+                <button onClick={() => setMenu(true)} className="rounded-xl p-2.5 text-muted hover:bg-sunk" aria-label={t.common.menu}>
+                  <Menu className="h-5 w-5" />
+                </button>
+                <Logo className="h-8 w-8" />
+              </div>
+              <div className="hidden text-sm text-muted lg:block">
+                {t.home.hello}
+                {lang === 'ar' ? '، ' : ', '}
+                <span className="font-medium text-ink">{user?.full_name?.split(' ')[0]}</span>
+              </div>
             </div>
-            <div className="hidden text-sm text-muted lg:block">
-              {t.home.hello}
-              {lang === 'ar' ? '، ' : ', '}
-              <span className="font-medium text-ink">{user?.full_name?.split(' ')[0]}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <TopControls />
+            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+              {/* Small phones: language and theme live in the side menu to keep the bar uncluttered. */}
+              <div className="hidden sm:block">
+                <TopControls />
+              </div>
+              <MessagesButton />
               <Notifications />
               <NavLink to="/app/settings" className="ms-1 rounded-full" aria-label={t.nav.settings}>
                 <Avatar name={user?.full_name} src={user?.profile_image} size={36} />
@@ -254,12 +304,14 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 pb-32 pt-6 sm:px-6 lg:pb-12">
-          <AnimatePresence mode="wait">
-            <motion.div key={loc.pathname} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22 }}>
-              {children ?? <Outlet />}
-            </motion.div>
-          </AnimatePresence>
+        <main className="mx-auto max-w-6xl px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:pb-12">
+          <ErrorBoundary key={loc.pathname}>
+            <Suspense fallback={<PageSpinner />}>
+              <div key={loc.pathname} className="page-in">
+                {children ?? <Outlet />}
+              </div>
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
 
@@ -284,17 +336,26 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         </div>
       </nav>
 
-      <AnimatePresence>
-        {menu && (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <motion.div className="absolute inset-0 bg-night/50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMenu(false)} />
-            <motion.aside
-              initial={{ x: document.documentElement.dir === 'rtl' ? '100%' : '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: document.documentElement.dir === 'rtl' ? '100%' : '-100%' }}
-              transition={{ type: 'spring', bounce: 0.1, duration: 0.4 }}
-              className="safe-top absolute inset-y-0 start-0 flex w-[82%] max-w-xs flex-col bg-surface px-4 py-5"
-            >
+      {/* Side menu: always mounted and driven by CSS, so it can always be opened again
+          and never leaves an invisible layer over the app. */}
+      <div
+        className={cx('fixed inset-0 z-50 lg:hidden', !menu && 'pointer-events-none')}
+        aria-hidden={!menu}
+        {...((!menu ? { inert: '' } : {}) as any)}
+      >
+        <div
+          className={cx('absolute inset-0 bg-night/50 transition-opacity duration-300', menu ? 'opacity-100' : 'opacity-0')}
+          onClick={() => setMenu(false)}
+        />
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-label={t.common.menu}
+          className={cx(
+            'safe-top safe-bottom absolute inset-y-0 start-0 flex w-[84%] max-w-xs flex-col bg-surface px-4 py-5 shadow-card transition-transform duration-300 ease-out will-change-transform',
+            menu ? 'translate-x-0' : 'ltr:-translate-x-full rtl:translate-x-full',
+          )}
+        >
               <div className="mb-6 flex items-center justify-between px-2">
                 <div className="flex items-center gap-3">
                   <Avatar name={user?.full_name} src={user?.profile_image} />
@@ -307,20 +368,40 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto pb-6">{sidebar(() => setMenu(false))}</div>
-            </motion.aside>
-          </div>
-        )}
-      </AnimatePresence>
+              <div className="mb-3 flex justify-end border-b border-line pb-3 sm:hidden">
+                <TopControls />
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pb-6">{sidebar(() => setMenu(false), false)}</div>
+        </aside>
+      </div>
     </div>
+  );
+}
+
+/** Back: previous screen if there is one in this tab's history, otherwise the parent screen. */
+function BackButton() {
+  const navigate = useNavigate();
+  const loc = useLocation();
+  const { t } = useI18n();
+  return (
+    <button
+      onClick={() => {
+        if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
+        else navigate(loc.pathname.split('/').slice(0, -1).join('/') || '/app', { replace: true });
+      }}
+      className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-ink transition hover:bg-sunk active:scale-95"
+      aria-label={t.common.back}
+    >
+      <ArrowLeft className="h-5 w-5 flip-rtl" />
+    </button>
   );
 }
 
 function TabLink({ item }: { item: NavItem }) {
   return (
-    <NavLink to={item.to} end={item.end} className={({ isActive }) => cx('flex flex-col items-center gap-0.5 text-[11px] transition', isActive ? 'text-stitch' : 'text-muted')}>
-      <item.icon className="h-5 w-5" />
-      {item.label}
+    <NavLink to={item.to} end={item.end} className={({ isActive }) => cx('flex min-w-0 flex-col items-center gap-0.5 px-0.5 text-[11px] leading-tight transition', isActive ? 'text-stitch' : 'text-muted')}>
+      <item.icon className="h-5 w-5 shrink-0" />
+      <span className="max-w-full truncate">{item.label}</span>
     </NavLink>
   );
 }

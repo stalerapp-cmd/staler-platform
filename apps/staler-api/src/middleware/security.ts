@@ -14,7 +14,8 @@ export const securityHeaders = helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
-      imgSrc: ["'self'", 'data:', 'blob:'],
+      // Product photos and avatars live in Supabase Storage.
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.supabase.co'],
       connectSrc: ["'self'"],
       mediaSrc: ["'self'", 'blob:'],
       workerSrc: ["'self'", 'blob:'],

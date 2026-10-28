@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { one, S } from '../lib/db.js';
 import { forbidden, unauthorized } from '../lib/errors.js';
 import { verifyToken } from '../lib/jwt.js';
+import { cachedUser, rememberUser } from '../lib/authCache.js';
 import { safeEqual, sha256 } from '../lib/crypto.js';
 
 export interface AuthContext {
@@ -49,10 +50,13 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     } catch (e: any) {
       throw unauthorized(e?.expired ? 'Session expired' : 'Invalid session', e?.expired ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN');
     }
-    const u = await one<{ role: string; status: string; token_version: number }>(
-      `SELECT role, status, token_version FROM ${S}.users WHERE id = $1`,
-      [claims.sub],
-    );
+    type Row = { role: string; status: string; token_version: number };
+    // A cached row is only trusted if it still matches the token's version.
+    let u = cachedUser<Row>(claims.sub);
+    if (!u || u.token_version !== claims.tv) {
+      u = (await one<Row>(`SELECT role, status, token_version FROM ${S}.users WHERE id = $1`, [claims.sub])) ?? undefined;
+      if (u) rememberUser(claims.sub, u);
+    }
     if (!u || u.token_version !== claims.tv) throw unauthorized('Session revoked', 'SESSION_REVOKED');
     if (u.status !== 'active') throw forbidden('Account is suspended', 'ACCOUNT_SUSPENDED');
     req.auth = { userId: claims.sub, role: u.role as AuthContext['role'], sid: claims.sid };

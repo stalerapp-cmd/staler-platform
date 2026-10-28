@@ -20,6 +20,8 @@ const transporter =
         secure: env.SMTP_SECURE,
         auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
         requireTLS: true,
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
         tls: { minVersion: 'TLSv1.2' },
       })
     : null;
@@ -31,20 +33,78 @@ if (isProd && env.MAIL_MODE === 'log') {
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
+function fromAddress() {
+  return env.MAIL_FROM ?? `"${env.BANK_NAME}" <${env.SMTP_USER ?? 'no-reply@example.com'}>`;
+}
+function parseFrom(f: string) {
+  const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(f);
+  return m ? { name: m[1]!.trim() || env.BANK_NAME, email: m[2]!.trim() } : { name: env.BANK_NAME, email: f.trim() };
+}
+
+async function postJson(url: string, headers: Record<string, string>, body: unknown) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 20_000);
+  try {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body), signal: ctl.signal });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function deliver(mail: Mail) {
+  const from = fromAddress();
+  if (env.MAIL_MODE === 'brevo') {
+    const f = parseFrom(from);
+    return postJson('https://api.brevo.com/v3/smtp/email', { 'api-key': env.MAIL_API_KEY ?? '' }, {
+      sender: f,
+      to: [{ email: mail.to }],
+      subject: mail.subject,
+      htmlContent: mail.html,
+      textContent: mail.text,
+    });
+  }
+  if (env.MAIL_MODE === 'resend') {
+    return postJson('https://api.resend.com/emails', { Authorization: `Bearer ${env.MAIL_API_KEY ?? ''}` }, {
+      from,
+      to: [mail.to],
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+  }
+  if (env.MAIL_RELAY_URL && env.MAIL_RELAY_SECRET) {
+    return postJson(env.MAIL_RELAY_URL, { 'x-relay-secret': env.MAIL_RELAY_SECRET }, {
+      smtp: { host: env.SMTP_HOST, port: env.SMTP_PORT, user: env.SMTP_USER, pass: env.SMTP_PASS },
+      mail: { from, ...mail },
+    });
+  }
+  await transporter!.sendMail({ from, ...mail });
+}
+
+/**
+ * Sends in the background: the HTTP request that triggered the mail (sign-up,
+ * password reset…) answers immediately instead of waiting for the mail server.
+ */
 export async function sendMail(mail: Mail): Promise<void> {
   if (env.MAIL_MODE === 'memory') {
     outbox.push(mail);
     return;
   }
-  if (env.MAIL_MODE === 'log' || !transporter) {
+  if (env.MAIL_MODE === 'log' || (env.MAIL_MODE === 'smtp' && !transporter)) {
     logger.info({ to: mail.to, subject: mail.subject, preview: mail.text }, 'mail (log mode)');
     return;
   }
-  try {
-    await transporter.sendMail({ from: env.MAIL_FROM ?? `"${env.BANK_NAME}" <${env.SMTP_USER}>`, ...mail });
-  } catch (err) {
-    logger.error({ err, to: mail.to }, 'mail delivery failed');
-  }
+  const attempt = async (n: number): Promise<void> => {
+    try {
+      await deliver(mail);
+      logger.info({ to: mail.to, subject: mail.subject }, 'mail sent');
+    } catch (err) {
+      if (n < 2) return void setTimeout(() => void attempt(n + 1), 3_000 * (n + 1));
+      logger.error({ err, to: mail.to }, 'mail delivery failed');
+    }
+  };
+  void attempt(0);
 }
 
 type Lang = 'en' | 'ar';

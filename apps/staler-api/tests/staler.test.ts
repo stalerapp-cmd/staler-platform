@@ -495,6 +495,25 @@ describe('messages', () => {
     const unread = await request(app).get('/api/messages/unread-count').set(auth(b.token));
     expect(unread.body.data.unread).toBe(0);
   });
+
+  it('works with the production rules: new chats, both type names, re-opening and deleting', async () => {
+    const a = await walletUser(app, 'Chat Gamma');
+    const b = await walletUser(app, 'Chat Delta');
+    const first = await request(app).post('/api/messages/conversations').set(auth(a.token)).send({ type: 'user_to_user', recipientId: b.userId });
+    expect(first.status).toBe(201);
+    const again = await request(app).post('/api/messages/conversations').set(auth(b.token)).send({ type: 'direct', recipientId: a.userId });
+    expect(again.body.data.conversationId).toBe(first.body.data.conversationId);
+    const id = first.body.data.conversationId;
+    const sent = await request(app).post(`/api/messages/conversations/${id}/messages`).set(auth(a.token)).send({ content: 'hello' });
+    expect(sent.status).toBe(201);
+    const list = await request(app).get('/api/messages/conversations').set(auth(b.token));
+    const conv = list.body.data.conversations.find((c: any) => c.id === id);
+    expect(conv.lastMessage.content).toBe('hello');
+    expect(conv.unread).toBe(1);
+    expect((await request(app).delete(`/api/messages/messages/${sent.body.data.message.id}`).set(auth(a.token))).status).toBe(200);
+    const support = await request(app).post('/api/messages/conversations').set(auth(a.token)).send({ type: 'support' });
+    expect(support.status).toBe(201);
+  });
 });
 
 // ======================================================================= admin

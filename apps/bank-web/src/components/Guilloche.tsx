@@ -59,11 +59,23 @@ export function Guilloche({ className, color = 'rgb(var(--brass))', spin = true,
   );
 }
 
-/** Wordmark emblem: a small engraved rosette in a brass coin. */
+/** Brand emblem: a bank facade in brass on vault green — readable down to 24px. */
 export function Emblem({ className = 'h-9 w-9' }: { className?: string }) {
   return (
-    <span className={`relative inline-grid place-items-center overflow-hidden rounded-full bg-gold ${className}`}>
-      <Guilloche className="h-[115%] w-[115%]" color="rgb(var(--vault))" spin={false} draw={false} />
-    </span>
+    <svg viewBox="0 0 64 64" className={`shrink-0 ${className}`} role="img" aria-label="TalerBank">
+      <rect width="64" height="64" rx="16" fill="#0C1A17" />
+      <circle cx="32" cy="32" r="26" fill="none" stroke="#C9A45C" strokeWidth="1.4" opacity=".55" />
+      <g fill="#C9A45C">
+        <path d="M32 12.5L50 22H14z" />
+        <rect x="15" y="24" width="34" height="3.2" rx="1" />
+        <rect x="18" y="29" width="4.4" height="14" rx="1" />
+        <rect x="26.2" y="29" width="4.4" height="14" rx="1" />
+        <rect x="33.4" y="29" width="4.4" height="14" rx="1" />
+        <rect x="41.6" y="29" width="4.4" height="14" rx="1" />
+        <rect x="15" y="45" width="34" height="3.2" rx="1" />
+        <rect x="13" y="49.6" width="38" height="3.2" rx="1" />
+      </g>
+      <circle cx="32" cy="18.6" r="1.8" fill="#0C1A17" />
+    </svg>
   );
 }

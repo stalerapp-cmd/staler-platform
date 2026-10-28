@@ -98,13 +98,14 @@ export function createApp(): Express {
     app.use(
       express.static(dist, {
         index: false,
-        maxAge: '1y',
-        immutable: true,
+        // Hashed bundles never change; everything else must be revalidated so a
+        // new deploy (new icon, new manifest, new index.html) shows up at once.
         setHeaders: (res, path) => {
-          if (path.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Cache-Control', /[\\/]assets[\\/]/.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache');
         },
       }),
     );
+    app.get(/^\/assets\//, (_req, res) => res.status(404).end());
     app.get(/^\/(?!api\/|taler-|link\/|health).*/, (_req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(join(dist, 'index.html'));

@@ -1,27 +1,28 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth, type User } from './lib/auth';
 import Shell from './layouts/Shell';
 import { Guilloche } from './components/Guilloche';
 import { Spinner } from './components/ui';
+import { ErrorBoundary, lazyRetry } from './components/Boundary';
 import { Forgot, Login, Register, Verify } from './pages/Auth';
 
-const Overview = lazy(() => import('./pages/Overview'));
-const Transfer = lazy(() => import('./pages/Transfer'));
-const Transactions = lazy(() => import('./pages/Transactions'));
-const Requests = lazy(() => import('./pages/Requests'));
-const Pay = lazy(() => import('./pages/Requests').then((m) => ({ default: m.Pay })));
-const Scan = lazy(() => import('./pages/Scan'));
-const WalletWithdraw = lazy(() => import('./pages/WalletWithdraw'));
-const Apps = lazy(() => import('./pages/Apps'));
-const Settings = lazy(() => import('./pages/Settings'));
-const AdminOverview = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminOverview })));
-const AdminCustomers = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminCustomers })));
-const AdminCustomer = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminCustomer })));
-const AdminLedger = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminLedger })));
-const AdminExchange = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminExchange })));
-const AdminAudit = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminAudit })));
-const AdminSettings = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminSettings })));
+const Overview = lazyRetry(() => import('./pages/Overview'));
+const Transfer = lazyRetry(() => import('./pages/Transfer'));
+const Transactions = lazyRetry(() => import('./pages/Transactions'));
+const Requests = lazyRetry(() => import('./pages/Requests'));
+const Pay = lazyRetry(() => import('./pages/Requests').then((m) => ({ default: m.Pay })));
+const Scan = lazyRetry(() => import('./pages/Scan'));
+const WalletWithdraw = lazyRetry(() => import('./pages/WalletWithdraw'));
+const Apps = lazyRetry(() => import('./pages/Apps'));
+const Settings = lazyRetry(() => import('./pages/Settings'));
+const AdminOverview = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminOverview })));
+const AdminCustomers = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminCustomers })));
+const AdminCustomer = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminCustomer })));
+const AdminLedger = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminLedger })));
+const AdminExchange = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminExchange })));
+const AdminAudit = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminAudit })));
+const AdminSettings = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminSettings })));
 
 export function Splash() {
   return (
@@ -62,6 +63,7 @@ const admin = (el: ReactNode) => <Private roles={['admin']}>{page(el)}</Private>
 
 export default function App() {
   return (
+    <ErrorBoundary full>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
@@ -91,5 +93,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }

@@ -31,6 +31,7 @@ let accessToken: string | null = null;
 let refreshing: Promise<any> | null = null;
 const listeners = new Set<(user: any | null) => void>();
 
+let currentUser: any | null = null;
 export const session = {
   onChange(fn: (user: any | null) => void) {
     listeners.add(fn);
@@ -39,7 +40,11 @@ export const session = {
     };
   },
   emit(user: any | null) {
+    currentUser = user;
     listeners.forEach((l) => l(user));
+  },
+  get user(): any | null {
+    return currentUser;
   },
   get token() {
     return accessToken;

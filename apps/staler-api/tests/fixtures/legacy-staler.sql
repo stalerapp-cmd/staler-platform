@@ -149,14 +149,16 @@ CREATE TABLE public.conversations (
   title TEXT,
   status TEXT DEFAULT 'active',
   created_by UUID REFERENCES public.users(id),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now(),
+  -- same rule as the production database
+  CONSTRAINT valid_type CHECK (type IN ('support', 'merchant', 'exchange', 'user_to_user'))
 );
 CREATE TABLE public.conversation_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE,
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-  last_read_at TIMESTAMPTZ
+  last_read_at TIMESTAMP
 );
 CREATE TABLE public.messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -164,9 +166,10 @@ CREATE TABLE public.messages (
   sender_id UUID REFERENCES public.users(id),
   content TEXT,
   is_edited BOOLEAN DEFAULT false,
-  edited_at TIMESTAMPTZ,
+  edited_at TIMESTAMP,
   is_deleted BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMP DEFAULT now(),
+  CONSTRAINT content_not_empty CHECK (length(trim(content)) > 0)
 );
 CREATE TABLE public.system_settings (
   id INTEGER PRIMARY KEY,
@@ -217,7 +220,7 @@ INSERT INTO public.orders (id, user_id, merchant_id, total_amount, status, payme
 VALUES ('ffffffff-ffff-4fff-8fff-ffffffffffff', '11111111-1111-4111-8111-111111111111', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 40.00, 'processing', 'completed');
 INSERT INTO public.order_items (order_id, product_id, quantity, price, is_digital) VALUES ('ffffffff-ffff-4fff-8fff-ffffffffffff', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 1, 40.00, false);
 
-INSERT INTO public.conversations (id, type, title, created_by) VALUES ('99999999-9999-4999-8999-999999999999', 'direct', NULL, '11111111-1111-4111-8111-111111111111');
+INSERT INTO public.conversations (id, type, title, created_by) VALUES ('99999999-9999-4999-8999-999999999999', 'user_to_user', NULL, '11111111-1111-4111-8111-111111111111');
 INSERT INTO public.conversation_participants (conversation_id, user_id) VALUES
   ('99999999-9999-4999-8999-999999999999', '11111111-1111-4111-8111-111111111111'),
   ('99999999-9999-4999-8999-999999999999', '22222222-2222-4222-8222-222222222222');

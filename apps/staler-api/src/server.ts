@@ -3,13 +3,16 @@ import { createApp } from './app.js';
 import { migrate } from './db/migrate.js';
 import { bootstrap } from './db/bootstrap.js';
 import { logger } from './lib/logger.js';
-import { pool } from './lib/db.js';
+import { pool, warmPool } from './lib/db.js';
 import { reconcilePending } from './modules/bank.js';
 import { housekeeping } from './modules/housekeeping.js';
 
 async function main() {
   if (env.RUN_MIGRATIONS) await migrate();
   await bootstrap();
+  await warmPool();
+  // Keep pooled connections alive between visits.
+  setInterval(() => void warmPool(2), 60_000).unref();
   const app = createApp();
   const server = app.listen(env.PORT, () => logger.info({ port: env.PORT }, `${env.SITE_NAME} API listening`));
   server.headersTimeout = 30_000;

@@ -136,7 +136,7 @@ function NewChat({ open, onClose }: { open: boolean; onClose: () => void }) {
       <ul className="mt-3 max-h-72 overflow-y-auto">
         {users.map((u) => (
           <li key={u.id}>
-            <button onClick={() => start({ type: 'direct', recipientId: u.id })} className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-start hover:bg-sunk">
+            <button onClick={() => start({ type: 'user_to_user', recipientId: u.id })} className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-start hover:bg-sunk">
               <Avatar name={u.full_name} src={u.profile_image} size={36} />
               <span>{u.full_name}</span>
             </button>

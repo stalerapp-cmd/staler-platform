@@ -364,10 +364,12 @@ export function Toggle({ checked, onChange, label, description }: { checked: boo
 export function Sheet({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current();
     window.addEventListener('keydown', onKey);
     const tm = setTimeout(() => ref.current?.querySelector<HTMLElement>('input,button,textarea,select')?.focus(), 60);
     document.body.style.overflow = 'hidden';
@@ -377,20 +379,28 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
       document.body.style.overflow = '';
       prev?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={title}>
-          <motion.div className="absolute inset-0 bg-night/55 backdrop-blur-[2px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+        <motion.div
+          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 1, pointerEvents: 'none', transition: { duration: 0.2 } }}
+        >
+          <motion.div className="absolute inset-0 bg-night/55 backdrop-blur-[2px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }} onClick={onClose} />
           <motion.div
             ref={ref}
             initial={{ y: 40, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 40, opacity: 0, scale: 0.98 }}
+            exit={{ y: 40, opacity: 0, scale: 0.98, transition: { duration: 0.18 } }}
             transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
             className={cx(
-              'safe-bottom relative max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-6 shadow-card sm:rounded-3xl',
+              'safe-bottom relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-surface p-5 shadow-card sm:rounded-3xl sm:p-6',
               wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
             )}
           >
@@ -403,7 +413,7 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
             </div>
             {children}
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

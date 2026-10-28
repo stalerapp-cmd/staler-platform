@@ -7,6 +7,7 @@ import { unauthorized } from '../lib/errors.js';
 import { ACCESS_TTL_SECONDS, signToken } from '../lib/jwt.js';
 import { clientIp, userAgent } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
+import { forgetUser } from '../lib/authCache.js';
 
 export const REFRESH_TTL_DAYS = 14;
 export const SESSION_MAX_DAYS = 30;
@@ -66,38 +67,45 @@ export async function issueSession(
 /**
  * Refresh-token rotation with reuse detection: presenting an already-rotated
  * token means it was stolen, so the whole session family is revoked.
+ *
+ * Done in ONE atomic SQL statement (row-locked with FOR UPDATE) because every
+ * round trip to the database costs ~250 ms from the app server.
  */
 export async function rotate(req: Request, res: Response, presented: string) {
-  const hash = sha256(presented);
-  const result = await tx(async (c) => {
-    const rt = await one<any>(
-      `SELECT r.*, u.role, u.status, u.token_version
-         FROM ${S}.refresh_tokens r JOIN ${S}.users u ON u.id = r.user_id
-        WHERE r.token_hash = $1 FOR UPDATE OF r`,
-      [hash],
-      c,
-    );
-    if (!rt) return { error: 'INVALID' as const };
-    if (rt.revoked_at) {
-      await c.query(`UPDATE ${S}.refresh_tokens SET revoked_at = COALESCE(revoked_at, now()) WHERE family_id = $1`, [rt.family_id]);
-      return { error: 'REUSED' as const, userId: rt.user_id };
-    }
-    if (new Date(rt.expires_at) < new Date() || new Date(rt.family_expires_at) < new Date()) return { error: 'EXPIRED' as const };
-    if (rt.status !== 'active') return { error: 'SUSPENDED' as const };
-    await c.query(`UPDATE ${S}.refresh_tokens SET revoked_at = now(), last_used_at = now() WHERE id = $1`, [rt.id]);
-    return { rt };
-  });
-  if ('error' in result) {
-    if (result.error === 'REUSED') {
-      await audit({ userId: result.userId, action: 'auth.refresh_token_reuse_detected' }, req);
-    }
+  const refreshToken = `str_${randomToken(32)}`;
+  const r = await one<any>(
+    `WITH cur AS (
+        SELECT r.id, r.user_id, r.family_id, r.revoked_at, r.expires_at, r.family_expires_at, u.role, u.status, u.token_version
+          FROM ${S}.refresh_tokens r JOIN ${S}.users u ON u.id = r.user_id
+         WHERE r.token_hash = $1 FOR UPDATE OF r
+      ), ok AS (
+        SELECT * FROM cur WHERE revoked_at IS NULL AND expires_at > now() AND family_expires_at > now() AND status = 'active'
+      ), ins AS (
+        INSERT INTO ${S}.refresh_tokens (user_id, family_id, token_hash, expires_at, family_expires_at, user_agent, ip_address)
+        SELECT user_id, family_id, $2, LEAST(now() + make_interval(days => $5), family_expires_at), family_expires_at, $3, $4 FROM ok
+        RETURNING id
+      ), upd AS (
+        UPDATE ${S}.refresh_tokens t SET revoked_at = now(), last_used_at = now(), replaced_by = (SELECT id FROM ins)
+          FROM ok WHERE t.id = ok.id RETURNING t.id
+      ), reuse AS (
+        UPDATE ${S}.refresh_tokens SET revoked_at = COALESCE(revoked_at, now())
+         WHERE family_id = (SELECT family_id FROM cur WHERE revoked_at IS NOT NULL) RETURNING 1
+      )
+      SELECT cur.user_id, cur.family_id, cur.role, cur.status, cur.token_version, cur.revoked_at IS NOT NULL AS reused,
+             (SELECT id FROM ins) AS new_id, (SELECT count(*) FROM upd) AS rotated, (SELECT count(*) FROM reuse) AS revoked
+        FROM cur`,
+    [sha256(presented), sha256(refreshToken), userAgent(req), clientIp(req), REFRESH_TTL_DAYS],
+  );
+  if (!r || !r.new_id) {
+    if (r?.reused) await audit({ userId: r.user_id, action: 'auth.refresh_token_reuse_detected' }, req);
     clearRefreshCookie(res);
     throw unauthorized('Session expired, please sign in again', 'SESSION_EXPIRED');
   }
-  const { rt } = result;
-  const session = await issueSession(req, res, { id: rt.user_id, role: rt.role, token_version: rt.token_version }, rt.family_id, new Date(rt.family_expires_at));
-  await pool.query(`UPDATE ${S}.refresh_tokens SET replaced_by = $2 WHERE id = $1`, [rt.id, session.sessionId]);
-  return { session, userId: rt.user_id as string };
+  const accessToken = await signToken({ sub: r.user_id, role: r.role, tv: r.token_version, sid: r.family_id, typ: 'access' });
+  const session = isMobileClient(req)
+    ? { accessToken, expiresIn: ACCESS_TTL_SECONDS, refreshToken, sessionId: r.new_id as string }
+    : (setRefreshCookie(res, refreshToken), { accessToken, expiresIn: ACCESS_TTL_SECONDS, sessionId: r.new_id as string });
+  return { session, userId: r.user_id as string };
 }
 
 export async function revokeFamilyByToken(presented: string) {
@@ -111,6 +119,7 @@ export async function revokeFamilyByToken(presented: string) {
 export async function revokeAllSessions(userId: string) {
   await pool.query(`UPDATE ${S}.refresh_tokens SET revoked_at = COALESCE(revoked_at, now()) WHERE user_id = $1`, [userId]);
   await pool.query(`UPDATE ${S}.users SET token_version = token_version + 1 WHERE id = $1`, [userId]);
+  forgetUser(userId);
 }
 
 export function presentedRefreshToken(req: Request): string | null {

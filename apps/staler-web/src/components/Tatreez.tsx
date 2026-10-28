@@ -121,10 +121,29 @@ export function StitchBand({ width = 48, cell = 8, className, colors = ['rgb(var
 }
 
 /** Brand mark: a small stitched star. */
+/** Brand mark: the tatreez star struck on a gold coin, with a banknote behind it. */
 export function Logo({ className = 'h-9 w-9', animate = false }: { className?: string; animate?: boolean }) {
+  const reduce = useReducedMotion();
+  const play = animate && !reduce;
   return (
-    <span className={`relative inline-grid place-items-center rounded-xl bg-night ${className}`}>
-      <StarMotif size={9} cell={8} className="h-[78%] w-[78%]" animate={animate} strokeWidth={2.2} colors={['#E2506A', '#E9C060']} />
-    </span>
+    <svg viewBox="0 0 64 64" className={`shrink-0 ${className}`} role="img" aria-label="S-Taler">
+      <rect width="64" height="64" rx="16" fill="#141B3D" />
+      <motion.g
+        initial={play ? { rotate: -4, y: 4, opacity: 0 } : false}
+        animate={{ rotate: -14, y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        style={{ originX: '32px', originY: '32px' }}
+      >
+        <rect x="11" y="13" width="42" height="22" rx="4" fill="#C8344A" />
+        <rect x="14" y="16" width="36" height="16" rx="2.5" fill="none" stroke="#141B3D" strokeOpacity=".35" strokeWidth="1.2" />
+      </motion.g>
+      <motion.g initial={play ? { scale: 0.6, opacity: 0 } : false} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', bounce: 0.45, duration: 0.7, delay: 0.15 }} style={{ originX: '32px', originY: '38px' }}>
+        <circle cx="32" cy="38" r="17" fill="#E3B448" />
+        <circle cx="32" cy="38" r="14.2" fill="none" stroke="#141B3D" strokeWidth="1.4" strokeDasharray="1.6 1.6" />
+        <path d="M32 27.5l3.6 3.6-3.6 3.6-3.6-3.6zM32 41.3l3.6 3.6-3.6 3.6-3.6-3.6zM21.5 38l3.6-3.6 3.6 3.6-3.6 3.6zM35.3 38l3.6-3.6 3.6 3.6-3.6 3.6z" fill="#C8344A" />
+        <path d="M32 33l5 5-5 5-5-5z" fill="#141B3D" />
+        <path d="M32 36l2 2-2 2-2-2z" fill="#E3B448" />
+      </motion.g>
+    </svg>
   );
 }

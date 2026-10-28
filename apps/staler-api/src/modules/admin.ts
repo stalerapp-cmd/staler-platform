@@ -17,6 +17,7 @@ import { anonymiseUser } from './auth.js';
 import { createWallet } from './walletCore.js';
 import { idParam } from './commerce.js';
 import { reconcilePending } from './bank.js';
+import { forgetUser } from '../lib/authCache.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth, requireRole('admin'));
@@ -195,6 +196,7 @@ adminRouter.patch(
         WHERE id = $1`,
       [req.params.id, b.fullName ?? null, b.status ?? null, role, adminLevel ?? null, adminLevel !== undefined],
     );
+    forgetUser(req.params.id);
     if (b.status === 'suspended') await revokeAllSessions(req.params.id!);
     await audit({ userId: req.auth!.userId, action: 'admin.user_updated', entityType: 'user', entityId: req.params.id, details: b }, req);
     res.json({ success: true });
@@ -255,6 +257,7 @@ adminRouter.post(
       `UPDATE ${S}.users SET totp_enabled = false, totp_secret_enc = NULL, totp_last_step = NULL, totp_recovery_hashes = '{}', token_version = token_version + 1 WHERE id = $1`,
       [req.params.id],
     );
+    forgetUser(req.params.id);
     await audit({ userId: req.auth!.userId, action: 'admin.2fa_reset', entityType: 'user', entityId: req.params.id }, req);
     res.json({ success: true });
   }),

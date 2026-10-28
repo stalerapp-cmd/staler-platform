@@ -34,6 +34,24 @@ Values you are asked for (if the final `onrender.com` names differ, use the real
 | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | e.g. Gmail: `smtp.gmail.com`, your address, an [app password](https://support.google.com/accounts/answer/185833), `TalerBank <you@gmail.com>` | same |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | — | optional, for storing product files in Supabase Storage |
 
+### E-mail on Render's free plan
+Render's free plan blocks outgoing SMTP ports, so sending straight to Gmail times out. Both services therefore send mail through a small HTTPS→SMTP relay deployed as the Supabase Edge Function `mail-relay` (Supabase allows port 465). Your SMTP settings stay in Render; the relay only forwards them over HTTPS. Set on both services:
+
+| Variable | Value |
+|---|---|
+| `MAIL_MODE` | `smtp` |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | e.g. `smtp.gmail.com`, `465`, your Gmail address, a Gmail app password |
+| `MAIL_RELAY_URL` | `https://<project-ref>.supabase.co/functions/v1/mail-relay` |
+| `MAIL_RELAY_SECRET` | the secret configured in the function |
+
+Alternatives without the relay: `MAIL_MODE=brevo` or `MAIL_MODE=resend` with `MAIL_API_KEY`. Mail is sent in the background, so sign-up and password reset answer immediately.
+
+### Speed
+The database is in Supabase's Seoul region and the services in Frankfurt (~250 ms per round trip). The servers keep database connections open, cache the per-request account check for 10 s, and rotate sessions in a single SQL statement. For the fastest result, put the services and the database in the same region (e.g. a new Supabase project in Frankfurt, or Render services in Singapore).
+
+### Old encrypted data
+S-Taler reads messages written by the previous backend with `LEGACY_MESSAGE_ENCRYPTION_KEY` (the old `MESSAGE_ENCRYPTION_KEY`) and old reserve keys with `LEGACY_ENCRYPTION_KEY` (the old `ENCRYPTION_KEY`).
+
 After the first deploy:
 - open `https://<service>/health` — it should say `ok`;
 - sign in as admin, change the password, enable two-step verification;

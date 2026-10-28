@@ -20,7 +20,11 @@ export const pool = new pg.Pool({
   connectionString: env.DATABASE_URL,
   ssl: sslConfig(),
   max: env.DB_POOL_MAX,
-  idleTimeoutMillis: 30_000,
+  // The database is far from the app server: opening a TLS connection costs
+  // several round trips (~1 s), so connections are kept open and reused.
+  idleTimeoutMillis: 0,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
   connectionTimeoutMillis: 10_000,
   // Client-side timeout only: startup parameters such as statement_timeout are
   // rejected by Supabase's transaction pooler.
@@ -78,4 +82,9 @@ export async function tx<T>(fn: (c: pg.PoolClient) => Promise<T>, retries = 4): 
       client.release();
     }
   }
+}
+
+/** Opens (or re-validates) a few connections so the first user request does not pay for the TLS handshake. */
+export async function warmPool(n = 3) {
+  await Promise.all(Array.from({ length: n }, () => pool.query('SELECT 1').catch(() => undefined)));
 }

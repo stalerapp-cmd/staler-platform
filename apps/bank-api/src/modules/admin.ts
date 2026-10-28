@@ -11,6 +11,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { centralAccount, exchangeAccount, move, notify } from './ledger.js';
 import { requireSecondFactor } from './mfa.js';
 import { revokeAllSessions } from './sessions.js';
+import { forgetUser } from '../lib/authCache.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth, requireRole('admin'));
@@ -135,6 +136,7 @@ adminRouter.patch(
               token_version = token_version + CASE WHEN $2 IS NOT NULL OR $3 IS NOT NULL THEN 1 ELSE 0 END WHERE id = $1`,
       [req.params.id, req.body.status ?? null, req.body.role ?? null],
     );
+    forgetUser(req.params.id);
     if (req.body.status === 'suspended') await revokeAllSessions(req.params.id!);
     await audit({ userId: req.auth!.userId, action: 'admin.user_updated', entityType: 'user', entityId: req.params.id, details: req.body }, req);
     res.json({ success: true });
@@ -161,6 +163,7 @@ adminRouter.post(
               token_version = token_version + 1 WHERE id = $1 AND role <> 'exchange'`,
       [req.params.id],
     );
+    forgetUser(req.params.id);
     await audit({ userId: req.auth!.userId, action: 'admin.2fa_reset', entityType: 'user', entityId: req.params.id }, req);
     res.json({ success: true });
   }),

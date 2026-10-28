@@ -91,7 +91,8 @@ messagesRouter.post(
   '/conversations',
   validate({
     body: z
-      .object({ type: z.enum(['direct', 'support']), recipientId: idParam.optional(), title: z.string().trim().max(80).optional() })
+      // 'direct' is accepted from older app versions; it is stored as the database's 'user_to_user'.
+      .object({ type: z.enum(['direct', 'user_to_user', 'support']), recipientId: idParam.optional(), title: z.string().trim().max(80).optional() })
       .strict(),
   }),
   ah(async (req, res) => {
@@ -112,8 +113,8 @@ messagesRouter.post(
         );
         await c.query(
           `INSERT INTO ${S}.conversation_participants (conversation_id, user_id)
-           SELECT $1, id FROM ${S}.users WHERE role = 'admin' AND status = 'active' AND id <> $2
-           UNION SELECT $1, $2`,
+           SELECT $1::uuid, id FROM ${S}.users WHERE role = 'admin' AND status = 'active' AND id <> $2::uuid
+           UNION SELECT $1::uuid, $2::uuid`,
           [conv.id, me],
         );
         return conv.id;
@@ -128,12 +129,12 @@ messagesRouter.post(
       `SELECT c.id FROM ${S}.conversations c
          JOIN ${S}.conversation_participants a ON a.conversation_id = c.id AND a.user_id = $1
          JOIN ${S}.conversation_participants b ON b.conversation_id = c.id AND b.user_id = $2
-        WHERE c.type = 'direct' LIMIT 1`,
+        WHERE c.type IN ('user_to_user', 'merchant', 'exchange') LIMIT 1`,
       [me, recipientId],
     );
     if (existing) return res.json({ success: true, data: { conversationId: existing.id, existing: true } });
     const id = await tx(async (c) => {
-      const conv = await one<any>(`INSERT INTO ${S}.conversations (type, title, created_by, status) VALUES ('direct', $2, $1, 'active') RETURNING id`, [me, title ?? null], c);
+      const conv = await one<any>(`INSERT INTO ${S}.conversations (type, title, created_by, status) VALUES ('user_to_user', $2, $1, 'active') RETURNING id`, [me, title ?? null], c);
       await c.query(`INSERT INTO ${S}.conversation_participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`, [conv.id, me, recipientId]);
       return conv.id;
     });
@@ -217,7 +218,7 @@ messagesRouter.delete(
   '/messages/:id',
   validate({ params: z.object({ id: idParam }).strict() }),
   ah(async (req, res) => {
-    const r = await pool.query(`UPDATE ${S}.messages SET is_deleted = true, content = '' WHERE id = $1 AND sender_id = $2`, [req.params.id, req.auth!.userId]);
+    const r = await pool.query(`UPDATE ${S}.messages SET is_deleted = true, content = '[deleted]' WHERE id = $1 AND sender_id = $2`, [req.params.id, req.auth!.userId]);
     if (r.rowCount === 0) throw notFound('Message not found');
     res.json({ success: true });
   }),

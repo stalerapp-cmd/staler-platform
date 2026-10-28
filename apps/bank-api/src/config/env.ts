@@ -56,7 +56,12 @@ const schema = z.object({
   BANK_ADMIN_EMAIL: z.string().email().optional(),
   BANK_ADMIN_PASSWORD: z.string().min(12).optional(),
 
-  MAIL_MODE: z.enum(['smtp', 'log', 'memory']).default('log'),
+  MAIL_MODE: z.enum(['smtp', 'brevo', 'resend', 'log', 'memory']).default('log'),
+  /** HTTPS relay that speaks SMTP for us (Render's free plan blocks SMTP ports). */
+  MAIL_RELAY_URL: z.string().url().optional(),
+  MAIL_RELAY_SECRET: z.string().min(16).optional(),
+  /** API key for MAIL_MODE=brevo or resend. */
+  MAIL_API_KEY: z.string().optional(),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().default(465),
   SMTP_SECURE: bool.prefault('true'),

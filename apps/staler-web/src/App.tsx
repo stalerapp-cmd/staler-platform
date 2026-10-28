@@ -1,36 +1,37 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth, type User } from './lib/auth';
 import AppShell from './layouts/AppShell';
 import { Logo } from './components/Tatreez';
 import { Spinner } from './components/ui';
+import { ErrorBoundary, lazyRetry } from './components/Boundary';
 import Landing from './pages/Landing';
 import { Forgot, Login, Register, Verify } from './pages/Auth';
 
-const Home = lazy(() => import('./pages/Home'));
-const Send = lazy(() => import('./pages/Send'));
-const Receive = lazy(() => import('./pages/Receive'));
-const Scan = lazy(() => import('./pages/Scan'));
-const Claim = lazy(() => import('./pages/Claim'));
-const Bank = lazy(() => import('./pages/Bank'));
-const BankQr = lazy(() => import('./pages/Bank').then((m) => ({ default: m.BankQr })));
-const Activity = lazy(() => import('./pages/Activity'));
-const Store = lazy(() => import('./pages/Store'));
-const Orders = lazy(() => import('./pages/Store').then((m) => ({ default: m.Orders })));
-const Messages = lazy(() => import('./pages/Messages'));
-const Settings = lazy(() => import('./pages/Settings'));
-const Vouchers = lazy(() => import('./pages/Vouchers'));
-const MerchantDashboard = lazy(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantDashboard })));
-const MerchantProducts = lazy(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantProducts })));
-const MerchantOrders = lazy(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantOrders })));
-const AdminOverview = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminOverview })));
-const AdminUsers = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminUsers })));
-const AdminUserDetail = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminUserDetail })));
-const AdminStores = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminStores })));
-const AdminPending = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminPending })));
-const AdminBankOps = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminBankOps })));
-const AdminAudit = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminAudit })));
-const AdminSettings = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminSettings })));
+const Home = lazyRetry(() => import('./pages/Home'));
+const Send = lazyRetry(() => import('./pages/Send'));
+const Receive = lazyRetry(() => import('./pages/Receive'));
+const Scan = lazyRetry(() => import('./pages/Scan'));
+const Claim = lazyRetry(() => import('./pages/Claim'));
+const Bank = lazyRetry(() => import('./pages/Bank'));
+const BankQr = lazyRetry(() => import('./pages/Bank').then((m) => ({ default: m.BankQr })));
+const Activity = lazyRetry(() => import('./pages/Activity'));
+const Store = lazyRetry(() => import('./pages/Store'));
+const Orders = lazyRetry(() => import('./pages/Store').then((m) => ({ default: m.Orders })));
+const Messages = lazyRetry(() => import('./pages/Messages'));
+const Settings = lazyRetry(() => import('./pages/Settings'));
+const Vouchers = lazyRetry(() => import('./pages/Vouchers'));
+const MerchantDashboard = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantDashboard })));
+const MerchantProducts = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantProducts })));
+const MerchantOrders = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantOrders })));
+const AdminOverview = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminOverview })));
+const AdminUsers = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminUsers })));
+const AdminUserDetail = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminUserDetail })));
+const AdminStores = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminStores })));
+const AdminPending = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminPending })));
+const AdminBankOps = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminBankOps })));
+const AdminAudit = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminAudit })));
+const AdminSettings = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminSettings })));
 
 export function Splash() {
   return (
@@ -70,6 +71,7 @@ const page = (el: ReactNode) => (
 
 export default function App() {
   return (
+    <ErrorBoundary full>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<GuestOnly><Landing /></GuestOnly>} />
@@ -108,5 +110,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
