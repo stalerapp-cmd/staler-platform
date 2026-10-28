@@ -15,7 +15,7 @@ export async function housekeeping() {
 
   // Shipped orders the buyer never confirmed are paid out after 14 days.
   const stale = await pool.query(
-    `SELECT id FROM ${S}.orders WHERE status = 'shipped' AND escrow_status = 'held' AND shipped_at < now() - interval '14 days' LIMIT 100`,
+    `SELECT id FROM ${S}.orders WHERE status = 'shipped' AND escrow_status = 'held' AND dispute_status IS DISTINCT FROM 'open' AND COALESCE(balance_due, 0) = 0 AND shipped_at < now() - interval '14 days' LIMIT 100`,
   );
   for (const o of stale.rows) await tx((c) => releaseEscrow(c, o.id, 'auto-released after 14 days'));
   if (vouchers.rowCount || stale.rowCount) logger.info({ vouchers: vouchers.rowCount, orders: stale.rowCount }, 'housekeeping done');

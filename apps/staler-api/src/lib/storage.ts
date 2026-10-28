@@ -47,15 +47,18 @@ export async function putFile(bucket: Bucket, ownerId: string, ext: string, mime
 }
 
 /** Short-lived download link for a private file (digital products). */
-export async function privateDownload(ref: string): Promise<{ redirect?: string; file?: { data: Buffer; mime: string; filename: string } } | null> {
+export async function privateDownload(ref: string): Promise<{ file: { data: Buffer; mime: string; filename: string } } | null> {
   if (ref.startsWith('db:')) {
     const f = await one<any>(`SELECT data, mime, filename FROM ${S}.stored_files WHERE id = $1 AND bucket = 'digital-products'`, [ref.slice(3)]);
     return f ? { file: { data: f.data, mime: f.mime, filename: f.filename } } : null;
   }
   if (!supa) return null;
-  const { data, error } = await supa.storage.from('digital-products').createSignedUrl(ref, 300);
+  // Never hand out a storage link (it would work for anyone it's forwarded to):
+  // the bytes go through our server, personalised, behind a single-use ticket.
+  const { data, error } = await supa.storage.from('digital-products').download(ref);
   if (error || !data) return null;
-  return { redirect: data.signedUrl };
+  const filename = ref.split('/').pop() ?? 'file';
+  return { file: { data: Buffer.from(await data.arrayBuffer()), mime: data.type || 'application/octet-stream', filename } };
 }
 
 export async function publicFile(id: string) {

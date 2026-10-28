@@ -1,23 +1,28 @@
 import { motion } from 'framer-motion';
-import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Crown,
   Activity,
+  ArrowLeft,
   Bell,
   ClipboardList,
   Cog,
+  Contact,
+  Crown,
   FileClock,
+  GitBranch,
+  HelpCircle,
   Home,
   Landmark,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   Menu,
   MessageCircle,
   Moon,
   Package,
   QrCode,
+  Scale,
   ScanLine,
   Send,
   ShieldCheck,
@@ -38,7 +43,8 @@ import { useTheme } from '../lib/theme';
 import { get, post } from '../lib/api';
 import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
-import { localize, type Notice } from '../lib/notifications';
+import { localize, targetOf, type Notice } from '../lib/notifications';
+import { useToast } from '../components/Toast';
 import { Logo } from '../components/Tatreez';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
@@ -63,8 +69,12 @@ function useNav() {
     { to: '/app/bank', label: t.nav.bank, icon: Landmark },
     { to: '/app/activity', label: t.nav.activity, icon: Activity },
     { to: '/app/store', label: t.nav.store, icon: ShoppingBag },
+    { to: '/app/stores', label: t.nav.stores, icon: Store },
     { to: '/app/orders', label: t.nav.orders, icon: ClipboardList },
     { to: '/app/messages', label: t.nav.messages, icon: MessageCircle },
+    { to: '/app/contacts', label: t.nav.contacts, icon: Contact },
+    ...(user?.role !== 'admin' ? [{ to: '/app/vouchers', label: t.nav.cash, icon: Ticket }] : []),
+    { to: '/app/help', label: t.nav.help, icon: HelpCircle },
   ];
   const role: NavItem[] = [];
   if (user?.role === 'merchant') {
@@ -72,15 +82,17 @@ function useNav() {
       { to: '/app/merchant', label: t.nav.merchant, icon: Store, end: true },
       { to: '/app/merchant/products', label: t.nav.products, icon: Package },
       { to: '/app/merchant/orders', label: t.nav.storeOrders, icon: ClipboardList },
+      { to: '/app/merchant/stores', label: t.nav.myStores, icon: GitBranch },
+      { to: '/app/merchant/ads', label: t.nav.ads, icon: Megaphone },
     );
   }
-  if (user?.role === 'exchange') role.push({ to: '/app/vouchers', label: t.nav.vouchers, icon: Ticket });
   if (user?.role === 'admin') {
     // Each admin sees only the sections their permissions open.
     const items: (NavItem & { perm?: string })[] = [
       { to: '/app/admin', label: t.nav.overview, icon: LayoutDashboard, end: true },
       { to: '/app/admin/users', label: t.nav.users, icon: Users, perm: 'users.view' },
       { to: '/app/admin/stores', label: t.nav.stores, icon: Store, perm: 'stores.manage' },
+      { to: '/app/admin/disputes', label: t.nav.disputes, icon: Scale, perm: 'orders.disputes' },
       { to: '/app/admin/pending', label: t.nav.pending, icon: UserPlus, perm: 'pending.manage' },
       { to: '/app/admin/bank', label: t.nav.bankOps, icon: Landmark, perm: 'bank.ops' },
       { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
@@ -152,17 +164,25 @@ function MessagesButton() {
 
 function Notifications() {
   const { t, lang } = useI18n();
+  const toast = useToast();
+  const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<{ notifications: Notice[]; unread: number } | null>(null);
+  const seen = useRef<string | null>(null);
   const load = async () => {
     try {
-      setData(await get('/api/notifications'));
+      const d = await get<{ notifications: Notice[]; unread: number }>('/api/notifications');
+      // Something new arrived while the app is open: show it right away.
+      const newest = d.notifications[0];
+      if (seen.current && newest && newest.id !== seen.current && !newest.is_read) toast(localize(newest, lang).title);
+      seen.current = newest?.id ?? '';
+      setData(d);
     } catch {
       /* offline */
     }
   };
   useEffect(() => void load(), []);
-  usePolling(load, 30_000);
+  usePolling(load, 15_000);
   return (
     <>
       <button
@@ -188,13 +208,24 @@ function Notifications() {
             {data.notifications.map((n) => {
               const l = localize(n, lang);
               return (
-                <li key={n.id} className="flex gap-3 py-3">
-                  <span className={cx('mt-2 h-2 w-2 shrink-0 rounded-full', n.is_read ? 'bg-transparent' : 'bg-stitch')} aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{l.title}</p>
-                    {l.body && <p className="break-words text-sm text-muted">{l.body}</p>}
-                    <p className="mt-1 text-xs text-muted">{relative(n.created_at, lang)}</p>
-                  </div>
+                <li key={n.id}>
+                  <button
+                    onClick={() => {
+                      const to = targetOf(n);
+                      if (to) {
+                        setOpen(false);
+                        nav(to);
+                      }
+                    }}
+                    className="flex w-full gap-3 rounded-xl px-1 py-3 text-start transition hover:bg-sunk"
+                  >
+                    <span className={cx('mt-2 h-2 w-2 shrink-0 rounded-full', n.is_read ? 'bg-transparent' : 'bg-stitch')} aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{l.title}</p>
+                      {l.body && <p className="break-words text-sm text-muted">{l.body}</p>}
+                      <p className="mt-1 text-xs text-muted">{relative(n.created_at, lang)}</p>
+                    </div>
+                  </button>
                 </li>
               );
             })}
@@ -425,7 +456,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
 }
 
 /** Back: previous screen if there is one in this tab's history, otherwise the parent screen. */
-function BackButton() {
+export function BackButton() {
   const navigate = useNavigate();
   const loc = useLocation();
   const { t } = useI18n();

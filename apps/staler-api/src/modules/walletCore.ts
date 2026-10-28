@@ -215,3 +215,18 @@ export const maskName = (name: string | null | undefined) =>
     .filter(Boolean)
     .map((p, i) => (i === 0 ? p : `${p[0]}.`))
     .join(' ');
+
+/**
+ * Bilingual notification: English stored as title/body (legacy readers), Arabic in
+ * metadata.ar — the app shows whichever matches the reader's language.
+ */
+export async function notifyBi(
+  c: pg.PoolClient | undefined,
+  userId: string,
+  type: string,
+  en: [string, string],
+  ar: [string, string],
+  metadata: Record<string, unknown> = {},
+) {
+  await notify(c, userId, type, en[0], en[1], { ...metadata, ar: { title: ar[0], body: ar[1] } });
+}

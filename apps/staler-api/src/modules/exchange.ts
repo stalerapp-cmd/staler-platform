@@ -26,7 +26,7 @@ export const voucherUri = (id: string, secret: string) => `taler://exchange-clai
 
 exchangeRouter.post(
   '/vouchers',
-  requireRole('exchange'),
+  requireRole('user', 'merchant', 'exchange'),
   moneyLimiter,
   validate({ body: z.object({ amount: amountSchema, description: z.string().trim().max(140).optional().default('') }).strict() }),
   ah(async (req, res) => {
@@ -61,7 +61,7 @@ exchangeRouter.post(
 
 exchangeRouter.get(
   '/vouchers',
-  requireRole('exchange'),
+  requireRole('user', 'merchant', 'exchange'),
   ah(async (req, res) => {
     const r = await pool.query(
       `SELECT v.id, v.amount, v.description, v.created_at, v.expires_at, v.claimed_at,
@@ -100,7 +100,7 @@ export async function refundVoucher(voucherId: string, newStatus: 'cancelled') {
 
 exchangeRouter.delete(
   '/vouchers/:id',
-  requireRole('exchange'),
+  requireRole('user', 'merchant', 'exchange'),
   validate({ params: z.object({ id: uuid }).strict() }),
   ah(async (req, res) => {
     const own = await one(`SELECT 1 FROM ${S}.exchange_vouchers WHERE id = $1 AND exchange_user_id = $2`, [req.params.id, req.auth!.userId]);

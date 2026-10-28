@@ -12,6 +12,7 @@ export const PERMISSIONS = [
   'users.role',
   'wallets.freeze',
   'stores.manage',
+  'orders.disputes',
   'pending.manage',
   'notify',
   'support',

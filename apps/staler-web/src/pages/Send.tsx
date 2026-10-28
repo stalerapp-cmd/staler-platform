@@ -141,6 +141,7 @@ export default function Send() {
             <p className="mt-2 text-muted">
               <span className="num font-medium text-ink">{money(result?.amount ?? amount, lang)}</span> {t.send.sentLead} {recipient?.name}
             </p>
+            {recipient?.walletId && <SaveContact walletId={recipient.walletId} />}
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               <Link to="/app">
                 <Button variant="secondary" block>
@@ -162,6 +163,35 @@ export default function Send() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/** After paying someone: one tap to keep them in contacts. */
+function SaveContact({ walletId }: { walletId: string }) {
+  const { t, err } = useI18n();
+  const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="mt-5">
+      <Button
+        variant="ghost"
+        loading={state === 'busy'}
+        disabled={state === 'done'}
+        onClick={async () => {
+          setState('busy');
+          try {
+            await post('/api/contacts', { walletId });
+            setState('done');
+          } catch (e) {
+            setError(err(e));
+            setState('idle');
+          }
+        }}
+      >
+        {state === 'done' ? t.messages.saved : t.messages.saveContact}
+      </Button>
+      <ErrorNote>{error}</ErrorNote>
     </div>
   );
 }

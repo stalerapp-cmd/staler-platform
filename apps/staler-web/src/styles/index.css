@@ -110,3 +110,17 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   direction: rtl;
   text-align: right;
 }
+
+/* Live position pulse on tracking maps */
+@keyframes stPulse {
+  0% { transform: scale(0.6); opacity: 0.45; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.leaflet-container { font: inherit; }
+
+/* Chat background: a faint cross-stitch grid, like embroidery cloth */
+.chat-ground {
+  background-color: rgb(var(--sunk) / 0.35);
+  background-image: radial-gradient(rgb(var(--ink) / 0.06) 1px, transparent 1.2px);
+  background-size: 14px 14px;
+}

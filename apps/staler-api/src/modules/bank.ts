@@ -3,18 +3,20 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
-import { decrypt, encrypt, randomToken, safeEqual } from '../lib/crypto.js';
-import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
+import { codeHash, decrypt, encrypt, numericCode, randomToken, safeEqual } from '../lib/crypto.js';
+import { codeMail, sendMail } from '../lib/mailer.js';
+import { checkSmsCode, sendSmsCode, smsEnabled } from '../lib/sms.js';
+import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { amountSchema, cmp } from '../lib/money.js';
-import { idempotencyKey, totpCode, validate } from '../lib/validate.js';
+import { idempotencyKey, otpCode, totpCode, validate } from '../lib/validate.js';
 import { idempotent } from '../lib/idempotency.js';
 import { audit } from '../lib/audit.js';
 import { logger } from '../lib/logger.js';
 import { bank, BankRejected, BankUnreachable } from '../lib/bankClient.js';
 import { newReserveKeypair } from '../lib/reserve.js';
 import { requireAuth } from '../middleware/auth.js';
-import { authLimiter, moneyLimiter } from '../middleware/security.js';
+import { authLimiter, codeLimiter, moneyLimiter } from '../middleware/security.js';
 import { requireSecondFactor } from './mfa.js';
 import { assertDailyLimit, assertMaxTransfer, credit, debit, notify, walletOfUser, writeLine } from './walletCore.js';
 
@@ -84,6 +86,59 @@ const linkView = (l: LinkRow | null) =>
     ? { linked: true, iban: l.bank_iban, holder: l.bank_holder, linkedAt: l.created_at, expiresAt: l.bank_token_expires_at, via: l.linked_via }
     : { linked: false };
 
+// ------------------------------------------------------------ link lock
+/**
+ * The bank link is the wallet's money pipe, so once a wallet has ever been linked,
+ * changing or removing it needs a fresh code sent to the account e-mail — and by
+ * SMS too when the account has a phone number. A stolen session alone can't
+ * redirect the money.
+ */
+async function everLinked(userId: string) {
+  return Boolean(await one(`SELECT 1 FROM ${S}.bank_accounts WHERE user_id = $1 LIMIT 1`, [userId]));
+}
+
+bankRouter.post(
+  '/link/change-code',
+  requireAuth,
+  codeLimiter,
+  ah(async (req, res) => {
+    const userId = req.auth!.userId;
+    const u = await one<any>(`SELECT email, phone_number, language FROM ${S}.users WHERE id = $1`, [userId]);
+    const code = numericCode(6);
+    await pool.query(`UPDATE ${S}.profile_update_verifications SET verified = true WHERE user_id = $1 AND update_type = 'bank_link' AND verified = false`, [userId]);
+    await pool.query(
+      `INSERT INTO ${S}.profile_update_verifications (user_id, verification_code, update_type, expires_at, verified, attempts)
+       VALUES ($1, $2, 'bank_link', now() + interval '15 minutes', false, 0)`,
+      [userId, codeHash('bank-link', String(userId), code)],
+    );
+    await sendMail(codeMail(u.email, 'security', code, u.language === 'en' ? 'en' : 'ar'));
+    const sms = Boolean(u.phone_number && smsEnabled());
+    if (sms) await sendSmsCode(u.phone_number, u.language === 'en' ? 'en' : 'ar');
+    res.json({ success: true, data: { sms, email: u.email.replace(/^(.).*(@.*)$/, '$1•••$2') } });
+  }),
+);
+
+const changeProof = { changeCode: otpCode.optional(), smsCode: otpCode.optional() };
+
+async function assertChangeAllowed(userId: string, b: { changeCode?: string; smsCode?: string }) {
+  if (!(await everLinked(userId))) return;
+  if (!b.changeCode) throw new AppError(403, 'LINK_LOCKED', 'Changing the linked bank needs the code we e-mail you');
+  const v = await one<any>(
+    `SELECT id, verification_code, attempts, expires_at FROM ${S}.profile_update_verifications
+      WHERE user_id = $1 AND update_type = 'bank_link' AND verified = false ORDER BY created_at DESC LIMIT 1`,
+    [userId],
+  );
+  if (!v || v.attempts >= 5 || new Date(v.expires_at) < new Date() || v.verification_code !== codeHash('bank-link', String(userId), b.changeCode)) {
+    if (v) await pool.query(`UPDATE ${S}.profile_update_verifications SET attempts = attempts + 1 WHERE id = $1`, [v.id]);
+    throw badRequest('INVALID_CODE', 'Invalid or expired code');
+  }
+  const u = await one<any>(`SELECT phone_number FROM ${S}.users WHERE id = $1`, [userId]);
+  if (u?.phone_number && smsEnabled()) {
+    if (!b.smsCode || !(await checkSmsCode(u.phone_number, b.smsCode))) throw badRequest('INVALID_SMS_CODE', 'The SMS code is not right');
+  }
+  await pool.query(`UPDATE ${S}.profile_update_verifications SET verified = true WHERE id = $1`, [v.id]);
+}
+
 bankRouter.get(
   '/link',
   requireAuth,
@@ -97,8 +152,9 @@ bankRouter.post(
   '/link',
   requireAuth,
   authLimiter,
-  validate({ body: z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{4}-?[A-Z0-9]{4}$/, 'Link code looks like ABCD-EFGH') }).strict() }),
+  validate({ body: z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{4}-?[A-Z0-9]{4}$/, 'Link code looks like ABCD-EFGH'), ...changeProof }).strict() }),
   ah(async (req, res) => {
+    await assertChangeAllowed(req.auth!.userId, req.body);
     const code = req.body.code.includes('-') ? req.body.code : `${req.body.code.slice(0, 4)}-${req.body.code.slice(4)}`;
     const w = await walletOfUser(req.auth!.userId);
     const result = await bank.redeemLinkCode(code, w.wallet_id);
@@ -113,8 +169,9 @@ bankRouter.post(
   '/link/credentials',
   requireAuth,
   authLimiter,
-  validate({ body: z.object({ login: z.string().trim().min(3).max(254), password: z.string().min(1).max(256), totp: totpCode.optional() }).strict() }),
+  validate({ body: z.object({ login: z.string().trim().min(3).max(254), password: z.string().min(1).max(256), totp: totpCode.optional(), ...changeProof }).strict() }),
   ah(async (req, res) => {
+    await assertChangeAllowed(req.auth!.userId, req.body);
     const w = await walletOfUser(req.auth!.userId);
     const result = await bank.linkWithCredentials(req.body.login, req.body.password, req.body.totp, w.wallet_id);
     await storeLink(req.auth!.userId, 'credentials', result);
@@ -126,7 +183,9 @@ bankRouter.post(
 bankRouter.delete(
   '/link',
   requireAuth,
+  validate({ body: z.object(changeProof).strict().optional() }),
   ah(async (req, res) => {
+    await assertChangeAllowed(req.auth!.userId, req.body ?? {});
     const l = await activeLink(req.auth!.userId);
     if (l) {
       await bank.revokeLink(linkToken(l)).catch(() => undefined);
@@ -182,7 +241,10 @@ export async function finalizeIncoming(opId: string): Promise<boolean> {
       metadata: { bankOperation: op.bank_operation_id ?? op.request_uid, reservePub: op.reserve_pub },
       balanceAfter: balance,
     });
-    await notify(c, w.user_id, 'bank_topup', 'Wallet topped up', `${op.amount} ${env.CURRENCY} arrived from TalerBank`, { operation: op.id });
+    await notify(c, w.user_id, 'bank_topup', 'Wallet topped up', `${op.amount} ${env.CURRENCY} arrived from TalerBank`, {
+      operation: op.id,
+      ar: { title: 'انشحنت محفظتك', body: `وصل ${op.amount} ${env.CURRENCY} من TalerBank` },
+    });
     return true;
   });
 }
@@ -196,7 +258,9 @@ async function finalizeDeposit(opId: string) {
     );
     if (!op) return;
     await c.query(`UPDATE ${S}.transactions SET status = 'completed' WHERE reference = $1 AND transaction_type = 'deposit'`, [op.id]);
-    await notify(c, op.user_id, 'bank_deposit', 'Sent to your bank', `${op.amount} ${env.CURRENCY} arrived in your TalerBank account`);
+    await notify(c, op.user_id, 'bank_deposit', 'Sent to your bank', `${op.amount} ${env.CURRENCY} arrived in your TalerBank account`, {
+      ar: { title: 'وصلت مصاريك للبنك', body: `وصل ${op.amount} ${env.CURRENCY} لحسابك في TalerBank` },
+    });
   });
 }
 
@@ -220,7 +284,9 @@ async function refundDeposit(opId: string, reason: string) {
       reference: op.id,
       balanceAfter: balance,
     });
-    await notify(c, w.user_id, 'bank_deposit_failed', 'Bank transfer failed', `${op.amount} ${env.CURRENCY} returned to your wallet`);
+    await notify(c, w.user_id, 'bank_deposit_failed', 'Bank transfer failed', `${op.amount} ${env.CURRENCY} returned to your wallet`, {
+      ar: { title: 'ما زبط التحويل للبنك', body: `رجع ${op.amount} ${env.CURRENCY} لمحفظتك` },
+    });
   });
 }
 

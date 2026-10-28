@@ -203,11 +203,11 @@ describe('wallet transfers', () => {
 });
 
 // ============================================================ exchange vouchers
-describe('exchange vouchers (replaces the unauthenticated /exchange/claim)', () => {
+describe('cash vouchers (any personal or business account; replaces the unauthenticated /exchange/claim)', () => {
   it('escrows, claims once, blocks self-claim and refunds on cancel', async () => {
     const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
     const email = `${uniq('ex')}@x.com`;
-    await request(app).post('/api/admin/users').set(auth(sup)).send({ fullName: 'Cash Agent', email, password: STRONG, role: 'exchange' });
+    await request(app).post('/api/admin/users').set(auth(sup)).send({ fullName: 'Cash Agent', email, password: STRONG, role: 'user' });
     const agent = await login(app, email, STRONG);
     const legacy = funder.token;
     const me = await request(app).get('/api/auth/me').set(auth(agent));
@@ -219,9 +219,10 @@ describe('exchange vouchers (replaces the unauthenticated /exchange/claim)', () 
     expect(uri).toMatch(/^taler:\/\/exchange-claim\?v=/);
     expect((await request(app).get('/api/wallet').set(auth(agent))).body.data.wallet.balance).toBe('70.00');
 
-    // a normal user cannot mint vouchers
+    // any account can hand out cash value, but never more than it holds; admins can't mint money
     const u = await walletUser(app, 'Voucher Taker');
-    expect((await request(app).post('/api/exchange/vouchers').set(auth(u.token)).send({ amount: '1' })).status).toBe(403);
+    expect((await request(app).post('/api/exchange/vouchers').set(auth(u.token)).send({ amount: '1' })).status).toBe(409);
+    expect((await request(app).post('/api/exchange/vouchers').set(auth(sup)).send({ amount: '1' })).status).toBe(403);
     // wrong secret
     const forged = uri.replace(/\.[A-Za-z0-9_-]{32}$/, '.' + 'A'.repeat(32));
     expect((await request(app).post('/api/exchange/claim').set(auth(u.token)).send({ voucher: forged })).status).toBe(404);
@@ -260,7 +261,7 @@ describe('marketplace', () => {
       .post('/api/store/checkout')
       .set(auth(buyer.token))
       .set('Idempotency-Key', idem())
-      .send({ items: [{ productId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', quantity: 2 }] });
+      .send({ items: [{ productId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', quantity: 2 }], address: 'Rafidia St, Nablus' });
     expect(co.status).toBe(201);
     expect(co.body.data.total).toBe('80.00');
     expect(await walletBalance(app, buyer)).toBe('20.00');
@@ -281,7 +282,7 @@ describe('marketplace', () => {
 
     // second order cancelled by the buyer before shipping -> refund + restock
     await request(app).post('/api/wallet/transfer').set(auth(legacy)).send({ to: buyer.walletId, amount: '40' });
-    const co2 = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [{ productId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', quantity: 1 }] });
+    const co2 = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [{ productId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', quantity: 1 }], fulfillment: 'pickup' });
     expect(co2.status, JSON.stringify(co2.body)).toBe(201);
     const o2 = co2.body.data.orders[0].id;
     expect((await request(app).post(`/api/store/orders/${o2}/cancel`).set(auth(buyer.token))).status).toBe(200);
@@ -310,11 +311,26 @@ describe('marketplace', () => {
     expect(await walletBalance(app, m)).toBe('12.50');
 
     const order = (await request(app).get('/api/store/orders').set(auth(buyer.token))).body.data.orders[0];
-    const dl = await request(app).get(`/api/store/orders/${order.id}/items/${order.items[0].id}/download`).set(auth(buyer.token));
+    expect(order.items[0].licence_code).toMatch(/^ST-[0-9A-F]{4}-[0-9A-F]{4}$/);
+    // the old direct-download route and raw storage links are gone
+    expect((await request(app).get(`/api/store/orders/${order.id}/items/${order.items[0].id}/download`).set(auth(buyer.token))).status).toBe(404);
+    const ticket = await request(app).post(`/api/store/orders/${order.id}/items/${order.items[0].id}/ticket`).set(auth(buyer.token)).send({});
+    expect(ticket.status).toBe(200);
+    expect(ticket.body.data.url).toMatch(/^\/api\/store\/file\/[A-Za-z0-9_-]{40,}$/);
+    const dl = await request(app).get(ticket.body.data.url).buffer(true).parse((r, cb) => {
+      const chunks: Buffer[] = [];
+      r.on('data', (c: Buffer) => chunks.push(c));
+      r.on('end', () => cb(null, Buffer.concat(chunks)));
+    });
     expect(dl.status).toBe(200);
-    expect(dl.body.toString()).toContain('secret content');
+    expect(dl.headers['content-disposition']).toContain(order.items[0].licence_code);
+    // single use: a forwarded link is dead
+    expect((await request(app).get(ticket.body.data.url)).status).toBe(404);
     const thief = await walletUser(app, 'Not Buyer');
-    expect((await request(app).get(`/api/store/orders/${order.id}/items/${order.items[0].id}/download`).set(auth(thief.token))).status).toBe(404);
+    expect((await request(app).post(`/api/store/orders/${order.id}/items/${order.items[0].id}/ticket`).set(auth(thief.token)).send({})).status).toBe(404);
+    // the seller can trace a leaked copy back to the buyer
+    const lic = await request(app).get(`/api/merchant/licences/${order.items[0].licence_code}`).set(auth(m.token));
+    expect(lic.body.data.licence.buyer_email).toBe(buyer.email);
 
     // merchants cannot buy from themselves or edit other stores' products
     expect((await request(app).post('/api/store/checkout').set(auth(m.token)).send({ items: [{ productId: p.body.data.product.id, quantity: 1 }] })).status).toBe(400);
@@ -322,6 +338,66 @@ describe('marketplace', () => {
     const hijack = await request(app).put(`/api/merchant/products/${p.body.data.product.id}`).set(auth(other)).send({ name: 'Hacked', price: '0.01' });
     expect(hijack.status).toBe(404);
     expect((await request(app).delete(`/api/merchant/products/${p.body.data.product.id}`).set(auth(other))).status).toBe(404);
+  });
+
+  it('deposit orders: deposit held, balance paid, handover code settles, disputes freeze', async () => {
+    const m = await walletUser(app, 'Deposit Seller', 'merchant');
+    const st = await request(app).post('/api/merchant/stores').set(auth(m.token)).send({ storeName: 'Olive Wood', category: 'crafts', city: 'Bethlehem' });
+    expect(st.status).toBe(201);
+    const br = await request(app).post('/api/merchant/stores').set(auth(m.token)).send({ storeName: 'Olive Wood', parentId: st.body.data.store.id, branchName: 'Ramallah' });
+    expect(br.status).toBe(201);
+    const p = await request(app)
+      .post('/api/merchant/products')
+      .set(auth(m.token))
+      .set('x-store-id', br.body.data.store.id)
+      .send({ name: 'Carved Table', price: '100', stock: 3, depositPercent: 20 });
+    expect(p.status).toBe(201);
+    const page = await request(app).get(`/api/store/s/${st.body.data.store.slug}`);
+    expect(page.body.data.branches).toHaveLength(2);
+
+    const buyer = await walletUser(app, 'Table Buyer');
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: buyer.walletId, amount: '150' });
+    const noAddr = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [{ productId: p.body.data.product.id, quantity: 1 }] });
+    expect(noAddr.status).toBe(400);
+    const co = await request(app)
+      .post('/api/store/checkout')
+      .set(auth(buyer.token))
+      .send({ items: [{ productId: p.body.data.product.id, quantity: 1 }], address: 'Al-Irsal St, Ramallah', phone: '0599000000' });
+    expect(co.status, JSON.stringify(co.body)).toBe(201);
+    expect(co.body.data.total).toBe('20.00');
+    const id = co.body.data.orders[0].id;
+    let o = (await request(app).get(`/api/store/orders/${id}`).set(auth(buyer.token))).body.data.order;
+    expect(o.balance_due).toBe('80.00');
+    expect(o.handover_code).toMatch(/^\d{6}$/);
+    // the store never sees the handover code
+    const mo = (await request(app).get('/api/merchant/orders?all=1').set(auth(m.token))).body.data.orders.find((x: any) => x.id === id);
+    expect(mo.handover_code).toBeUndefined();
+
+    expect((await request(app).post(`/api/merchant/orders/${id}/accept`).set(auth(m.token)).send({})).status).toBe(200);
+    expect((await request(app).post(`/api/merchant/orders/${id}/ship`).set(auth(m.token)).send({ lat: 31.9, lng: 35.2 })).status).toBe(200);
+    expect((await request(app).post(`/api/merchant/orders/${id}/track`).set(auth(m.token)).send({ lat: 31.91, lng: 35.21, note: 'Qalandia' })).status).toBe(200);
+    // confirming isn't possible while the balance is unpaid
+    expect((await request(app).post(`/api/store/orders/${id}/confirm`).set(auth(buyer.token))).status).toBe(409);
+    expect((await request(app).post(`/api/store/orders/${id}/pay-balance`).set(auth(buyer.token)).send({})).status).toBe(200);
+    expect(await walletBalance(app, buyer)).toBe('50.00');
+    // wrong code is rejected, the right code settles the money with the store
+    expect((await request(app).post(`/api/merchant/orders/${id}/deliver`).set(auth(m.token)).send({ code: o.handover_code === '000000' ? '111111' : '000000' })).status).toBe(400);
+    expect((await request(app).post(`/api/merchant/orders/${id}/deliver`).set(auth(m.token)).send({ code: o.handover_code })).status).toBe(200);
+    expect(await walletBalance(app, m)).toBe('100.00');
+    o = (await request(app).get(`/api/store/orders/${id}`).set(auth(buyer.token))).body.data.order;
+    expect(o.status).toBe('completed');
+    expect(o.events.map((e: any) => e.kind)).toEqual(expect.arrayContaining(['placed', 'accepted', 'shipped', 'location', 'balance_paid', 'delivered', 'released']));
+
+    // a disputed order is frozen until an admin decides
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: buyer.walletId, amount: '50' });
+    const co2 = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [{ productId: p.body.data.product.id, quantity: 1 }], fulfillment: 'pickup' });
+    const id2 = co2.body.data.orders[0].id;
+    expect((await request(app).post(`/api/store/orders/${id2}/dispute`).set(auth(buyer.token)).send({ reason: 'Store is not answering' })).status).toBe(200);
+    const code2 = (await request(app).get(`/api/store/orders/${id2}`).set(auth(buyer.token))).body.data.order.handover_code;
+    expect((await request(app).post(`/api/merchant/orders/${id2}/deliver`).set(auth(m.token)).send({ code: code2, cashBalance: true })).status).toBe(409);
+    const admin = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    expect((await request(app).post(`/api/admin/orders/${id2}/resolve`).set(auth(admin)).send({ outcome: 'refund', note: 'Store unreachable' })).status).toBe(200);
+    expect(await walletBalance(app, buyer)).toBe('100.00');
   });
 
   it('sells exactly the stock under concurrent checkouts', async () => {
@@ -332,7 +408,7 @@ describe('marketplace', () => {
     const buyers = await Promise.all(Array.from({ length: 8 }, (_, i) => walletUser(app, `Mug Buyer ${'abcdefgh'[i]}`)));
     for (const b of buyers) await request(app).post('/api/wallet/transfer').set(auth(legacy)).send({ to: b.walletId, amount: '2' });
     const res = await Promise.all(
-      buyers.map((b) => request(app).post('/api/store/checkout').set(auth(b.token)).send({ items: [{ productId: p.body.data.product.id, quantity: 1 }] })),
+      buyers.map((b) => request(app).post('/api/store/checkout').set(auth(b.token)).send({ items: [{ productId: p.body.data.product.id, quantity: 1 }], address: 'Old City, Nablus' })),
     );
     expect(res.filter((r) => r.status === 201)).toHaveLength(4);
     expect((await q(`SELECT stock FROM public.products WHERE id = $1`, [p.body.data.product.id])).rows[0].stock).toBe(0);
@@ -369,6 +445,17 @@ describe('TalerBank integration (real bank process)', () => {
     expect(await bankBalance(c)).toBe('800.00');
     const res = await q(`SELECT reserve_priv FROM public.reserves r JOIN public.wallets w ON w.id = r.wallet_id WHERE w.wallet_id = $1`, [u.walletId]);
     expect(res.rows[0].reserve_priv).toMatch(/^gcm1:/);
+  });
+
+  it('locks the bank link: changing or removing it needs a fresh e-mailed code', async () => {
+    const other = await bankCustomer('Linked Person Two');
+    const code2 = await bankApi.post('/api/link-codes', { accountId: other.accountId }, other.token);
+    // a stolen session alone can't point the wallet at another account, or unlink it
+    expect((await request(app).post('/api/bank/link').set(auth(u.token)).send({ code: code2.body.data.code })).status).toBe(403);
+    expect((await request(app).delete('/api/bank/link').set(auth(u.token)).send({})).status).toBe(403);
+    expect((await request(app).post('/api/bank/link/change-code').set(auth(u.token))).status).toBe(200);
+    expect((await request(app).delete('/api/bank/link').set(auth(u.token)).send({ changeCode: '000000' === lastCode(u.email) ? '111111' : '000000' })).status).toBe(400);
+    expect((await request(app).get('/api/bank/link').set(auth(u.token))).body.data.linked).toBe(true);
   });
 
   it('moves money wallet -> bank, refusing more than the wallet holds', async () => {

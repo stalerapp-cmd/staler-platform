@@ -328,3 +328,74 @@ export function AdminSettings() {
     </div>
   );
 }
+
+export function AdminDisputes() {
+  const { t, lang, err } = useI18n();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const { data, reload } = useData<{ disputes: any[] }>('/api/admin/disputes');
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const decide = async (d: any, outcome: 'release' | 'refund') => {
+    const note = (notes[d.id] ?? '').trim();
+    if (note.length < 3) return toast(t.disp.note, 'error');
+    if (!(await confirm({ title: outcome === 'release' ? t.disp.releaseQ : t.disp.refundQ, body: t.disp.decideB, confirmLabel: outcome === 'release' ? t.disp.release : t.disp.refund, tone: outcome === 'refund' ? 'danger' : 'primary' }))) return;
+    try {
+      await post(`/api/admin/orders/${d.id}/resolve`, { outcome, note });
+      toast(t.common.done);
+      void reload();
+    } catch (e) {
+      toast(err(e), 'error');
+    }
+  };
+  return (
+    <div className="mx-auto max-w-3xl">
+      <PageHeader title={t.disp.title} />
+      {!data ? (
+        <Skeleton className="h-40 rounded-2xl" />
+      ) : !data.disputes.length ? (
+        <p className="card p-8 text-center text-muted">{t.disp.none}</p>
+      ) : (
+        <div className="space-y-4">
+          {data.disputes.map((d) => (
+            <motion.article key={d.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-display text-lg">
+                    #{String(d.id).slice(0, 8)} · {money(d.total_amount, lang)}
+                  </p>
+                  <p className="text-sm text-muted">
+                    {t.disp.store}: {d.store_name}
+                    {d.branch_name ? ` · ${d.branch_name}` : ''} ({d.merchant_name}) · {t.disp.buyer}: {d.buyer_name}
+                  </p>
+                </div>
+                <Badge tone={d.dispute_status === 'open' ? 'bad' : 'good'}>{d.dispute_status === 'open' ? t.disp.open : t.disp.resolved}</Badge>
+              </div>
+              <p className="mt-3 rounded-xl bg-stitch/10 px-3 py-2 text-sm">
+                <span className="font-medium">{t.disp.reason}:</span> {d.dispute_reason}
+              </p>
+              <ol className="mt-3 space-y-1 text-sm text-muted">
+                {(d.events as any[]).map((e, k) => (
+                  <li key={k}>
+                    {relative(e.at, lang)} — {e.kind}
+                    {e.note ? `: ${e.note}` : ''}
+                  </li>
+                ))}
+              </ol>
+              {d.dispute_status === 'open' && d.escrow_status === 'held' && (
+                <div className="mt-4 space-y-3">
+                  <Field label={t.disp.note} value={notes[d.id] ?? ''} onChange={(e) => setNotes({ ...notes, [d.id]: e.target.value })} maxLength={300} />
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => decide(d, 'release')}>{t.disp.release}</Button>
+                    <Button variant="danger" onClick={() => decide(d, 'refund')}>
+                      {t.disp.refund}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </motion.article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

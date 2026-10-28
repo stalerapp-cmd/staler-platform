@@ -9,6 +9,7 @@ import { validate } from '../lib/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 import { moneyLimiter } from '../middleware/security.js';
 import { idParam } from './commerce.js';
+import { notifyBi } from './walletCore.js';
 
 /**
  * Messages are encrypted at rest: every message is AES-256-GCM encrypted
@@ -40,15 +41,112 @@ async function participant(conversationId: string, userId: string) {
   if (!p) throw notFound('Conversation not found');
 }
 
+const LINK_RE = /https?:\/\/[^\s]+/;
+
+/** Stores an (encrypted) message and tells the other participants — one notification per chat until they read it. */
+export async function postMessage(conversationId: string, me: string, text: string, o: { replyTo?: string; kind?: 'text' | 'link'; meta?: Record<string, unknown> } = {}) {
+  await participant(conversationId, me);
+  const conv = await one<any>(`SELECT status, type FROM ${S}.conversations WHERE id = $1`, [conversationId]);
+  if (conv?.status === 'closed') throw forbidden('This conversation is closed', 'CONVERSATION_CLOSED');
+  if (o.replyTo && !(await one(`SELECT 1 FROM ${S}.messages WHERE id = $1 AND conversation_id = $2`, [o.replyTo, conversationId]))) throw notFound('Message not found');
+  const kind = o.kind ?? (LINK_RE.test(text) ? 'link' : 'text');
+  const m = await one<any>(
+    `INSERT INTO ${S}.messages (conversation_id, sender_id, content, is_edited, is_deleted, reply_to, kind, meta) VALUES ($1, $2, $3, false, false, $4, $5, $6)
+     RETURNING id, created_at, reply_to, kind, meta, reactions`,
+    [conversationId, me, encrypt(text, `msg:${conversationId}`), o.replyTo ?? null, kind, o.meta ? JSON.stringify(o.meta) : null],
+  );
+  await pool.query(`UPDATE ${S}.conversations SET updated_at = now(), last_message_at = now() WHERE id = $1`, [conversationId]);
+  await pool.query(`UPDATE ${S}.conversation_participants SET last_read_at = now() WHERE conversation_id = $1 AND user_id = $2`, [conversationId, me]);
+  const sender = await one<{ full_name: string }>(`SELECT full_name FROM ${S}.users WHERE id = $1`, [me]);
+  const others = await pool.query(
+    `SELECT p.user_id FROM ${S}.conversation_participants p WHERE p.conversation_id = $1 AND p.user_id <> $2
+        AND NOT EXISTS (SELECT 1 FROM ${S}.notifications n WHERE n.user_id = p.user_id AND n.type = 'message' AND NOT n.is_read
+                         AND n.metadata->>'conversationId' = $1::text)`,
+    [conversationId, me],
+  );
+  const preview = kind === 'link' ? '🔗' : text.slice(0, 80);
+  for (const r of others.rows) {
+    await notifyBi(undefined, r.user_id, 'message', [`New message from ${sender?.full_name ?? 'someone'}`, preview], [`رسالة جديدة من ${sender?.full_name ?? 'حدا'}`, preview], {
+      conversationId,
+    });
+  }
+  return { id: m.id, content: text, created_at: m.created_at, sender_id: me, mine: true, reply_to: m.reply_to, kind: m.kind, meta: m.meta, reactions: m.reactions };
+}
+
+const EMOJI = z.string().min(1).max(16).regex(/^\p{Extended_Pictographic}[\p{Extended_Pictographic}\p{Emoji_Modifier}\u200d\ufe0f]*$/u, 'Pick an emoji');
+
+messagesRouter.post(
+  '/messages/:id/react',
+  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ emoji: EMOJI }).strict() }),
+  ah(async (req, res) => {
+    const me = String(req.auth!.userId);
+    const m = await one<any>(`SELECT conversation_id, reactions, is_deleted FROM ${S}.messages WHERE id = $1`, [req.params.id]);
+    if (!m || m.is_deleted) throw notFound('Message not found');
+    await participant(String(m.conversation_id), me);
+    const r: Record<string, string[]> = { ...(m.reactions ?? {}) };
+    // One reaction per person: toggling the same emoji removes it, a new one replaces the old.
+    const had = (r[req.body.emoji] ?? []).includes(me);
+    for (const k of Object.keys(r)) {
+      r[k] = r[k]!.filter((u) => u !== me);
+      if (!r[k]!.length) delete r[k];
+    }
+    if (!had) r[req.body.emoji] = [...(r[req.body.emoji] ?? []), me];
+    await pool.query(`UPDATE ${S}.messages SET reactions = $2 WHERE id = $1`, [req.params.id, JSON.stringify(r)]);
+    res.json({ success: true, data: { reactions: r } });
+  }),
+);
+
+/** Share a store / product link straight into a chat with someone. */
+messagesRouter.post(
+  '/share',
+  moneyLimiter,
+  validate({
+    body: z
+      .object({
+        recipientId: idParam,
+        url: z.string().url().max(500),
+        title: z.string().trim().min(1).max(120),
+        note: z.string().trim().max(300).optional(),
+      })
+      .strict(),
+  }),
+  ah(async (req, res) => {
+    const me = req.auth!.userId;
+    const u = new URL(req.body.url);
+    if (u.origin !== new URL(env.PUBLIC_URL).origin) throw badRequest('FOREIGN_LINK', 'Only S-Taler links can be shared here');
+    if (String(req.body.recipientId) === String(me)) throw badRequest('SELF', 'You cannot message yourself');
+    const target = await one<any>(`SELECT id, role, status FROM ${S}.users WHERE id = $1`, [req.body.recipientId]);
+    if (!target || target.status !== 'active' || target.role === 'admin') throw notFound('User not found');
+    const existing = await one<any>(
+      `SELECT c.id FROM ${S}.conversations c
+         JOIN ${S}.conversation_participants a ON a.conversation_id = c.id AND a.user_id = $1
+         JOIN ${S}.conversation_participants b ON b.conversation_id = c.id AND b.user_id = $2
+        WHERE c.type IN ('user_to_user', 'merchant', 'exchange') AND c.status = 'active' LIMIT 1`,
+      [me, req.body.recipientId],
+    );
+    const id =
+      existing?.id ??
+      (await tx(async (c) => {
+        const conv = await one<any>(`INSERT INTO ${S}.conversations (type, created_by, status) VALUES ('user_to_user', $1, 'active') RETURNING id`, [me], c);
+        await c.query(`INSERT INTO ${S}.conversation_participants (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`, [conv.id, me, req.body.recipientId]);
+        return conv.id;
+      }));
+    const text = `${req.body.note ? `${req.body.note}\n` : ''}${req.body.title}\n${u.toString()}`;
+    await postMessage(String(id), me, text, { kind: 'link', meta: { url: u.toString(), title: req.body.title } });
+    res.status(201).json({ success: true, data: { conversationId: id } });
+  }),
+);
+
 messagesRouter.get(
   '/search-users',
   validate({ query: z.object({ q: z.string().trim().min(2).max(64) }).strict() }),
   ah(async (req, res) => {
     const q = `%${String(req.query.q).replace(/[\\%_]/g, (m) => '\\' + m)}%`;
     const r = await pool.query(
-      `SELECT id, full_name, role, profile_image FROM ${S}.users
-        WHERE full_name ILIKE $1 AND id <> $2 AND role <> 'admin' AND status = 'active' ORDER BY full_name LIMIT 20`,
-      [q, req.auth!.userId],
+      `SELECT u.id, u.full_name, u.role, u.profile_image, w.wallet_id FROM ${S}.users u LEFT JOIN ${S}.wallets w ON w.user_id = u.id
+        WHERE (u.full_name ILIKE $1 OR lower(u.email) = lower($3) OR w.wallet_id = $3) AND u.id <> $2 AND u.role <> 'admin' AND u.status = 'active'
+        ORDER BY (lower(u.email) = lower($3) OR w.wallet_id = $3) DESC, u.full_name LIMIT 20`,
+      [q, req.auth!.userId, String(req.query.q).trim()],
     );
     res.json({ success: true, data: { users: r.rows } });
   }),
@@ -166,16 +264,28 @@ messagesRouter.get(
     await participant(req.params.id!, me);
     const q = req.query as any;
     const r = await pool.query(
-      `SELECT m.id, m.content, m.created_at, m.is_edited, m.sender_id, u.full_name AS sender_name, u.profile_image AS sender_image, u.role AS sender_role
+      `SELECT m.id, m.content, m.created_at, m.is_edited, COALESCE(m.is_deleted,false) AS is_deleted, m.sender_id, m.reactions, m.kind, m.meta, m.reply_to,
+              u.full_name AS sender_name, u.profile_image AS sender_image, u.role AS sender_role,
+              r.content AS reply_content, ru.full_name AS reply_name, COALESCE(r.is_deleted,false) AS reply_deleted
          FROM ${S}.messages m LEFT JOIN ${S}.users u ON u.id = m.sender_id
-        WHERE m.conversation_id = $1 AND NOT COALESCE(m.is_deleted,false) AND ($2::timestamptz IS NULL OR m.created_at < $2)
+         LEFT JOIN ${S}.messages r ON r.id = m.reply_to AND r.conversation_id = m.conversation_id
+         LEFT JOIN ${S}.users ru ON ru.id = r.sender_id
+        WHERE m.conversation_id = $1 AND ($2::timestamptz IS NULL OR m.created_at < $2)
         ORDER BY m.created_at DESC LIMIT $3`,
       [req.params.id, q.before ?? null, q.limit],
     );
     await pool.query(`UPDATE ${S}.conversation_participants SET last_read_at = now() WHERE conversation_id = $1 AND user_id = $2`, [req.params.id, me]);
     res.json({
       success: true,
-      data: { messages: r.rows.reverse().map((m) => ({ ...m, content: readMessage(m.content, String(req.params.id)), mine: String(m.sender_id) === String(me) })) },
+      data: {
+        messages: r.rows.reverse().map(({ reply_content, reply_name, reply_deleted, ...m }) => ({
+          ...m,
+          content: m.is_deleted ? '' : readMessage(m.content, String(req.params.id)),
+          meta: m.is_deleted ? null : m.meta,
+          mine: String(m.sender_id) === String(me),
+          reply: m.reply_to ? { name: reply_name, content: reply_deleted ? '' : readMessage(reply_content ?? '', String(req.params.id)).slice(0, 140), deleted: reply_deleted } : null,
+        })),
+      },
     });
   }),
 );
@@ -183,19 +293,11 @@ messagesRouter.get(
 messagesRouter.post(
   '/conversations/:id/messages',
   moneyLimiter,
-  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ content }).strict() }),
+  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ content, replyTo: idParam.optional() }).strict() }),
   ah(async (req, res) => {
     const me = req.auth!.userId;
-    await participant(req.params.id!, me);
-    const conv = await one<any>(`SELECT status FROM ${S}.conversations WHERE id = $1`, [req.params.id]);
-    if (conv?.status === 'closed') throw forbidden('This conversation is closed', 'CONVERSATION_CLOSED');
-    const m = await one<any>(
-      `INSERT INTO ${S}.messages (conversation_id, sender_id, content, is_edited, is_deleted) VALUES ($1, $2, $3, false, false) RETURNING id, created_at`,
-      [req.params.id, me, encrypt(req.body.content, `msg:${req.params.id}`)],
-    );
-    await pool.query(`UPDATE ${S}.conversations SET updated_at = now() WHERE id = $1`, [req.params.id]);
-    await pool.query(`UPDATE ${S}.conversation_participants SET last_read_at = now() WHERE conversation_id = $1 AND user_id = $2`, [req.params.id, me]);
-    res.status(201).json({ success: true, data: { message: { id: m.id, content: req.body.content, created_at: m.created_at, sender_id: me, mine: true } } });
+    const message = await postMessage(String(req.params.id), me, req.body.content, { replyTo: req.body.replyTo });
+    res.status(201).json({ success: true, data: { message } });
   }),
 );
 
@@ -218,7 +320,7 @@ messagesRouter.delete(
   '/messages/:id',
   validate({ params: z.object({ id: idParam }).strict() }),
   ah(async (req, res) => {
-    const r = await pool.query(`UPDATE ${S}.messages SET is_deleted = true, content = '[deleted]' WHERE id = $1 AND sender_id = $2`, [req.params.id, req.auth!.userId]);
+    const r = await pool.query(`UPDATE ${S}.messages SET is_deleted = true, content = '[deleted]', meta = NULL, reactions = '{}'::jsonb WHERE id = $1 AND sender_id = $2 AND NOT COALESCE(is_deleted,false)`, [req.params.id, req.auth!.userId]);
     if (r.rowCount === 0) throw notFound('Message not found');
     res.json({ success: true });
   }),

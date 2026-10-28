@@ -11,7 +11,7 @@ import { audit } from '../lib/audit.js';
 import { requireAuth } from '../middleware/auth.js';
 import { moneyLimiter } from '../middleware/security.js';
 import { requireSecondFactor } from './mfa.js';
-import { assertDailyLimit, assertMaxTransfer, maskName, notify, walletOfUser, walletToWallet } from './walletCore.js';
+import { assertDailyLimit, assertMaxTransfer, maskName, notify, walletOfUser, walletToWallet , notifyBi } from './walletCore.js';
 
 export const walletRouter = Router();
 walletRouter.use(requireAuth);
@@ -154,7 +154,16 @@ walletRouter.post(
         });
         await notify(c, recipient.user_id, 'money_received', 'Money received', `${maskName(me.full_name)} sent you ${amount} ${env.CURRENCY}`, {
           reference: moved.reference,
+          ar: { title: kind === 'payment' ? 'وصلتك دفعة' : 'وصلتك مصاري', body: `${maskName(me.full_name)} بعتلك ${amount} ${env.CURRENCY}` },
         });
+        await notifyBi(
+          c,
+          userId,
+          kind === 'payment' ? 'payment_sent' : 'money_sent',
+          [kind === 'payment' ? 'Payment sent' : 'Money sent', `${amount} ${env.CURRENCY} to ${maskName(recipient.full_name)}`],
+          [kind === 'payment' ? 'تم الدفع' : 'تم التحويل', `${amount} ${env.CURRENCY} إلى ${maskName(recipient.full_name)}`],
+          { reference: moved.reference },
+        );
         return { ...moved, from: mine.wallet_id };
       });
       await audit({ userId, action: 'wallet.transfer', entityType: 'transfer', entityId: result.reference, details: { amount, to: recipient.wallet_id } }, req);

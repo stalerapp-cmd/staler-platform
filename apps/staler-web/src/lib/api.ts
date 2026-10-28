@@ -65,8 +65,29 @@ export function newIdempotencyKey() {
   return `ik_${crypto.randomUUID().replace(/-/g, '')}`;
 }
 
+/** The merchant's currently selected store or branch (sent as X-Store-Id). */
+export const currentStore = {
+  get(): string | null {
+    try {
+      return localStorage.getItem('st.store');
+    } catch {
+      return null;
+    }
+  },
+  set(id: string | null) {
+    try {
+      if (id) localStorage.setItem('st.store', id);
+      else localStorage.removeItem('st.store');
+    } catch {
+      /* private mode */
+    }
+  },
+};
+
 function headers(extra: Record<string, string> = {}): Record<string, string> {
+  const store = currentStore.get();
   return {
+    ...(store ? { 'X-Store-Id': store } : {}),
     Accept: 'application/json',
     'X-Requested-With': 'fetch',
     ...(isNative ? { 'X-Client': 'mobile' } : {}),

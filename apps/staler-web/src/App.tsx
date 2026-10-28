@@ -34,6 +34,14 @@ const AdminPending = lazyRetry(() => import('./pages/Admin').then((m) => ({ defa
 const AdminBankOps = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminBankOps })));
 const AdminAudit = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminAudit })));
 const AdminSettings = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminSettings })));
+const AdminDisputes = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminDisputes })));
+const StoresPage = lazyRetry(() => import('./pages/Stores'));
+const StoresDirectory = lazyRetry(() => import('./pages/Stores').then((m) => ({ default: m.StoresDirectory })));
+const StorePage = lazyRetry(() => import('./pages/StorePage'));
+const Contacts = lazyRetry(() => import('./pages/Contacts'));
+const Help = lazyRetry(() => import('./pages/Help'));
+const MerchantStores = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantStores })));
+const MerchantAds = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantAds })));
 
 export function Splash() {
   return (
@@ -83,6 +91,8 @@ export default function App() {
         <Route path="/verify" element={<GuestOnly><Verify /></GuestOnly>} />
         <Route path="/forgot" element={<GuestOnly><Forgot /></GuestOnly>} />
         <Route path="/store" element={page(<Store publicMode />)} />
+        <Route path="/stores" element={page(<StoresPage />)} />
+        <Route path="/s/:slug" element={page(<StorePage />)} />
         <Route path="/app" element={<Private><AppShell /></Private>}>
           <Route index element={page(<Home />)} />
           <Route path="send" element={page(<Send />)} />
@@ -94,13 +104,18 @@ export default function App() {
           <Route path="activity" element={page(<Activity />)} />
           <Route path="store" element={page(<Store />)} />
           <Route path="orders" element={page(<Orders />)} />
+          <Route path="stores" element={page(<StoresDirectory />)} />
+          <Route path="contacts" element={page(<Contacts />)} />
+          <Route path="help" element={page(<Help />)} />
           <Route path="messages" element={page(<Messages />)} />
           <Route path="messages/:id" element={page(<Messages />)} />
           <Route path="settings" element={page(<Settings />)} />
-          <Route path="vouchers" element={<Private roles={['exchange']}>{page(<Vouchers />)}</Private>} />
+          <Route path="vouchers" element={<Private roles={['user', 'merchant', 'exchange']}>{page(<Vouchers />)}</Private>} />
           <Route path="merchant" element={<Private roles={['merchant']}>{page(<MerchantDashboard />)}</Private>} />
           <Route path="merchant/products" element={<Private roles={['merchant']}>{page(<MerchantProducts />)}</Private>} />
           <Route path="merchant/orders" element={<Private roles={['merchant']}>{page(<MerchantOrders />)}</Private>} />
+          <Route path="merchant/stores" element={<Private roles={['merchant']}>{page(<MerchantStores />)}</Private>} />
+          <Route path="merchant/ads" element={<Private roles={['merchant']}>{page(<MerchantAds />)}</Private>} />
           <Route path="admin" element={<Private roles={['admin']}>{page(<AdminOverview />)}</Private>} />
           <Route path="admin/users" element={<Private roles={['admin']}>{page(<AdminUsers />)}</Private>} />
           <Route path="admin/users/:id" element={<Private roles={['admin']}>{page(<AdminUserDetail />)}</Private>} />
@@ -110,6 +125,7 @@ export default function App() {
           <Route path="admin/audit" element={<Private roles={['admin']}>{page(<AdminAudit />)}</Private>} />
           <Route path="admin/settings" element={<Private roles={['admin']}>{page(<AdminSettings />)}</Private>} />
           <Route path="admin/admins" element={<Private roles={['admin']}>{page(<AdminAdmins />)}</Private>} />
+          <Route path="admin/disputes" element={<Private roles={['admin']}>{page(<AdminDisputes />)}</Private>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

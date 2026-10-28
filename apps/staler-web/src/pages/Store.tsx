@@ -1,151 +1,72 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDownUp, Download, FileDown, Minus, Package, Plus, Search, ShoppingCart, Trash2, Truck } from 'lucide-react';
-import { ApiError, assetUrl, downloadFile, get, newIdempotencyKey, post } from '../lib/api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowDownUp,
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  CircleDollarSign,
+  ClipboardCheck,
+  Download,
+  KeyRound,
+  MapPin,
+  Navigation,
+  Package,
+  PackageCheck,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  Store as StoreIcon,
+  Truck,
+  XCircle,
+} from 'lucide-react';
+import { ApiError, downloadFile, get, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
-import { date, money } from '../lib/format';
+import { date, fill, money, relative } from '../lib/format';
 import { useSecureAction } from '../components/SecureAction';
 import { useToast } from '../components/Toast';
-import { Badge, Button, Chips, EmptyState, ErrorNote, PageHeader, Select, Sheet, Skeleton, SuccessMark, cx } from '../components/ui';
-import { StarMotif } from '../components/Tatreez';
 import { useConfirm } from '../components/Confirm';
-import { fill } from '../lib/format';
+import { Badge, Button, Chips, EmptyState, ErrorNote, PageHeader, Select, Sheet, Skeleton, TextArea, cx } from '../components/ui';
+import { CartButton, CartSheet, ProductCard, ProductImage, ProductSheet, type Product } from '../components/Commerce';
+import { MapView, type Pin } from '../components/MapView';
+import { QRImage } from '../components/QR';
+import { SecureReader } from '../components/Reader';
+import { PublicShell } from '../layouts/PublicShell';
+import { StoreLogo, type StoreSummary } from './Stores';
 
-export interface Product {
-  id: string;
-  name: string;
-  description: string | null;
-  price: string;
-  image_url: string | null;
-  stock: number;
-  is_digital: boolean;
-  store_name: string;
-  merchant_id: string;
-  category?: string | null;
-  store_description?: string | null;
-}
+export { CartProvider, useCart } from '../components/Commerce';
+export type { Product } from '../components/Commerce';
 
-// --------------------------------------------------------------------- cart
-interface Line {
-  product: Product;
-  qty: number;
-}
-const CartCtx = createContext<{
-  lines: Line[];
-  add: (p: Product) => void;
-  setQty: (id: string, q: number) => void;
-  clear: () => void;
-  count: number;
-} | null>(null);
-
-export function CartProvider({ children }: { children: ReactNode }) {
-  const [lines, setLines] = useState<Line[]>(() => {
-    try {
-      return JSON.parse(sessionStorage.getItem('st.cart') ?? '[]');
-    } catch {
-      return [];
-    }
-  });
-  useEffect(() => {
-    try {
-      sessionStorage.setItem('st.cart', JSON.stringify(lines));
-    } catch {
-      /* ignore */
-    }
-  }, [lines]);
-  const value = useMemo(
-    () => ({
-      lines,
-      count: lines.reduce((s, l) => s + l.qty, 0),
-      add: (p: Product) =>
-        setLines((ls) => {
-          const ex = ls.find((l) => l.product.id === p.id);
-          if (ex) return ls.map((l) => (l.product.id === p.id ? { ...l, qty: p.is_digital ? 1 : Math.min(l.qty + 1, 99, p.stock) } : l));
-          return [...ls, { product: p, qty: 1 }];
-        }),
-      setQty: (id: string, q: number) => setLines((ls) => (q <= 0 ? ls.filter((l) => l.product.id !== id) : ls.map((l) => (l.product.id === id ? { ...l, qty: Math.min(q, 99) } : l)))),
-      clear: () => setLines([]),
-    }),
-    [lines],
-  );
-  return <CartCtx.Provider value={value}>{children}</CartCtx.Provider>;
-}
-export const useCart = () => useContext(CartCtx)!;
-
-// ------------------------------------------------------------- product art
-function ProductImage({ p, className }: { p: Product; className?: string }) {
-  const url = assetUrl(p.image_url);
-  const [failed, setFailed] = useState(false);
-  if (url && !failed) {
-    return <img src={url} alt={p.name} loading="lazy" onError={() => setFailed(true)} className={cx('h-full w-full object-cover', className)} />;
-  }
-  // No photo: a stitched cover, colour chosen from the product name so it stays stable.
-  const hash = Array.from(p.name).reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-  const covers = [
-    ['#141B3D', '#E2506A', '#E9C060'],
-    ['#2F3F18', '#E9C060', '#E2506A'],
-    ['#5A1424', '#E9C060', '#9DBB5F'],
-    ['#1C3B4A', '#E2506A', '#E9C060'],
-  ] as const;
-  const [bg, a, b] = covers[hash % covers.length]!;
-  return (
-    <div className={cx('relative grid h-full w-full place-items-center overflow-hidden', className)} style={{ background: bg }} aria-hidden="true">
-      <StarMotif size={13} cell={10} className="absolute h-[85%] w-[85%] opacity-80" colors={[a, b]} animate={false} />
-      <span className="relative grid h-14 w-14 place-items-center rounded-2xl bg-black/25 font-display text-2xl text-white backdrop-blur-sm">{Array.from(p.name.replace(/["«»]/g, ''))[0]}</span>
-    </div>
-  );
-}
-
-function ProductCard({ p, onOpen, index }: { p: Product; onOpen: () => void; index: number }) {
-  const { t, lang } = useI18n();
-  const soldOut = !p.is_digital && p.stock <= 0;
-  return (
-    <motion.button
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(index, 12) * 0.04 }}
-      onClick={onOpen}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface text-start transition hover:-translate-y-1 hover:shadow-card"
-    >
-      <div className="relative aspect-[4/5] overflow-hidden">
-        <ProductImage p={p} className="transition duration-500 group-hover:scale-105" />
-        <div className="absolute start-2 top-2">
-          {p.is_digital ? <Badge tone="info">{t.store.digital}</Badge> : soldOut ? <Badge tone="bad">{t.store.soldOut}</Badge> : null}
-        </div>
-      </div>
-      <div className="flex flex-1 flex-col p-3.5">
-        <p className="line-clamp-2 font-medium leading-snug">{p.name}</p>
-        <p className="mt-0.5 truncate text-xs text-muted">{p.store_name}</p>
-        <p className="num mt-auto pt-3 font-display text-lg">{money(p.price, lang)}</p>
-      </div>
-      <span className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-dashed border-stitch/0 transition group-hover:border-stitch/40" />
-    </motion.button>
-  );
-}
-
-// ------------------------------------------------------------------- store
-export default function Store({ publicMode = false }: { publicMode?: boolean }) {
+// ------------------------------------------------------------------- market
+function Market() {
   const { t, err } = useI18n();
-  const { count } = useCart();
+  const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
-  const [type, setType] = useState<'' | 'digital' | 'physical'>('');
+  const [type, setType] = useState('all');
   const [sort, setSort] = useState('new');
   const [items, setItems] = useState<Product[] | null>(null);
+  const [stores, setStores] = useState<StoreSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const seq = useRef(0);
 
   useEffect(() => {
+    get<{ stores: StoreSummary[] }>('/api/store/stores')
+      .then((d) => setStores(d.stores.slice(0, 12)))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
     const n = ++seq.current;
     const h = setTimeout(async () => {
       try {
         const p = new URLSearchParams({ limit: '60', sort });
         if (q.trim()) p.set('q', q.trim());
-        if (type) p.set('type', type);
+        if (type !== 'all') p.set('type', type);
         const d = await get<{ products: Product[] }>(`/api/store/products?${p}`);
         if (n === seq.current) setItems(d.products);
       } catch (e) {
@@ -154,19 +75,35 @@ export default function Store({ publicMode = false }: { publicMode?: boolean }) 
     }, 250);
     return () => clearTimeout(h);
   }, [q, type, sort, err]);
+  useEffect(() => {
+    if (params.get('cart')) setCartOpen(true);
+  }, [params]);
 
   return (
-    <div className={publicMode ? 'mx-auto max-w-6xl px-5 py-8' : ''}>
-      <PageHeader
-        title={t.store.title}
-        lead={t.store.lead}
-        actions={
-          <Button variant="secondary" onClick={() => setCartOpen(true)} icon={<ShoppingCart className="h-5 w-5" />}>
-            {t.store.cart}
-            {count > 0 && <span className="num ms-1 rounded-full bg-stitch px-2 text-xs text-white">{count}</span>}
-          </Button>
-        }
-      />
+    <div>
+      <PageHeader title={t.store.title} lead={t.store.lead} actions={<CartButton onClick={() => setCartOpen(true)} className="border border-line" />} />
+      {stores.length > 0 && (
+        <section className="mb-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg">{t.shop.storesTitle}</h2>
+            <Link to="/stores" className="text-sm text-sky hover:underline">
+              {t.shop.allStores}
+            </Link>
+          </div>
+          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+            {stores.map((s, i) => (
+              <motion.div key={s.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}>
+                <Link to={`/s/${s.slug}`} className="group flex w-24 shrink-0 snap-start flex-col items-center gap-2 text-center">
+                  <span className="rounded-[1.2rem] p-0.5 transition group-hover:scale-105" style={{ background: s.ads ? 'linear-gradient(135deg,#E2506A,#E9C060)' : 'transparent' }}>
+                    <StoreLogo s={s} size={68} />
+                  </span>
+                  <span className="line-clamp-2 text-xs font-medium leading-tight">{s.store_name}</span>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="mb-6 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <label className="relative min-w-[220px] flex-1">
@@ -185,12 +122,13 @@ export default function Store({ publicMode = false }: { publicMode?: boolean }) 
         </div>
         <Chips
           label={t.tx.filter}
-          value={(type || 'all') as any}
-          onChange={(v: string) => setType((v === 'all' ? '' : v) as any)}
+          value={type as any}
+          onChange={(v: string) => setType(v)}
           options={[
             { value: 'all', label: t.common.all },
-            { value: 'digital', label: t.store.digital },
             { value: 'physical', label: t.store.physical },
+            { value: 'digital', label: t.store.digital },
+            { value: 'deposit', label: t.mstore.deposit },
           ]}
         />
       </div>
@@ -198,7 +136,7 @@ export default function Store({ publicMode = false }: { publicMode?: boolean }) 
       {!items ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[4/6] rounded-2xl" />
+            <Skeleton key={i} className="aspect-[4/6] rounded-[1.4rem]" />
           ))}
         </div>
       ) : items.length ? (
@@ -211,277 +149,382 @@ export default function Store({ publicMode = false }: { publicMode?: boolean }) 
         <EmptyState icon={<Package className="h-6 w-6" />} title={t.store.noProducts} />
       )}
       <ProductSheet product={open} onClose={() => setOpen(null)} onAdded={() => setCartOpen(true)} />
-      <CartSheet open={cartOpen} onClose={() => setCartOpen(false)} publicMode={publicMode} />
+      <CartSheet
+        open={cartOpen}
+        onClose={() => {
+          setCartOpen(false);
+          if (params.get('cart')) setParams({}, { replace: true });
+        }}
+      />
     </div>
   );
 }
 
-function ProductSheet({ product, onClose, onAdded }: { product: Product | null; onClose: () => void; onAdded: () => void }) {
-  const { t, lang } = useI18n();
-  const { add } = useCart();
-  if (!product) return <Sheet open={false} onClose={onClose} title="">{null}</Sheet>;
-  const soldOut = !product.is_digital && product.stock <= 0;
+export default function Store({ publicMode = false }: { publicMode?: boolean }) {
+  if (!publicMode) return <Market />;
   return (
-    <Sheet open={!!product} onClose={onClose} title={product.name} wide>
-      <div className="grid gap-6 sm:grid-cols-2">
-        <div className="aspect-square overflow-hidden rounded-2xl">
-          <ProductImage p={product} />
-        </div>
-        <div className="flex flex-col">
-          <p className="text-sm text-muted">
-            {t.store.by} {product.store_name}
-          </p>
-          <p className="num mt-2 font-display text-4xl">{money(product.price, lang)}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {product.is_digital ? (
-              <Badge tone="info">
-                <FileDown className="h-3.5 w-3.5" /> {t.store.digital}
-              </Badge>
-            ) : (
-              <Badge tone={soldOut ? 'bad' : 'good'}>
-                <Truck className="h-3.5 w-3.5" /> {soldOut ? t.store.soldOut : `${product.stock} ${t.store.inStock}`}
-              </Badge>
-            )}
-          </div>
-          {product.description && <p className="mt-4 whitespace-pre-line text-muted">{product.description}</p>}
-          {!product.is_digital && <p className="mt-4 rounded-xl bg-olive/10 p-3 text-sm text-olive">{t.store.escrow}</p>}
-          <Button
-            className="mt-auto"
-            block
-            size="lg"
-            variant="stitch"
-            disabled={soldOut}
-            icon={<ShoppingCart className="h-5 w-5" />}
-            onClick={() => {
-              add(product);
-              onClose();
-              onAdded();
-            }}
-          >
-            {t.store.add}
-          </Button>
-        </div>
-      </div>
-    </Sheet>
-  );
-}
-
-function CartSheet({ open, onClose, publicMode }: { open: boolean; onClose: () => void; publicMode: boolean }) {
-  const { t, lang, err } = useI18n();
-  const { user, reload } = useAuth();
-  const nav = useNavigate();
-  const { lines, setQty, clear } = useCart();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<any>(null);
-  const key = useRef(newIdempotencyKey());
-  const secure = useSecureAction();
-  const total = lines.reduce((s, l) => s + Math.round(Number(l.product.price) * 100) * l.qty, 0) / 100;
-  const confirm = useConfirm();
-
-  const checkout = async () => {
-    if (!user) return nav('/login', { state: { from: '/app/store' } });
-    const count = lines.reduce((n, l) => n + l.qty, 0);
-    const ok = await confirm({
-      title: t.ask.buyTitle,
-      body: fill(t.ask.buyBody, { total: money(total, lang), count }),
-      confirmLabel: fill(t.ask.buyOk, { total: money(total, lang) }),
-    });
-    if (!ok) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await secure.run((totp) =>
-        post('/api/store/checkout', { items: lines.map((l) => ({ productId: l.product.id, quantity: l.qty })), ...(totp ? { totp } : {}) }, key.current),
-      );
-      setDone(r);
-      clear();
-      key.current = newIdempotencyKey();
-      void reload();
-    } catch (e) {
-      if (!(e instanceof ApiError && e.code === 'CANCELLED')) setError(err(e));
-      key.current = newIdempotencyKey();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Sheet
-      open={open}
-      onClose={() => {
-        setDone(null);
-        onClose();
-      }}
-      title={t.store.cart}
-    >
-      {secure.element}
-      {done ? (
-        <div className="py-4 text-center">
-          <SuccessMark />
-          <h3 className="mt-5 text-xl">{t.store.paid}</h3>
-          <p className="num mt-1 font-display text-2xl">{money(done.total, lang)}</p>
-          <p className="mt-3 text-sm text-muted">{t.store.paidLead}</p>
-          <Link to="/app/orders" onClick={onClose}>
-            <Button block className="mt-6">
-              {t.nav.orders}
-            </Button>
-          </Link>
-        </div>
-      ) : !lines.length ? (
-        <p className="py-10 text-center text-muted">{t.store.emptyCart}</p>
-      ) : (
-        <div>
-          <ul className="divide-y divide-line">
-            <AnimatePresence initial={false}>
-              {lines.map((l) => (
-                <motion.li key={l.product.id} layout exit={{ opacity: 0, height: 0 }} className="flex items-center gap-3 py-3">
-                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl">
-                    <ProductImage p={l.product} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{l.product.name}</p>
-                    <p className="num text-sm text-muted">{money(l.product.price, lang)}</p>
-                  </div>
-                  {l.product.is_digital ? (
-                    <button onClick={() => setQty(l.product.id, 0)} className="rounded-lg p-2 text-muted hover:text-stitch" aria-label={t.store.remove}>
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-1 rounded-xl border border-line">
-                      <button onClick={() => setQty(l.product.id, l.qty - 1)} className="p-2 text-muted hover:text-ink" aria-label="−">
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      <span className="num w-6 text-center">{l.qty}</span>
-                      <button onClick={() => setQty(l.product.id, Math.min(l.qty + 1, l.product.stock))} className="p-2 text-muted hover:text-ink" aria-label="+">
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ul>
-          <div className="mt-4 flex items-center justify-between border-t border-dashed border-line pt-4">
-            <span className="text-muted">{t.common.total}</span>
-            <span className="num font-display text-2xl">{money(total, lang)}</span>
-          </div>
-          <ErrorNote>{error}</ErrorNote>
-          <Button block size="lg" variant="stitch" className="mt-5" loading={busy} onClick={checkout}>
-            {user ? t.store.checkout : t.store.loginToBuy}
-          </Button>
-          {publicMode && !user && <p className="mt-2 text-center text-xs text-muted">{t.store.loginToBuy}</p>}
-        </div>
-      )}
-    </Sheet>
+    <PublicShell>
+      <Market />
+    </PublicShell>
   );
 }
 
 // ------------------------------------------------------------------- orders
-export function Orders() {
+const STEPS = ['placed', 'accepted', 'shipped', 'delivered', 'completed'] as const;
+const EV_ICON: Record<string, typeof Package> = {
+  placed: ShoppingBag,
+  accepted: ClipboardCheck,
+  shipped: Truck,
+  ready_for_pickup: PackageCheck,
+  location: MapPin,
+  note: Package,
+  out_for_delivery: Navigation,
+  balance_paid: CircleDollarSign,
+  delivered: PackageCheck,
+  confirmed: CheckCircle2,
+  released: ShieldCheck,
+  cancelled: XCircle,
+  disputed: AlertTriangle,
+  resolved: ShieldCheck,
+};
+
+function stepOf(o: any) {
+  if (o.status === 'completed') return 4;
+  if (o.status === 'delivered' || o.delivered_at) return 3;
+  if (o.status === 'shipped') return 2;
+  if (o.accepted_at) return 1;
+  return 0;
+}
+
+function Progress({ o }: { o: any }) {
+  const { t } = useI18n();
+  const at = stepOf(o);
+  const labels = [t.ord.ev.placed, t.ord.ev.accepted, o.fulfillment === 'pickup' ? t.ord.ev.ready_for_pickup : t.ord.ev.shipped, t.ord.ev.delivered, t.ord.ev.released];
+  return (
+    <ol className="relative mt-5 grid grid-cols-5 gap-1" aria-label={t.ord.timeline}>
+      <span className="absolute inset-x-[10%] top-3.5 h-1 rounded-full bg-sunk" />
+      <motion.span
+        className="absolute start-[10%] top-3.5 h-1 rounded-full bg-olive"
+        initial={{ width: 0 }}
+        animate={{ width: `${(at / (STEPS.length - 1)) * 80}%` }}
+        transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+      />
+      {labels.map((l, i) => (
+        <li key={l} className="relative flex flex-col items-center gap-1.5 text-center">
+          <motion.span
+            initial={{ scale: 0.5 }}
+            animate={{ scale: i === at ? [1, 1.18, 1] : 1 }}
+            transition={i === at ? { repeat: Infinity, duration: 2 } : {}}
+            className={cx('grid h-8 w-8 place-items-center rounded-full border-2 text-xs', i <= at ? 'border-olive bg-olive text-white' : 'border-line bg-surface text-muted')}
+          >
+            {i < at ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+          </motion.span>
+          <span className={cx('text-[11px] leading-tight', i <= at ? 'text-ink' : 'text-muted')}>{l}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function OrderCard({ o, i, onChanged }: { o: any; i: number; onChanged: () => void }) {
   const { t, lang, err } = useI18n();
   const toast = useToast();
+  const confirm = useConfirm();
+  const secure = useSecureAction();
   const { reload } = useAuth();
-  const { data, loading, reload: refresh } = useData<{ orders: any[] }>('/api/store/orders');
-  const [confirm, setConfirm] = useState<{ id: string; kind: 'confirm' | 'cancel' } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const tone = (s: string) => (s === 'completed' ? 'good' : s === 'cancelled' ? 'bad' : s === 'shipped' ? 'info' : 'warn');
+  const [open, setOpen] = useState(i === 0 && o.escrow_status === 'held');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [dispute, setDispute] = useState(false);
+  const [reason, setReason] = useState('');
+  const [reader, setReader] = useState<{ url: string; title: string } | null>(null);
+  const held = o.escrow_status === 'held';
+  const physical = o.fulfillment !== 'digital';
+  const due = Number(o.balance_due) > 0;
+  const tone = o.status === 'completed' ? 'good' : o.status === 'cancelled' ? 'bad' : o.dispute_status === 'open' ? 'bad' : o.status === 'shipped' ? 'info' : 'warn';
+
+  const pins = useMemo<Pin[]>(() => {
+    const out: Pin[] = [];
+    if (o.store_lat != null && o.store_lng != null) out.push({ lat: o.store_lat, lng: o.store_lng, label: o.store_name, kind: 'store' });
+    if (o.delivery_lat != null && o.delivery_lng != null) out.push({ lat: o.delivery_lat, lng: o.delivery_lng, label: t.ord.youPin, kind: 'home' });
+    const track = (o.events as any[]).filter((e) => e.lat != null && e.lng != null);
+    track.forEach((e, k) => out.push({ lat: e.lat, lng: e.lng, label: `${t.ord.ev[e.kind] ?? e.kind} · ${relative(e.at, lang)}`, kind: k === track.length - 1 ? 'now' : 'track' }));
+    return out;
+  }, [o, t, lang]);
+
+  const act = async (kind: 'confirm' | 'cancel' | 'pay-balance') => {
+    const q =
+      kind === 'confirm'
+        ? { title: t.ord.confirmQ, body: fill(t.ord.confirmB, { amount: money(o.amount_paid ?? o.total_amount, lang) }), confirmLabel: t.ord.confirmOk }
+        : kind === 'cancel'
+          ? { title: t.ord.cancelQ, body: o.accepted_at && !o.deposit_refundable && due ? t.ord.cancelBKeep : t.ord.cancelB, confirmLabel: t.ord.cancelOk, tone: 'danger' as const }
+          : { title: t.ord.payQ, body: fill(t.ord.payB, { amount: money(o.balance_due, lang) }), confirmLabel: fill(t.ord.payOk, { amount: money(o.balance_due, lang) }) };
+    if (!(await confirm(q))) return;
+    setBusy(kind);
+    try {
+      if (kind === 'pay-balance') await secure.run((totp) => post(`/api/store/orders/${o.id}/pay-balance`, totp ? { totp } : {}));
+      else await post(`/api/store/orders/${o.id}/${kind}`);
+      toast(t.common.done);
+      onChanged();
+      void reload();
+    } catch (e) {
+      if (!(e instanceof ApiError && e.code === 'CANCELLED')) toast(err(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openFile = async (it: any, purpose: 'download' | 'view') => {
+    setBusy(it.id + purpose);
+    try {
+      const r = await post<{ url: string; purpose: string }>(`/api/store/orders/${o.id}/items/${it.id}/ticket`, { purpose });
+      if (r.purpose === 'view') setReader({ url: r.url, title: it.name });
+      else {
+        await downloadFile(r.url, it.name);
+        onChanged();
+      }
+    } catch (e) {
+      toast(err(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
+    <motion.article layout initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 8) * 0.04 }} className="card overflow-hidden">
+      {secure.element}
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-start gap-3 p-5 text-start" aria-expanded={open}>
+        <StoreLogo s={{ store_name: o.store_name ?? '—', logo_url: o.store_logo }} size={48} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-display text-lg">
+            {o.store_name}
+            {o.branch_name ? <span className="text-muted"> · {o.branch_name}</span> : null}
+          </p>
+          <p className="num text-sm text-muted">
+            #{String(o.id).slice(0, 8)} · {date(o.created_at, lang)}
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <Badge tone={tone}>{o.dispute_status === 'open' ? t.ord.disputed : t.ord.st[o.status] ?? o.status}</Badge>
+          <p className="num font-display text-xl">{money(o.total_amount, lang)}</p>
+        </div>
+        <ChevronDown className={cx('mt-1 h-5 w-5 shrink-0 text-muted transition', open && 'rotate-180')} />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <div className="space-y-5 border-t border-line px-5 pb-5">
+              {physical && o.status !== 'cancelled' && <Progress o={o} />}
+
+              <ul className="space-y-2">
+                {o.items.map((it: any) => (
+                  <li key={it.id} className="flex items-center gap-3 rounded-2xl bg-sunk/70 p-2.5 text-sm">
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl">
+                      <ProductImage p={{ name: it.name, image_url: it.image_url }} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">
+                        {it.quantity} × {it.name}
+                      </p>
+                      <p className="num text-xs text-muted">
+                        {money(it.price, lang)}
+                        {it.licence_code ? ` · ${it.licence_code}` : ''}
+                      </p>
+                    </div>
+                    {it.is_digital && o.status !== 'cancelled' && (
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <div className="flex gap-1.5">
+                          <Button size="sm" variant="secondary" loading={busy === it.id + 'view'} icon={<BookOpen className="h-4 w-4" />} onClick={() => openFile(it, 'view')}>
+                            {t.ord.open}
+                          </Button>
+                          {it.digital_mode !== 'view' && (
+                            <Button
+                              size="sm"
+                              loading={busy === it.id + 'download'}
+                              disabled={it.downloads >= it.download_limit}
+                              icon={<Download className="h-4 w-4" />}
+                              onClick={() => openFile(it, 'download')}
+                              aria-label={t.orders.download}
+                            />
+                          )}
+                        </div>
+                        {it.digital_mode !== 'view' && <span className="text-[11px] text-muted">{fill(t.ord.downloadsLeft, { n: Math.max(0, it.download_limit - it.downloads) })}</span>}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+
+              {physical && (
+                <div className="grid gap-3 text-sm sm:grid-cols-3">
+                  <div className="rounded-2xl border border-line p-3">
+                    <p className="text-muted">{t.ord.paidSoFar}</p>
+                    <p className="num font-display text-lg">{money(o.amount_paid ?? o.total_amount, lang)}</p>
+                  </div>
+                  <div className={cx('rounded-2xl border p-3', due ? 'border-gold/50 bg-gold/10' : 'border-line')}>
+                    <p className="text-muted">{t.ord.balanceDue}</p>
+                    <p className="num font-display text-lg">{money(o.balance_due ?? 0, lang)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-line p-3">
+                    <p className="text-muted">{o.fulfillment === 'pickup' ? t.ord.pickupAt : t.ord.deliverTo}</p>
+                    <p className="line-clamp-2">{o.fulfillment === 'pickup' ? o.store_address ?? o.store_name : o.delivery_address}</p>
+                  </div>
+                </div>
+              )}
+
+              {physical && held && o.handover_code && (
+                <motion.div
+                  initial={{ scale: 0.97, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="relative overflow-hidden rounded-3xl bg-night p-5 text-white"
+                >
+                  <div className="flex flex-wrap items-center gap-5">
+                    <div className="rounded-2xl bg-white p-2">
+                      <QRImage value={`staler-handover:${o.id}:${o.handover_code}`} size={112} label={t.ord.handover} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-2 text-sm text-white/70">
+                        <KeyRound className="h-4 w-4" /> {t.ord.handover}
+                      </p>
+                      <p className="num mt-1 font-display text-4xl tracking-[0.3em]" dir="ltr">
+                        {o.handover_code}
+                      </p>
+                      <p className="mt-2 text-xs text-white/70">{t.ord.handoverLead}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {physical && pins.length > 0 && <MapView pins={pins} trail className="h-56" />}
+
+              {(o.events as any[]).length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-sm font-medium text-muted">{t.ord.timeline}</h3>
+                  <ol className="relative space-y-3 border-s-2 border-dashed border-line ps-5">
+                    {[...(o.events as any[])].reverse().map((e, k) => {
+                      const Icon = EV_ICON[e.kind] ?? Package;
+                      return (
+                        <motion.li key={k} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: k * 0.05 }} className="relative">
+                          <span className={cx('absolute -start-[1.95rem] top-0 grid h-7 w-7 place-items-center rounded-full border-2 border-surface', k === 0 ? 'bg-stitch text-white' : 'bg-sunk text-muted')}>
+                            <Icon className="h-3.5 w-3.5" />
+                          </span>
+                          <p className="text-sm font-medium">{t.ord.ev[e.kind] ?? e.kind}</p>
+                          {e.note && !['placed', 'balance_paid', 'released'].includes(e.kind) && <p className="text-sm text-muted">{e.note}</p>}
+                          <p className="text-xs text-muted">{relative(e.at, lang)}</p>
+                        </motion.li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              )}
+
+              {held && (
+                <div className="flex flex-wrap gap-2">
+                  {due && (
+                    <Button loading={busy === 'pay-balance'} icon={<CircleDollarSign className="h-4 w-4" />} onClick={() => act('pay-balance')}>
+                      {fill(t.ord.payBalance, { amount: money(o.balance_due, lang) })}
+                    </Button>
+                  )}
+                  {!due && o.dispute_status !== 'open' && (
+                    <Button variant="stitch" loading={busy === 'confirm'} icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => act('confirm')}>
+                      {t.orders.confirm}
+                    </Button>
+                  )}
+                  {o.status === 'processing' && o.dispute_status !== 'open' && (
+                    <Button variant="danger" loading={busy === 'cancel'} icon={<XCircle className="h-4 w-4" />} onClick={() => act('cancel')}>
+                      {t.orders.cancel}
+                    </Button>
+                  )}
+                  {o.dispute_status !== 'open' && (
+                    <Button variant="ghost" icon={<AlertTriangle className="h-4 w-4" />} onClick={() => setDispute(true)}>
+                      {t.ord.dispute}
+                    </Button>
+                  )}
+                </div>
+              )}
+              {held && (
+                <p className="flex items-center gap-2 text-xs text-muted">
+                  <ShieldCheck className="h-4 w-4 text-olive" /> {t.ord.protect}
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <Sheet open={dispute} onClose={() => setDispute(false)} title={t.ord.dispute}>
+        <form
+          className="space-y-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy('dispute');
+            try {
+              await post(`/api/store/orders/${o.id}/dispute`, { reason: reason.trim() });
+              setDispute(false);
+              setReason('');
+              toast(t.common.done);
+              onChanged();
+            } catch (e2) {
+              toast(err(e2), 'error');
+            } finally {
+              setBusy(null);
+            }
+          }}
+        >
+          <p className="text-muted">{t.ord.disputeLead}</p>
+          <TextArea label={t.ord.disputeReason} value={reason} onChange={(e) => setReason(e.target.value)} required minLength={5} maxLength={500} rows={4} />
+          <Button block variant="danger-solid" loading={busy === 'dispute'}>
+            {t.ord.disputeSend}
+          </Button>
+        </form>
+      </Sheet>
+      <SecureReader url={reader?.url ?? null} title={reader?.title ?? ''} onClose={() => setReader(null)} />
+    </motion.article>
+  );
+}
+
+export function Orders() {
+  const { t } = useI18n();
+  const { data, loading, reload } = useData<{ orders: any[] }>('/api/store/orders');
+  const [tab, setTab] = useState<'open' | 'all'>('open');
+  const list = (data?.orders ?? []).filter((o) => tab === 'all' || o.escrow_status === 'held');
+  return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title={t.orders.title} />
+      <PageHeader
+        title={t.orders.title}
+        actions={
+          <Link to="/stores">
+            <Button variant="secondary" icon={<StoreIcon className="h-4 w-4" />}>
+              {t.shop.storesTitle}
+            </Button>
+          </Link>
+        }
+      />
+      <div className="mb-4">
+        <Chips label={t.tx.filter} value={tab} onChange={setTab} options={[{ value: 'open', label: t.ord.st.processing }, { value: 'all', label: t.common.all }]} />
+      </div>
       {loading && !data ? (
         <Skeleton className="h-40 rounded-2xl" />
-      ) : !data?.orders.length ? (
+      ) : !list.length ? (
         <EmptyState
           icon={<Package className="h-6 w-6" />}
           title={t.orders.none}
           action={
-            <Link to="/app/store">
-              <Button variant="secondary">{t.nav.store}</Button>
+            <Link to="/stores">
+              <Button variant="secondary">{t.shop.storesTitle}</Button>
             </Link>
           }
         />
       ) : (
         <div className="space-y-4">
-          {data.orders.map((o, i) => (
-            <motion.article key={o.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="card p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-display text-lg">{o.store_name}</p>
-                  <p className="num text-sm text-muted">
-                    #{String(o.id).slice(0, 8)} · {date(o.created_at, lang)}
-                  </p>
-                </div>
-                <div className="text-end">
-                  <Badge tone={tone(o.status)}>{t.orders.st[o.status] ?? o.status}</Badge>
-                  <p className="num mt-1 font-display text-xl">{money(o.total_amount, lang)}</p>
-                </div>
-              </div>
-              <ul className="mt-4 space-y-2">
-                {o.items.map((it: any) => (
-                  <li key={it.id} className="flex items-center justify-between gap-3 rounded-xl bg-sunk px-3 py-2 text-sm">
-                    <span className="min-w-0 truncate">
-                      {it.quantity} × {it.name}
-                    </span>
-                    {it.is_digital && o.status !== 'cancelled' && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        icon={<Download className="h-4 w-4" />}
-                        onClick={() => downloadFile(`/api/store/orders/${o.id}/items/${it.id}/download`, it.name).catch((e) => toast(err(e), 'error'))}
-                      >
-                        {t.orders.download}
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {o.escrow_status === 'held' && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => setConfirm({ id: o.id, kind: 'confirm' })}>
-                    {t.orders.confirm}
-                  </Button>
-                  {o.status === 'processing' && (
-                    <Button size="sm" variant="danger" onClick={() => setConfirm({ id: o.id, kind: 'cancel' })}>
-                      {t.orders.cancel}
-                    </Button>
-                  )}
-                </div>
-              )}
-            </motion.article>
+          {list.map((o, i) => (
+            <OrderCard key={o.id} o={o} i={i} onChanged={() => void reload()} />
           ))}
         </div>
       )}
-      <Sheet open={!!confirm} onClose={() => setConfirm(null)} title={confirm?.kind === 'cancel' ? t.orders.cancel : t.orders.confirm}>
-        <p className="text-muted">{confirm?.kind === 'cancel' ? t.orders.cancelQ : t.orders.confirmQ}</p>
-        <div className="mt-6 grid grid-cols-2 gap-3">
-          <Button variant="secondary" onClick={() => setConfirm(null)}>
-            {t.common.no}
-          </Button>
-          <Button
-            variant={confirm?.kind === 'cancel' ? 'danger' : 'primary'}
-            loading={busy}
-            onClick={async () => {
-              if (!confirm) return;
-              setBusy(true);
-              try {
-                await post(`/api/store/orders/${confirm.id}/${confirm.kind}`);
-                toast(t.common.done);
-                void refresh();
-                void reload();
-              } catch (e) {
-                toast(err(e), 'error');
-              } finally {
-                setBusy(false);
-                setConfirm(null);
-              }
-            }}
-          >
-            {t.common.yes}
-          </Button>
-        </div>
-      </Sheet>
+      <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-xs text-muted">
+        <ShieldCheck className="h-4 w-4" /> {t.ord.protect}
+      </p>
     </div>
   );
 }

@@ -14,7 +14,7 @@ import { ThemeProvider } from './lib/theme';
 import { AuthProvider } from './lib/auth';
 import { ToastProvider } from './components/Toast';
 import { ConfirmProvider } from './components/Confirm';
-import { CartProvider } from './pages/Store';
+import { CartProvider } from './components/Commerce';
 import { apiUrl, isNative } from './lib/api';
 
 // The app talks to a server that may be asleep (free hosting sleeps when idle).

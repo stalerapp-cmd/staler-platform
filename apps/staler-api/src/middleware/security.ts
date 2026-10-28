@@ -63,7 +63,7 @@ export function cors(req: Request, res: Response, next: NextFunction) {
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'Authorization,Content-Type,Idempotency-Key,X-Client,X-Requested-With,X-Request-Id',
+      'Authorization,Content-Type,Idempotency-Key,X-Client,X-Requested-With,X-Request-Id,X-Store-Id',
     );
     res.setHeader('Access-Control-Expose-Headers', 'X-Request-Id,RateLimit,RateLimit-Policy,Retry-After');
     res.setHeader('Access-Control-Max-Age', '600');

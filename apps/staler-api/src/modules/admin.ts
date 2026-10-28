@@ -18,7 +18,7 @@ import { requireSecondFactor } from './mfa.js';
 import { revokeAllSessions } from './sessions.js';
 import { anonymiseUser } from './auth.js';
 import { createWallet } from './walletCore.js';
-import { idParam } from './commerce.js';
+import { addEvent, idParam, refundOrder, releaseEscrow } from './commerce.js';
 import { reconcilePending } from './bank.js';
 import { forgetUser } from '../lib/authCache.js';
 
@@ -179,7 +179,7 @@ adminRouter.patch(
         phoneNumber: z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, 'Invalid phone number').nullable().optional(),
         language: z.enum(['en', 'ar']).optional(),
         status: z.enum(['active', 'suspended']).optional(),
-        role: z.enum(['user', 'merchant', 'exchange']).optional(),
+        role: z.enum(['user', 'merchant']).optional(),
       })
       .strict(),
   }),
@@ -372,7 +372,7 @@ adminRouter.post(
         fullName,
         email,
         password: passwordSchema,
-        role: z.enum(['user', 'merchant', 'exchange']).default('user'),
+        role: z.enum(['user', 'merchant']).default('user'),
       })
       .strict(),
   }),
@@ -625,3 +625,44 @@ adminRouter.post(
   }),
 );
 
+
+// --------------------------------------------------------------- disputes
+adminRouter.get(
+  '/disputes',
+  requirePerm('orders.disputes'),
+  ah(async (_req, res) => {
+    const r = await pool.query(
+      `SELECT o.id, o.total_amount, o.amount_paid, o.balance_due, o.status, o.escrow_status, o.dispute_status, o.dispute_reason, o.created_at, o.fulfillment,
+              o.delivery_address, m.store_name, m.branch_name, mu.full_name AS merchant_name, bu.full_name AS buyer_name, bu.email AS buyer_email,
+              COALESCE((SELECT json_agg(json_build_object('kind', e.kind, 'actor', e.actor, 'note', e.note, 'at', e.created_at) ORDER BY e.created_at)
+                          FROM ${S}.order_events e WHERE e.order_id = o.id), '[]') AS events
+         FROM ${S}.orders o JOIN ${S}.merchants m ON m.id = o.merchant_id JOIN ${S}.users mu ON mu.id = m.user_id JOIN ${S}.users bu ON bu.id = o.user_id
+        WHERE o.dispute_status IS NOT NULL ORDER BY (o.dispute_status = 'open') DESC, o.updated_at DESC LIMIT 100`,
+    );
+    res.json({ success: true, data: { disputes: r.rows } });
+  }),
+);
+
+adminRouter.post(
+  '/orders/:id/resolve',
+  requirePerm('orders.disputes'),
+  validate({
+    params: z.object({ id: idParam }).strict(),
+    body: z.object({ outcome: z.enum(['release', 'refund']), note: z.string().trim().min(3).max(300) }).strict(),
+  }),
+  ah(async (req, res) => {
+    const done = await tx(async (c) => {
+      const o = await one<any>(`SELECT id, escrow_status, dispute_status, user_id FROM ${S}.orders WHERE id = $1 FOR UPDATE`, [req.params.id], c);
+      if (!o) throw notFound('Order not found');
+      if (o.escrow_status !== 'held') throw conflict('ALREADY_SETTLED', 'This order is already settled');
+      await c.query(`UPDATE ${S}.orders SET dispute_status = 'resolved', updated_at = now() WHERE id = $1`, [o.id]);
+      await addEvent(c, o.id, 'resolved', 'admin', { note: `${req.body.outcome}: ${req.body.note}` });
+      return req.body.outcome === 'release'
+        ? releaseEscrow(c, o.id, `dispute resolved: ${req.body.note}`, 'admin')
+        : refundOrder(c, o.id, `dispute resolved: ${req.body.note}`, { actor: 'admin' });
+    });
+    if (!done) throw conflict('ALREADY_SETTLED', 'This order is already settled');
+    await audit({ userId: req.auth!.userId, action: `admin.dispute_${req.body.outcome}`, entityType: 'order', entityId: req.params.id, details: { note: req.body.note } }, req);
+    res.json({ success: true });
+  }),
+);

@@ -8,6 +8,20 @@ export interface Notice {
   body: string | null;
   is_read: boolean;
   created_at: string;
+  metadata?: { ar?: { title: string; body: string }; orderId?: string; conversationId?: string; [k: string]: unknown } | null;
+}
+
+/** Where tapping a notification should take you. */
+export function targetOf(n: Notice): string | null {
+  const m = n.metadata ?? {};
+  if (m.conversationId) return `/app/messages/${m.conversationId}`;
+  if (n.type === 'new_order' || n.type === 'balance_paid' || n.type === 'order_disputed' || (n.type === 'order_cancelled' && /buyer/i.test(n.body ?? ''))) return '/app/merchant/orders';
+  if (n.type === 'dispute_opened') return '/app/admin/disputes';
+  if (m.orderId || n.type.startsWith('order_')) return n.type === 'order_paid' ? '/app/merchant/orders' : '/app/orders';
+  if (/^(money_|payment_|bank_|voucher_)/.test(n.type)) return '/app/activity';
+  if (n.type.startsWith('activity:auth') ) return '/app/settings';
+  if (n.type.startsWith('activity:bank')) return '/app/bank';
+  return null;
 }
 
 /**
@@ -16,6 +30,7 @@ export interface Notice {
  */
 export function localize(n: Notice, lang: Lang): { title: string; body: string | null } {
   if (lang !== 'ar') return { title: n.title, body: n.body };
+  if (n.metadata?.ar?.title) return { title: n.metadata.ar.title, body: n.metadata.ar.body ?? null };
   const body = n.body ?? '';
   const m = /(\d+(?:\.\d+)?)\s+([A-Z]{2,11})/.exec(body);
   const amt = m ? money(m[1]!, lang, m[2]!) : '';
