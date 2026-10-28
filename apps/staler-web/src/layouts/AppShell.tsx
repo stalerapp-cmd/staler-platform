@@ -34,6 +34,7 @@ import { useTheme } from '../lib/theme';
 import { get, post } from '../lib/api';
 import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
+import { localize, type Notice } from '../lib/notifications';
 import { Logo } from '../components/Tatreez';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
@@ -137,7 +138,7 @@ function MessagesButton() {
 function Notifications() {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
-  const [data, setData] = useState<{ notifications: any[]; unread: number } | null>(null);
+  const [data, setData] = useState<{ notifications: Notice[]; unread: number } | null>(null);
   const load = async () => {
     try {
       setData(await get('/api/notifications'));
@@ -169,13 +170,19 @@ function Notifications() {
           <p className="py-8 text-center text-muted">{t.common.empty}</p>
         ) : (
           <ul className="divide-y divide-line">
-            {data.notifications.map((n) => (
-              <li key={n.id} className="py-3">
-                <p className="font-medium">{n.title}</p>
-                {n.body && <p className="text-sm text-muted">{n.body}</p>}
-                <p className="mt-1 text-xs text-muted">{relative(n.created_at, lang)}</p>
-              </li>
-            ))}
+            {data.notifications.map((n) => {
+              const l = localize(n, lang);
+              return (
+                <li key={n.id} className="flex gap-3 py-3">
+                  <span className={cx('mt-2 h-2 w-2 shrink-0 rounded-full', n.is_read ? 'bg-transparent' : 'bg-stitch')} aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{l.title}</p>
+                    {l.body && <p className="break-words text-sm text-muted">{l.body}</p>}
+                    <p className="mt-1 text-xs text-muted">{relative(n.created_at, lang)}</p>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Sheet>

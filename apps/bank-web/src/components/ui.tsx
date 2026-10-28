@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from 'framer-motion';
 import {
   forwardRef,
@@ -380,7 +381,10 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
       prev?.focus?.();
     };
   }, [open]);
-  return (
+  // Rendered at the document root: a parent with transform/backdrop-filter (the
+  // blurred top bar, page transitions) would otherwise trap `position: fixed`
+  // and push the sheet off-screen.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -415,7 +419,8 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
