@@ -38,10 +38,10 @@ export function SecureReader({ url, title, onClose }: { url: string | null; titl
           setState('ready');
           return;
         }
-        const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf');
-        const worker = (await import('pdfjs-dist/legacy/build/pdf.worker.min.js?url')).default;
+        const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
+        const worker = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
         pdfjs.GlobalWorkerOptions.workerSrc = worker;
-        const doc = await pdfjs.getDocument({ data: bytes, isEvalSupported: false, disableAutoFetch: true }).promise;
+        const doc = await pdfjs.getDocument({ data: bytes, isEvalSupported: false, disableAutoFetch: true, standardFontDataUrl: '/pdfjs/standard_fonts/' }).promise;
         setPages(doc.numPages);
         const width = Math.min(box.current.clientWidth - 16, 900);
         for (let n = 1; n <= doc.numPages && !cancelled; n++) {
@@ -80,7 +80,7 @@ export function SecureReader({ url, title, onClose }: { url: string | null; titl
 
   if (!url) return null;
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex flex-col bg-night/95 text-white print:hidden" onContextMenu={(e) => e.preventDefault()}>
+    <div className="fixed inset-0 z-[80] flex flex-col bg-night text-white print:hidden" onContextMenu={(e) => e.preventDefault()}>
       <div className="safe-top flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <div className="min-w-0">
           <p className="truncate font-medium">{title}</p>
@@ -100,7 +100,7 @@ export function SecureReader({ url, title, onClose }: { url: string | null; titl
           </div>
         )}
         {state === 'error' && <p className="mt-20 text-center text-white/70">{t.common.retry}</p>}
-        <div ref={box} />
+        <div ref={box} dir="ltr" />
       </div>
     </div>,
     document.body,
