@@ -1,8 +1,10 @@
 name: Android APKs
 
-# Every push to main builds both APKs.
-# Download APKs from the workflow run's Artifacts.
-# Pushing a tag like v1.2.0 publishes them on Releases.
+# Every push to main builds both APKs and publishes them as the newest
+# GitHub Release, with fixed file names (s-taler.apk, talerbank.apk), so
+#   https://github.com/<owner>/<repo>/releases/latest/download/s-taler.apk
+# always serves the latest build. The websites link to exactly these URLs.
+# Pushing a tag like v1.2.0 publishes a release under that version instead.
 
 on:
   push:
@@ -191,7 +193,7 @@ jobs:
 
   release:
     name: Publish release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push'
     needs: apk
     runs-on: ubuntu-24.04
 
@@ -205,8 +207,55 @@ jobs:
           path: out
           merge-multiple: true
 
+      # Stable names: prefer the signed release build, fall back to debug.
+      - name: Prepare release files
+        working-directory: out
+        run: |
+          for slug in s-taler talerbank; do
+            if [ -f "$slug-release.apk" ]; then src="$slug-release.apk"; else src="$slug-debug.apk"; fi
+            cp "$src" "$slug.apk"
+          done
+          rm -f *-release.apk *-debug.apk *.sha256
+          sha256sum *.apk > SHA256SUMS.txt
+          ls -la
+
+      - name: Resolve version
+        id: v
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/v*) echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT" ;;
+            *) echo "tag=v1.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: out/*
-          generate_release_notes: true
+          tag_name: ${{ steps.v.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: S-Taler & TalerBank ${{ steps.v.outputs.tag }}
+          make_latest: 'true'
+          files: |
+            out/s-taler.apk
+            out/talerbank.apk
+            out/SHA256SUMS.txt
+          body: |
+            Android builds of **S-Taler** (wallet) and **TalerBank** (bank) from commit ${{ github.sha }}.
+
+            - `s-taler.apk` — S-Taler wallet
+            - `talerbank.apk` — TalerBank
+
+            Always-latest links:
+            https://github.com/${{ github.repository }}/releases/latest/download/s-taler.apk
+            https://github.com/${{ github.repository }}/releases/latest/download/talerbank.apk
+
+      # Keep the Releases page tidy: only the 5 newest automatic builds stay.
+      - name: Prune old automatic releases
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/releases?per_page=100" --jq '.[] | select(.tag_name | test("^v1\\.0\\.[0-9]+$")) | .tag_name' \
+            | sort -t. -k3 -n -r | tail -n +6 | while read -r tag; do
+              echo "Deleting $tag"
+              gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag || true
+            done

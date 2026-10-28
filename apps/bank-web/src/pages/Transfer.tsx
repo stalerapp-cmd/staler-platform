@@ -65,7 +65,7 @@ export default function Transfer() {
                 label={t.transfer.fromAcc}
                 value={from}
                 onChange={setFrom}
-                options={accounts.map((a) => ({ value: a.id, label: a.nickname ?? a.account_number, hint: money(a.balance, lang) }))}
+                options={accounts.map((a) => ({ value: a.id, label: a.nickname && a.nickname !== 'Main account' ? a.nickname : a.account_number, hint: money(a.balance, lang) }))}
               />
             )}
             {fromAcc && (

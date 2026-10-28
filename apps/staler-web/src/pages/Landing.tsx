@@ -1,6 +1,8 @@
 import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Landmark, Lock, QrCode, ShoppingBag } from 'lucide-react';
+import { Download, Landmark, Lock, QrCode, ShoppingBag } from 'lucide-react';
+import { isNative } from '../lib/api';
+import { AppDownloads } from '../components/AppDownloads';
 import { useI18n } from '../lib/i18n';
 import { Logo, StarMotif, StitchBand } from '../components/Tatreez';
 import { BalanceCard } from '../components/Wallet';
@@ -65,6 +67,11 @@ export default function Landing() {
                   {t.landing.browse}
                 </Button>
               </Link>
+              {!isNative && (
+                <a href="#download" className="inline-flex items-center gap-2 rounded-xl px-3 py-3 text-sm font-medium text-muted transition hover:text-ink">
+                  <Download className="h-4 w-4" /> {t.dl.download}
+                </a>
+              )}
             </motion.div>
             <dl className="mt-14 grid max-w-lg grid-cols-3 gap-6">
               {[
@@ -127,26 +134,40 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------ close */}
-      <section className="relative overflow-hidden bg-night py-20 text-white">
-        <div className="absolute -start-24 top-1/2 h-96 w-96 -translate-y-1/2 opacity-60">
+      {/* ------------------------------------------- close + apps + footer */}
+      <section className="relative overflow-hidden bg-night text-white">
+        <div className="pointer-events-none absolute -start-24 top-24 hidden h-96 w-96 opacity-40 md:block">
           <StarMotif size={19} cell={20} className="h-full w-full" colors={['#E2506A', '#E9C060']} animate={false} />
         </div>
-        <div className="relative mx-auto flex max-w-6xl flex-col items-start gap-6 px-5 md:items-end md:text-end">
-          <p className="max-w-xl font-display text-3xl sm:text-4xl">{t.brand.tagline}</p>
-          <Link to="/register">
-            <Button size="lg" variant="stitch">
-              {t.landing.start}
-            </Button>
-          </Link>
+        <div className="relative mx-auto max-w-6xl px-5 pt-20">
+          <div className="flex flex-col items-start gap-6 md:flex-row md:items-end md:justify-between">
+            <p className="max-w-xl font-display text-3xl leading-tight sm:text-5xl">{t.brand.tagline}</p>
+            <Link to="/register">
+              <Button size="lg" variant="stitch">
+                {t.landing.start}
+              </Button>
+            </Link>
+          </div>
+          <div className="mt-16 sm:mt-20">
+            <AppDownloads self="staler" />
+          </div>
+          <footer className="safe-bottom mt-16 flex flex-col gap-6 border-t border-white/10 py-8 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <Logo className="h-10 w-10" />
+              <div>
+                <p className="font-display text-lg">S-Taler</p>
+                <p className="text-sm text-white/60">{t.foot.about}</p>
+              </div>
+            </div>
+            <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-white/70">
+              <Link to="/store" className="hover:text-white">{t.foot.store}</Link>
+              <Link to="/register" className="hover:text-white">{t.foot.open}</Link>
+              <Link to="/login" className="hover:text-white">{t.landing.signIn}</Link>
+              <a href="https://talerbank.onrender.com" rel="noopener" className="hover:text-white">{t.foot.bank} ↗</a>
+            </nav>
+          </footer>
         </div>
       </section>
-      <footer className="safe-bottom mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-muted">
-        <span>© {new Date().getFullYear()} S-Taler · An-Najah National University</span>
-        <Link to="/login" className="hover:text-ink">
-          {t.landing.signIn}
-        </Link>
-      </footer>
     </div>
   );
 }

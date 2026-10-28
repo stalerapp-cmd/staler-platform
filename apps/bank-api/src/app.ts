@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import { pinoHttp } from 'pino-http';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { makeIndexRenderer, mountReleaseRoute, mountSeoFiles } from './lib/site.js';
+import { site } from './config/site.js';
 import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { pool, S } from './lib/db.js';
@@ -93,8 +95,12 @@ export function createApp(): Express {
   app.use('/link', noStore, linkExchangeRouter);
 
   // ---- the web app (same origin => cookies stay first-party and CSP 'self' works)
+  mountReleaseRoute(app);
+  mountSeoFiles(app, site);
+
   const dist = env.WEB_DIST_DIR ? resolve(env.WEB_DIST_DIR) : resolve(process.cwd(), '../bank-web/dist');
   if (existsSync(join(dist, 'index.html'))) {
+    const renderIndex = makeIndexRenderer(join(dist, 'index.html'), site);
     app.use(
       express.static(dist, {
         index: false,
@@ -108,7 +114,8 @@ export function createApp(): Express {
     app.get(/^\/assets\//, (_req, res) => res.status(404).end());
     app.get(/^\/(?!api\/|taler-|link\/|health).*/, (_req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
-      res.sendFile(join(dist, 'index.html'));
+      res.setHeader('Vary', 'Accept-Language');
+      res.type('html').send(renderIndex(_req));
     });
     logger.info({ dist }, 'serving web app');
   }

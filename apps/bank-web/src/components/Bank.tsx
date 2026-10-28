@@ -32,7 +32,7 @@ export function AccountCard({ account, holder }: { account: Account; holder: str
       <div className="absolute inset-x-6 bottom-0 -z-10 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent" />
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="font-display text-xl">{account.nickname ?? t.home.account}</p>
+          <p className="font-display text-xl">{account.nickname && account.nickname !== 'Main account' ? account.nickname : t.home.account}</p>
           <p className="num text-sm text-[#9DAEA5]">{account.account_number}</p>
         </div>
         {account.is_locked && <Badge tone="bad">{t.home.frozen}</Badge>}

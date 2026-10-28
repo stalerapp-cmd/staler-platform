@@ -2,6 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 const en = {
   brand: { name: 'S-Taler', tagline: 'Your Palestinian wallet' },
+  dl: {
+    title: 'Take it with you.', lead: 'Our Android apps, always the newest version — straight from here, no store needed.',
+    wallet: 'Wallet', bank: 'Bank', walletD: 'Send, receive and pay by QR from your pocket.', bankD: 'Your account, transfers and statements in one tap.',
+    download: 'Download APK', updated: 'Updated',
+    android: 'First install? Android will ask you to allow installs from your browser — that’s expected.',
+    iphone: 'On iPhone? Open the site in Safari, tap Share, then “Add to Home Screen”. It works just like an app.',
+  },
+  foot: { store: 'Store', open: 'Open a wallet', bank: 'TalerBank', wallet: 'S-Taler', about: 'A Palestinian wallet and bank that work as one.', aboutBank: 'Digital banking that works hand in hand with the S-Taler wallet.', privacy: 'Your data stays encrypted, always.' },
   common: {
     continue: 'Continue', cancel: 'Cancel', areYouSure: 'Are you sure you want to continue?', back: 'Back', save: 'Save changes', saved: 'Saved', close: 'Close', confirm: 'Confirm',
     copy: 'Copy', copied: 'Copied', retry: 'Try again', loading: 'Loading…', search: 'Search', all: 'All', in: 'Received', out: 'Sent',
@@ -192,6 +200,14 @@ type Dict = typeof en;
 
 const ar: Dict = {
   brand: { name: 'S-Taler', tagline: 'محفظتك الفلسطينية' },
+  dl: {
+    title: 'خلّيه معك وين ما رحت.', lead: 'تطبيقاتنا لأندرويد، دايمًا بآخر نسخة — نزّلها من هون مباشرة، بدون متجر.',
+    wallet: 'المحفظة', bank: 'البنك', walletD: 'حوّل واستلم وادفع بالـ QR من جيبتك.', bankD: 'حسابك وحوالاتك وكشوفك بكبسة وحدة.',
+    download: 'نزّل التطبيق', updated: 'آخر تحديث',
+    android: 'أول مرة بتنزّل؟ أندرويد رح يطلب تسمح بالتثبيت من المتصفح — هاد طبيعي.',
+    iphone: 'عندك آيفون؟ افتح الموقع من Safari، اكبس مشاركة ثم «إضافة إلى الشاشة الرئيسية» — بيشتغل متل التطبيق تمامًا.',
+  },
+  foot: { store: 'المتجر', open: 'افتح محفظة', bank: 'TalerBank', wallet: 'S-Taler', about: 'محفظة وبنك فلسطينيين بيشتغلوا مع بعض كأنهم واحد.', aboutBank: 'بنك رقمي بيشتغل إيد بإيد مع محفظة S-Taler.', privacy: 'بياناتك مشفّرة، دايمًا.' },
   common: {
     continue: 'متابعة', cancel: 'إلغاء', areYouSure: 'متأكد إنك بدك تكمل؟', back: 'رجوع', save: 'حفظ التغييرات', saved: 'تم الحفظ', close: 'إغلاق', confirm: 'تأكيد', copy: 'نسخ', copied: 'تم النسخ',
     retry: 'حاول مجددًا', loading: 'جارٍ التحميل…', search: 'بحث', all: 'الكل', in: 'وارد', out: 'صادر', empty: 'لا شيء هنا بعد', optional: 'اختياري', amount: 'المبلغ',
@@ -387,7 +403,18 @@ const read = (k: string) => {
 };
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(() => (read('st.lang') as Lang) ?? (navigator.language?.startsWith('en') ? 'en' : 'ar'));
+  const [lang, setLangState] = useState<Lang>(() => {
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('lang') : null;
+    if (q === 'ar' || q === 'en') {
+      try {
+        localStorage.setItem('st.lang', q);
+      } catch {
+        /* private mode */
+      }
+      return q;
+    }
+    return (read('st.lang') as Lang) ?? (navigator.language?.startsWith('en') ? 'en' : 'ar');
+  });
   const setLang = useCallback((l: Lang) => {
     setLangState(l);
     try {

@@ -225,7 +225,9 @@ export function AnimatedNumber({ value, format }: { value: number; format: (n: n
   const mv = useMotionValue(reduce ? value : 0);
   const text = useTransform(mv, (n) => format(n));
   const [display, setDisplay] = useState(format(reduce ? value : 0));
-  useEffect(() => text.on('change', (v) => setDisplay(v)), [text]);
+  useEffect(() => {
+    return text.on('change', (v) => setDisplay(v));
+  }, [text]);
   useEffect(() => {
     if (reduce) {
       mv.set(value);

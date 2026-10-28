@@ -97,14 +97,20 @@ function SideLink({ item, onClick, animated = true }: { item: NavItem; onClick?:
       end={item.end}
       onClick={onClick}
       className={({ isActive }) =>
-        cx('group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition', isActive ? (animated ? 'text-ink' : 'bg-sunk font-medium text-ink') : 'text-muted hover:bg-sunk hover:text-ink')
+        cx('group relative flex items-center gap-3 rounded-xl px-2 py-1.5 text-[15px] transition', isActive ? (animated ? 'text-ink' : 'bg-sunk font-medium text-ink') : 'text-muted hover:bg-sunk hover:text-ink')
       }
     >
       {({ isActive }) => (
         <>
           {isActive && animated && <motion.span layoutId="side-active" className="absolute inset-0 rounded-xl bg-sunk" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />}
-          {isActive && animated && <motion.span layoutId="side-thread" className="absolute inset-y-2 start-0 w-1 rounded-full bg-stitch" />}
-          <item.icon className="relative h-5 w-5" />
+          <span
+            className={cx(
+              'relative grid h-8 w-8 shrink-0 place-items-center rounded-[10px] transition duration-300',
+              isActive ? 'bg-stitch text-white shadow-sm shadow-stitch/30' : 'group-hover:-rotate-6 group-hover:scale-110 group-hover:text-stitch',
+            )}
+          >
+            <item.icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.2 : 1.8} />
+          </span>
           <span className="relative">{item.label}</span>
         </>
       )}
@@ -334,21 +340,26 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       </div>
 
       {/* phone tab bar with the scan button raised in the middle */}
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur lg:hidden" aria-label="Tabs">
-        <div className="relative mx-auto grid h-16 max-w-md grid-cols-5 items-center">
+      <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden" aria-label="Tabs">
+        <div className="pointer-events-auto relative mx-auto grid h-[66px] max-w-md grid-cols-5 items-center rounded-[26px] border border-line/80 bg-surface/90 px-1 shadow-[0_14px_40px_-14px_rgba(0,0,0,0.45)] backdrop-blur-xl">
           {bottom.slice(0, 2).map((i) => (
             <TabLink key={i.to} item={i} />
           ))}
           <div className="grid place-items-center">
-            <NavLink to="/app/scan" aria-label={t.nav.scan} className="-mt-8 grid h-16 w-16 place-items-center rounded-2xl bg-stitch text-white shadow-card ring-4 ring-bg transition active:scale-95">
-              <ScanLine className="h-7 w-7" />
+            <NavLink
+              to="/app/scan"
+              aria-label={t.nav.scan}
+              className="group relative -mt-9 grid h-[62px] w-[62px] place-items-center rounded-full bg-stitch text-white shadow-lg shadow-stitch/40 ring-[5px] ring-bg transition duration-200 active:scale-90"
+            >
+              <span className="absolute inset-[5px] rounded-full border-2 border-dashed border-current opacity-30 motion-safe:animate-[spin_16s_linear_infinite]" />
+              <ScanLine className="relative h-7 w-7 transition duration-300 group-hover:scale-110 group-active:rotate-12" />
             </NavLink>
           </div>
           {bottom.slice(3).map((i) => (
             <TabLink key={i.to} item={i} />
           ))}
-          <button onClick={() => setMenu(true)} className="flex flex-col items-center gap-0.5 text-[11px] text-muted">
-            <Menu className="h-5 w-5" />
+          <button onClick={() => setMenu(true)} className="group flex h-full flex-col items-center justify-center gap-1 text-[11px] text-muted transition active:scale-95">
+            <Menu className="h-[22px] w-[22px] transition group-hover:scale-110" strokeWidth={1.8} />
             {t.nav.more}
           </button>
         </div>
@@ -417,9 +428,20 @@ function BackButton() {
 
 function TabLink({ item }: { item: NavItem }) {
   return (
-    <NavLink to={item.to} end={item.end} className={({ isActive }) => cx('flex min-w-0 flex-col items-center gap-0.5 px-0.5 text-[11px] leading-tight transition', isActive ? 'text-stitch' : 'text-muted')}>
-      <item.icon className="h-5 w-5 shrink-0" />
-      <span className="max-w-full truncate">{item.label}</span>
+    <NavLink to={item.to} end={item.end} className="relative flex h-full min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[11px] leading-tight">
+      {({ isActive }) => (
+        <>
+          {isActive && <motion.span layoutId="tab-pill" className="absolute inset-x-1 inset-y-1.5 rounded-[20px] bg-stitch/15" transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }} />}
+          <motion.span
+            className={cx('relative', isActive ? 'text-stitch' : 'text-muted')}
+            animate={isActive ? { y: -1, scale: 1.12 } : { y: 0, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 520, damping: 17 }}
+          >
+            <item.icon className="h-[22px] w-[22px] shrink-0" strokeWidth={isActive ? 2.3 : 1.8} />
+          </motion.span>
+          <span className={cx('relative max-w-full truncate transition', isActive ? 'font-semibold text-stitch' : 'text-muted')}>{item.label}</span>
+        </>
+      )}
     </NavLink>
   );
 }

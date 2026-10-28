@@ -1,7 +1,24 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 const en = {
-  brand: { name: 'TalerBank', tagline: 'Private banking, engraved in trust.' },
+  brand: { name: 'TalerBank', tagline: 'Your money, safe. Your bank, in your pocket.' },
+  landing: {
+    title: 'A bank that keeps its word.', open: 'Open an account', signIn: 'Sign in',
+    lead: 'Open an account with its own IBAN in minutes. Send instant transfers, pay and request by QR, and fund your S-Taler wallet — with an alert for every move.',
+    f1t: 'Instant transfers', f1d: 'Send to any IBAN or username and it lands in seconds, any time of day.',
+    f2t: 'Pay and request by QR', f2d: 'Show a code to get paid, or scan one to pay. No account numbers to type.',
+    f3t: 'Linked to S-Taler', f3d: 'Top up your wallet straight from your account — you approve each app, and never share your password.',
+    f4t: 'Nothing slips by', f4d: 'Two-step sign-in, device control and an instant alert for every movement on your account.',
+    stat1: 'your own account number', stat2: 'transfers, day and night', stat3: 'two-step protection',
+  },
+  dl: {
+    title: 'Take it with you.', lead: 'Our Android apps, always the newest version — straight from here, no store needed.',
+    wallet: 'Wallet', bank: 'Bank', walletD: 'Send, receive and pay by QR from your pocket.', bankD: 'Your account, transfers and statements in one tap.',
+    download: 'Download APK', updated: 'Updated',
+    android: 'First install? Android will ask you to allow installs from your browser — that’s expected.',
+    iphone: 'On iPhone? Open the site in Safari, tap Share, then “Add to Home Screen”. It works just like an app.',
+  },
+  foot: { store: 'Store', open: 'Open a wallet', bank: 'TalerBank', wallet: 'S-Taler', about: 'A Palestinian wallet and bank that work as one.', aboutBank: 'Digital banking that works hand in hand with the S-Taler wallet.', privacy: 'Your data stays encrypted, always.' },
   common: {
     continue: 'Continue', cancel: 'Cancel', areYouSure: 'Are you sure you want to continue?', back: 'Back', save: 'Save changes', saved: 'Saved', close: 'Close', confirm: 'Confirm', copy: 'Copy', copied: 'Copied',
     retry: 'Try again', loading: 'Loading…', search: 'Search', all: 'All', in: 'Incoming', out: 'Outgoing', empty: 'Nothing here yet', optional: 'optional',
@@ -140,7 +157,24 @@ const en = {
 type Dict = typeof en;
 
 const ar: Dict = {
-  brand: { name: 'TalerBank', tagline: 'صيرفة خاصة، محفورة بالثقة.' },
+  brand: { name: 'TalerBank', tagline: 'فلوسك بأمان، وبنكك بجيبتك.' },
+  landing: {
+    title: 'بنك قدّ كلمته.', open: 'افتح حساب', signIn: 'تسجيل الدخول',
+    lead: 'افتح حساب برقم IBAN خاص فيك خلال دقائق. حوّل فورًا، ادفع واطلب بالـ QR، واشحن محفظة S-Taler — ومع كل حركة بيوصلك تنبيه.',
+    f1t: 'حوالات فورية', f1d: 'حوّل لأي IBAN أو اسم مستخدم، وبتوصل خلال ثواني بأي وقت.',
+    f2t: 'ادفع واطلب بالـ QR', f2d: 'اعرض الكود لتستلم، أو امسحه لتدفع. بدون ما تكتب أرقام حسابات.',
+    f3t: 'مربوط مع S-Taler', f3d: 'اشحن محفظتك مباشرة من حسابك — إنت بتوافق على كل تطبيق، وكلمة سرك ما بتطلع لحدا.',
+    f4t: 'ولا حركة بتفوتك', f4d: 'تحقق بخطوتين، تحكّم بأجهزتك، وتنبيه فوري مع كل حركة على حسابك.',
+    stat1: 'رقم حساب خاص فيك', stat2: 'حوالات ليل نهار', stat3: 'حماية بخطوتين',
+  },
+  dl: {
+    title: 'خلّيه معك وين ما رحت.', lead: 'تطبيقاتنا لأندرويد، دايمًا بآخر نسخة — نزّلها من هون مباشرة، بدون متجر.',
+    wallet: 'المحفظة', bank: 'البنك', walletD: 'حوّل واستلم وادفع بالـ QR من جيبتك.', bankD: 'حسابك وحوالاتك وكشوفك بكبسة وحدة.',
+    download: 'نزّل التطبيق', updated: 'آخر تحديث',
+    android: 'أول مرة بتنزّل؟ أندرويد رح يطلب تسمح بالتثبيت من المتصفح — هاد طبيعي.',
+    iphone: 'عندك آيفون؟ افتح الموقع من Safari، اكبس مشاركة ثم «إضافة إلى الشاشة الرئيسية» — بيشتغل متل التطبيق تمامًا.',
+  },
+  foot: { store: 'المتجر', open: 'افتح محفظة', bank: 'TalerBank', wallet: 'S-Taler', about: 'محفظة وبنك فلسطينيين بيشتغلوا مع بعض كأنهم واحد.', aboutBank: 'بنك رقمي بيشتغل إيد بإيد مع محفظة S-Taler.', privacy: 'بياناتك مشفّرة، دايمًا.' },
   common: {
     continue: 'متابعة', cancel: 'إلغاء', areYouSure: 'متأكد إنك بدك تكمل؟', back: 'رجوع', save: 'حفظ التغييرات', saved: 'تم الحفظ', close: 'إغلاق', confirm: 'تأكيد', copy: 'نسخ', copied: 'تم النسخ',
     retry: 'حاول مجددًا', loading: 'جارٍ التحميل…', search: 'بحث', all: 'الكل', in: 'وارد', out: 'صادر', empty: 'لا شيء هنا بعد', optional: 'اختياري', amount: 'المبلغ',
@@ -281,6 +315,11 @@ const Ctx = createContext<I18n | null>(null);
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
     try {
+      const q = new URLSearchParams(location.search).get('lang');
+      if (q === 'ar' || q === 'en') {
+        localStorage.setItem('tb.lang', q);
+        return q;
+      }
       const s = localStorage.getItem('tb.lang');
       if (s === 'en' || s === 'ar') return s;
     } catch {

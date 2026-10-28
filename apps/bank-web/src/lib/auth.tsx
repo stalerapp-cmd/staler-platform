@@ -39,7 +39,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [signedOutForIdle, setIdle] = useState(false);
   const lastActivity = useRef(Date.now());
 
-  useEffect(() => session.onChange((u) => setUser(u)), []);
+  useEffect(() => {
+    return session.onChange((u) => setUser(u)); // unsubscribe on unmount
+  }, []);
   useEffect(() => {
     refreshSession().finally(() => setReady(true));
   }, []);

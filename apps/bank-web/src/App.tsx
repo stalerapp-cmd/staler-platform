@@ -6,6 +6,8 @@ import { Guilloche } from './components/Guilloche';
 import { Spinner } from './components/ui';
 import { ErrorBoundary, lazyRetry } from './components/Boundary';
 import { Forgot, Login, Register, Verify } from './pages/Auth';
+import Landing from './pages/Landing';
+import { isNative } from './lib/api';
 
 const Overview = lazyRetry(() => import('./pages/Overview'));
 const Transfer = lazyRetry(() => import('./pages/Transfer'));
@@ -67,7 +69,7 @@ export default function App() {
     <ErrorBoundary full>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={isNative ? <Navigate to="/login" replace /> : <GuestOnly><Landing /></GuestOnly>} />
         <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
         <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
         <Route path="/verify" element={<GuestOnly><Verify /></GuestOnly>} />

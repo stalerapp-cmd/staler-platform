@@ -100,3 +100,12 @@ body { overscroll-behavior-y: none; }
 
 /* One show-password button only: hide the browser's own (Edge / old IE). */
 input::-ms-reveal, input::-ms-clear { display: none; }
+
+/* Arabic hint text inside left-to-right fields (e-mail, wallet ID, IBAN…):
+   show the placeholder right-aligned like the rest of the form, then switch
+   to LTR as soon as the user types. Padding (icons/buttons) is untouched. */
+[dir='rtl'] input[dir='ltr']:placeholder-shown,
+[dir='rtl'] textarea[dir='ltr']:placeholder-shown {
+  direction: rtl;
+  text-align: right;
+}
