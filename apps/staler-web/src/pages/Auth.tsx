@@ -353,7 +353,8 @@ export function Forgot() {
     setError(null);
     try {
       if (step === 'email') {
-        await post('/api/auth/forgot-password', { email: email.trim() });
+        const fr = await post('/api/auth/forgot-password', { email: email.trim() });
+        if (fr?.pending) return nav('/verify', { state: { email: email.trim() } });
         setStep('reset');
       } else {
         await post('/api/auth/reset-password', { email: email.trim(), code, newPassword: pw });

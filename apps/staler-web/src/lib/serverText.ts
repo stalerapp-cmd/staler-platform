@@ -1,0 +1,39 @@
+/** Arabic for the most common server-side messages (validation and everyday errors). */
+const AR: Record<string, string> = {
+  'Code must be 6 digits': 'الرمز لازم يكون 6 أرقام',
+  'Invalid authenticator code': 'رمز المصادقة غير صحيح',
+  'Invalid e-mail address': 'الإيميل مش صحيح',
+  'Name is too long': 'الاسم طويل كثير',
+  'Name is too short': 'الاسم قصير كثير',
+  'Name contains invalid characters': 'الاسم فيه رموز مش مسموحة',
+  "Use letters, numbers, spaces and . - ' & _ only": 'استخدم حروف وأرقام ومسافات والرموز . - \' & _ بس',
+  'Password is too long': 'كلمة المرور طويلة كثير',
+  'Password must be at least 10 characters': 'كلمة المرور لازم تكون 10 أحرف على الأقل',
+  'Password needs a digit': 'كلمة المرور بدها رقم',
+  'Password needs a lowercase letter': 'كلمة المرور بدها حرف صغير',
+  'Password needs a symbol': 'كلمة المرور بدها رمز',
+  'Password needs an uppercase letter': 'كلمة المرور بدها حرف كبير',
+  'This password is too common': 'كلمة المرور هاي منتشرة كثير، اختار غيرها',
+  'Username: 3-32 letters, digits or _': 'اسم المستخدم: 3 لـ 32 حرف أو رقم أو _',
+  'Invalid or expired code': 'الرمز غلط أو انتهت صلاحيته',
+  'Too many wrong codes. Request a new one.': 'رموز غلط كثير. اطلب رمز جديد.',
+  'Password must not contain your e-mail': 'كلمة المرور ما لازم تحتوي إيميلك',
+  'Password must not contain your username or e-mail': 'كلمة المرور ما لازم تحتوي اسم المستخدم أو الإيميل',
+  'This username is already taken': 'اسم المستخدم مأخوذ',
+  'Registrations are currently closed': 'التسجيل مسكّر حاليًا',
+  'This account is suspended': 'هالحساب موقوف',
+  'Please verify your e-mail first — check your inbox or request a new code.': 'أكّد إيميلك أول — افحص الوارد أو اطلب رمز جديد.',
+  'Add a delivery address': 'أضف عنوان التوصيل',
+  'This order is already closed': 'الطلب مسكّر',
+  'Pay the remaining balance first (or pay the store in cash on delivery)': 'ادفع باقي المبلغ أول (أو ادفعه كاش للمتجر عند الاستلام)',
+  'That code is not right': 'الرمز مش صحيح',
+  'Download limit reached for this purchase': 'خلصت مرات التنزيل لهالمشتريات',
+  'Changing the linked bank needs the code we e-mail you': 'تغيير البنك المربوط بدّه الرمز اللي منبعته على إيميلك',
+  'No S-Taler account found': 'ما في حساب S-Taler بهالمعلومات',
+  'Too many requests, slow down': 'طلبات كثير، استنى شوي',
+};
+
+export function serverTextAr(message?: string | null): string | null {
+  if (!message) return null;
+  return AR[message] ?? null;
+}

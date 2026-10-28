@@ -34,7 +34,8 @@ export const fullName = z
   .trim()
   .min(2, 'Name is too short')
   .max(80, 'Name is too long')
-  .regex(/^[\p{L}\p{M}' .-]+$/u, 'Name contains invalid characters');
+  // Letters in any language, digits, spaces and common name punctuation (Exchange2026, Ali & Sons, O'Brien).
+  .regex(/^[\p{L}\p{M}\p{N}' .&_()-]+$/u, 'Use letters, numbers, spaces and . - \' & _ only');
 export const otpCode = z.string().trim().regex(/^\d{6}$/, 'Code must be 6 digits');
 export const totpCode = z.string().trim().regex(/^(\d{6}|[A-Z0-9]{4}-[A-Z0-9]{4})$/i, 'Invalid authenticator code');
 export const username = z

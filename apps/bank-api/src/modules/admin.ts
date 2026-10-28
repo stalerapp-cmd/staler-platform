@@ -14,7 +14,7 @@ import { revokeAllSessions } from './sessions.js';
 import { forgetUser } from '../lib/authCache.js';
 import { PERMISSIONS, assertCanManage, isSuper, requirePerm } from '../lib/permissions.js';
 import { codeHash, numericCode } from '../lib/crypto.js';
-import { codeMail, noticeMail, sendMail } from '../lib/mailer.js';
+import { codeMail, noticeMail, sendMail, sendMailNow } from '../lib/mailer.js';
 import { hashPassword, passwordSchema } from '../lib/passwords.js';
 import { email, fullName, username } from '../lib/validate.js';
 import { conflict } from '../lib/errors.js';
@@ -541,5 +541,18 @@ adminRouter.put(
     }
     await audit({ userId: req.auth!.userId, action: 'admin.settings_updated', details: req.body }, req);
     res.json({ success: true });
+  }),
+);
+
+// ------------------------------------------------------------- mail check
+/** Sends a test e-mail to the signed-in admin right now and reports exactly what happened. */
+adminRouter.post(
+  '/mail-test',
+  requirePerm('settings.manage'),
+  ah(async (req, res) => {
+    const me = await one<{ email: string; language: string | null }>(`SELECT email, language FROM ${S}.users WHERE id = $1`, [req.auth!.userId]);
+    const lang = me?.language === 'en' ? 'en' : 'ar';
+    const r = await sendMailNow(codeMail(me!.email, 'verify', '123456', lang));
+    res.json({ success: true, data: { to: me!.email, ...r } });
   }),
 );

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Users } from 'lucide-react';
-import { get, put } from '../lib/api';
+import { get, post, put } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
 import { date, money, relative } from '../lib/format';
@@ -377,6 +377,39 @@ export function AdminSettings() {
         <Toggle checked={s.maintenance_mode} onChange={(v) => setS({ ...s, maintenance_mode: v })} label={t.admin.maintenance} description={t.admin.maintenanceD} />
         <Button loading={busy}>{t.common.save}</Button>
       </form>
+      <MailCheck />
     </div>
+  );
+}
+
+/** Admin → system: proves whether the mail route works, and where the mail went. */
+export function MailCheck() {
+  const { t, err } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  return (
+    <section className="card mt-6 space-y-3 p-6">
+      <h2 className="text-xl">{t.mailtest.title}</h2>
+      <p className="text-sm text-muted">{t.mailtest.lead}</p>
+      <Button
+        variant="secondary"
+        loading={busy}
+        onClick={async () => {
+          setBusy(true);
+          setMsg(null);
+          try {
+            const r = await post<{ to: string; ok: boolean; error?: string }>('/api/admin/mail-test');
+            setMsg(r.ok ? { ok: true, text: t.mailtest.ok.replace('{to}', r.to) } : { ok: false, text: t.mailtest.fail.replace('{error}', r.error ?? '') });
+          } catch (e) {
+            setMsg({ ok: false, text: err(e) });
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {t.mailtest.send}
+      </Button>
+      {msg && <p className={cx('rounded-xl px-4 py-3 text-sm', msg.ok ? 'bg-olive/10 text-olive' : 'bg-stitch/10 text-stitch')}>{msg.text}</p>}
+    </section>
   );
 }

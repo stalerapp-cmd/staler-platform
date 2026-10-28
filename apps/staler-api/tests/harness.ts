@@ -66,7 +66,7 @@ export function bankMailCode(email: string): string {
   for (let i = bankLogs.length - 1; i >= 0; i--) {
     const line = bankLogs[i]!;
     if (line.includes(email) && line.includes('mail (log mode)')) {
-      const m = /: (\d{6})"/.exec(line);
+      const m = /"preview":"[^"]*?(\d{6})/.exec(line);
       if (m) return m[1]!;
     }
   }

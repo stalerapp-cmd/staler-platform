@@ -325,6 +325,19 @@ authRouter.post(
       );
       await sendMail(codeMail(req.body.email, 'reset', code, u.language ?? 'en'));
     }
+    if (!u) {
+      // Never finished signing up? Send the sign-up code again and send them to the code page.
+      const p = await one<any>(`SELECT id, language FROM ${S}.pending_users WHERE lower(email) = $1 AND (expires_at IS NULL OR expires_at > now())`, [req.body.email]);
+      if (p) {
+        const code = numericCode(6);
+        await pool.query(
+          `UPDATE ${S}.pending_users SET verification_code = $2, code_expires_at = now() + interval '${CODE_TTL_MIN} minutes', attempts = 0, verification_method = 'email' WHERE id = $1`,
+          [p.id, codeHash('verify', req.body.email, code)],
+        );
+        await sendMail(codeMail(req.body.email, 'verify', code, p.language ?? 'ar'));
+        return res.json({ success: true, data: { pending: true }, message: 'Your sign-up was never confirmed — we sent the sign-up code again.' });
+      }
+    }
     res.json({ success: true, message: 'If the e-mail is registered, a reset code has been sent.' });
   }),
 );

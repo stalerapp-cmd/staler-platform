@@ -6,7 +6,7 @@ import { codeHash, numericCode } from '../lib/crypto.js';
 import { conflict, forbidden, notFound } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { hashPassword, passwordSchema } from '../lib/passwords.js';
-import { codeMail, sendMail } from '../lib/mailer.js';
+import { codeMail, sendMail, sendMailNow } from '../lib/mailer.js';
 import { email, fullName, pageQuery, totpCode, validate } from '../lib/validate.js';
 import { audit } from '../lib/audit.js';
 import { bank } from '../lib/bankClient.js';
@@ -487,6 +487,32 @@ adminRouter.get(
   }),
 );
 
+/** Rescue a sign-up whose code never arrived: the admin vouches for the e-mail and the account is created. */
+adminRouter.post(
+  '/pending-users/:id/approve',
+  requirePerm('pending.manage'),
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const user = await tx(async (c) => {
+      const p = await one<any>(`DELETE FROM ${S}.pending_users WHERE id = $1 RETURNING *`, [req.params.id], c);
+      if (!p) throw notFound('Sign-up not found');
+      if (await one(`SELECT 1 FROM ${S}.users WHERE lower(email) = lower($1)`, [p.email], c)) throw conflict('EMAIL_TAKEN', 'This e-mail already has an account');
+      const role = ['merchant', 'exchange'].includes(p.role) ? p.role : 'user';
+      const u = await one<any>(
+        `INSERT INTO ${S}.users (email, password_hash, full_name, role, phone_number, verification_method, email_verified, email_verified_at, language, password_changed_at)
+         VALUES ($1, $2, $3, $4, $5, 'admin', true, now(), $6, now()) RETURNING id, email, language`,
+        [p.email, p.password_hash, p.full_name, role, p.phone_number, p.language ?? 'ar'],
+        c,
+      );
+      await createWallet(c, u.id);
+      return u;
+    });
+    await audit({ userId: req.auth!.userId, action: 'admin.pending_approved', entityType: 'user', entityId: user.id }, req);
+    await sendMail(noticeMail(user.email, user.language === 'en' ? 'Your wallet is ready' : 'محفظتك جاهزة', user.language === 'en' ? 'Support confirmed your sign-up. You can sign in now with your e-mail and password.' : 'الدعم أكّد تسجيلك. بتقدر تدخل هلّأ بإيميلك وكلمة المرور.', user.language === 'en' ? 'en' : 'ar'));
+    res.json({ success: true });
+  }),
+);
+
 adminRouter.delete(
   '/pending-users/:id',
   requirePerm('pending.manage'),
@@ -664,5 +690,18 @@ adminRouter.post(
     if (!done) throw conflict('ALREADY_SETTLED', 'This order is already settled');
     await audit({ userId: req.auth!.userId, action: `admin.dispute_${req.body.outcome}`, entityType: 'order', entityId: req.params.id, details: { note: req.body.note } }, req);
     res.json({ success: true });
+  }),
+);
+
+// ------------------------------------------------------------- mail check
+/** Sends a test e-mail to the signed-in admin right now and reports exactly what happened. */
+adminRouter.post(
+  '/mail-test',
+  requirePerm('settings.manage'),
+  ah(async (req, res) => {
+    const me = await one<{ email: string; language: string | null }>(`SELECT email, language FROM ${S}.users WHERE id = $1`, [req.auth!.userId]);
+    const lang = me?.language === 'en' ? 'en' : 'ar';
+    const r = await sendMailNow(codeMail(me!.email, 'verify', '123456', lang));
+    res.json({ success: true, data: { to: me!.email, ...r } });
   }),
 );

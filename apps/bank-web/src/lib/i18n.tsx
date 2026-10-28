@@ -1,7 +1,9 @@
+import { serverTextAr } from './serverText';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 const en = {
   brand: { name: 'TalerBank', tagline: 'Your money, safe. Your bank, in your pocket.' },
+  mailtest: { title: 'E-mail check', lead: 'Send a test code to your own e-mail and see exactly what happened.', send: 'Send test e-mail', ok: 'Sent to {to}. If it isn’t in your inbox within a minute, look in Spam or Promotions and mark it “Not spam” — that teaches Gmail to deliver the next ones.', fail: 'Sending failed: {error}' },
   bio: { unlockTitle: 'Unlock', unlockReason: 'Confirm it’s you', unlock: 'Unlock with fingerprint', usePassword: 'Sign in with password instead', lockedLead: 'Locked to keep your money safe.', enableTitle: 'Open with your fingerprint?', enableLead: 'Next time, unlock with your fingerprint or phone PIN instead of typing your password. You can turn this off in Settings.', enable: 'Turn on', notNow: 'Not now', enabled: 'Fingerprint unlock is on', toggle: 'Unlock with fingerprint', toggleD: 'Use your fingerprint, face or phone PIN instead of your password on this phone.' },
   account: { user: 'Customer', admin: 'Admin', super: 'Super admin' } as Record<string, string>,
   landing: {
@@ -162,6 +164,7 @@ type Dict = typeof en;
 
 const ar: Dict = {
   brand: { name: 'TalerBank', tagline: 'فلوسك بأمان، وبنكك بجيبتك.' },
+  mailtest: { title: 'فحص الإيميل', lead: 'ابعت رمز تجريبي لإيميلك وشوف شو صار بالزبط.', send: 'ابعت إيميل تجريبي', ok: 'انبعت على {to}. إذا ما وصل الوارد خلال دقيقة، افحص البريد المزعج (Spam) أو العروض (Promotions) واكبس «ليس رسالة مزعجة» — هيك جيميل بيتعلّم يوصّل الجاية للوارد.', fail: 'ما زبط الإرسال: {error}' },
   bio: { unlockTitle: 'فتح القفل', unlockReason: 'أكّد إنه إنت', unlock: 'افتح بالبصمة', usePassword: 'ادخل بكلمة المرور بدلها', lockedLead: 'مقفول عشان تضل مصاريك بأمان.', enableTitle: 'بدك تفتح ببصمتك؟', enableLead: 'المرة الجاية افتح ببصمتك أو رمز قفل الجوال بدل ما تكتب كلمة المرور. بتقدر تطفيها من الإعدادات.', enable: 'شغّلها', notNow: 'مش هلّأ', enabled: 'تم تفعيل الفتح بالبصمة', toggle: 'الفتح بالبصمة', toggleD: 'استخدم بصمتك أو وجهك أو رمز قفل الجوال بدل كلمة المرور على هالجوال.' },
   account: { user: 'عميل', admin: 'مدير', super: 'المدير العام' },
   landing: {
@@ -355,7 +358,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       dir: lang === 'ar' ? 'rtl' : 'ltr',
       setLang,
       toggle: () => setLang(lang === 'ar' ? 'en' : 'ar'),
-      err: (e: any) => (e?.code && t.errors[e.code]) || e?.message || t.errors.NETWORK,
+      err: (e: any) => {
+        if (e?.code && t.errors[e.code]) return t.errors[e.code];
+        // Validation errors: show the first field message, in Arabic when we have it.
+        const msg = Array.isArray(e?.details) && e.details[0]?.message ? e.details[0].message : e?.message;
+        return (lang === 'ar' && serverTextAr(msg)) || msg || t.errors.NETWORK;
+      },
     };
   }, [lang, setLang]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

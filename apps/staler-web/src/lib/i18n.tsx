@@ -1,7 +1,9 @@
+import { serverTextAr } from './serverText';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 const en = {
   brand: { name: 'S-Taler', tagline: 'Your Palestinian wallet' },
+  mailtest: { title: 'E-mail check', lead: 'Send a test code to your own e-mail and see exactly what happened.', send: 'Send test e-mail', ok: 'Sent to {to}. If it isn’t in your inbox within a minute, look in Spam or Promotions and mark it “Not spam” — that teaches Gmail to deliver the next ones.', fail: 'Sending failed: {error}', approve: 'Approve sign-up', approveT: 'Approve without a code?', approveB: 'Only if you’re sure this e-mail belongs to them. The account is created and they’re told by e-mail.' },
   disp: { title: 'Disputes', none: 'No disputes. Everyone’s happy.', buyer: 'Buyer', store: 'Store', reason: 'Reason', release: 'Pay the store', refund: 'Refund the buyer', note: 'Decision note (both sides see it)', releaseQ: 'Pay the store?', refundQ: 'Refund the buyer?', decideB: 'This settles the order for good.', resolved: 'Resolved', open: 'Open' },
   shop: {
     storesTitle: 'Stores', storesLead: 'Real shops from around Palestine — every payment held safely until your order arrives.',
@@ -259,6 +261,7 @@ type Dict = typeof en;
 
 const ar: Dict = {
   brand: { name: 'S-Taler', tagline: 'محفظتك الفلسطينية' },
+  mailtest: { title: 'فحص الإيميل', lead: 'ابعت رمز تجريبي لإيميلك وشوف شو صار بالزبط.', send: 'ابعت إيميل تجريبي', ok: 'انبعت على {to}. إذا ما وصل الوارد خلال دقيقة، افحص البريد المزعج (Spam) أو العروض (Promotions) واكبس «ليس رسالة مزعجة» — هيك جيميل بيتعلّم يوصّل الجاية للوارد.', fail: 'ما زبط الإرسال: {error}', approve: 'فعّل التسجيل', approveT: 'تفعّل بدون رمز؟', approveB: 'بس إذا متأكد إنه الإيميل إله. الحساب بينعمل وبيوصله إيميل.' },
   disp: { title: 'النزاعات', none: 'ما في نزاعات. الكل مبسوط.', buyer: 'المشتري', store: 'المتجر', reason: 'السبب', release: 'ادفع للمتجر', refund: 'رجّع للمشتري', note: 'ملاحظة القرار (بشوفها الطرفين)', releaseQ: 'تدفع للمتجر؟', refundQ: 'ترجّع المبلغ للمشتري؟', decideB: 'هيك الطلب بتسكّر نهائيًا.', resolved: 'محلول', open: 'مفتوح' },
   shop: {
     storesTitle: 'المتاجر', storesLead: 'متاجر حقيقية من كل فلسطين — وكل دفعة محفوظة بأمان لحتى يوصلك طلبك.',
@@ -553,7 +556,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       dir: lang === 'ar' ? 'rtl' : 'ltr',
       setLang,
       toggle: () => setLang(lang === 'ar' ? 'en' : 'ar'),
-      err: (e: any) => (e?.code && t.errors[e.code]) || e?.message || t.errors.NETWORK,
+      err: (e: any) => {
+        if (e?.code && t.errors[e.code]) return t.errors[e.code];
+        // Validation errors: show the first field message, in Arabic when we have it.
+        const msg = Array.isArray(e?.details) && e.details[0]?.message ? e.details[0].message : e?.message;
+        return (lang === 'ar' && serverTextAr(msg)) || msg || t.errors.NETWORK;
+      },
     };
   }, [lang, setLang]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -178,7 +178,8 @@ export function AdminStores() {
 
 export function AdminPending() {
   const confirm = useConfirm();
-  const { t, lang } = useI18n();
+  const { t, lang, err } = useI18n();
+  const toast = useToast();
   const { data, reload } = useData<{ pendingUsers: any[] }>('/api/admin/pending-users');
   return (
     <div>
@@ -208,6 +209,18 @@ export function AdminPending() {
               <span className="text-sm text-muted">
                 {t.admin.attempts}: <span className="num">{p.attempts}</span> · {t.admin.expires} {p.expires_at ? relative(p.expires_at, lang) : '—'}
               </span>
+              <Button size="sm" onClick={async () => {
+                if (!(await confirm({ title: t.mailtest.approveT, body: `${p.email} — ${t.mailtest.approveB}`, confirmLabel: t.mailtest.approve }))) return;
+                try {
+                  await post(`/api/admin/pending-users/${p.id}/approve`);
+                  toast(t.common.done);
+                } catch (e) {
+                  toast(err(e), 'error');
+                }
+                void reload();
+              }}>
+                {t.mailtest.approve}
+              </Button>
               <Button size="sm" variant="danger" onClick={async () => {
                 if (!(await confirm({ title: p.email, body: t.common.areYouSure, confirmLabel: t.common.delete, tone: 'danger' }))) return;
                 await del(`/api/admin/pending-users/${p.id}`);
@@ -325,6 +338,7 @@ export function AdminSettings() {
         <Field label={t.admin.announcement} value={s.announcement ?? ''} onChange={(e) => setS({ ...s, announcement: e.target.value })} maxLength={280} />
         <Button>{t.common.save}</Button>
       </form>
+      <MailCheck />
     </div>
   );
 }
@@ -397,5 +411,37 @@ export function AdminDisputes() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Admin → system: proves whether the mail route works, and where the mail went. */
+export function MailCheck() {
+  const { t, err } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  return (
+    <section className="card mt-6 space-y-3 p-6">
+      <h2 className="text-xl">{t.mailtest.title}</h2>
+      <p className="text-sm text-muted">{t.mailtest.lead}</p>
+      <Button
+        variant="secondary"
+        loading={busy}
+        onClick={async () => {
+          setBusy(true);
+          setMsg(null);
+          try {
+            const r = await post<{ to: string; ok: boolean; error?: string }>('/api/admin/mail-test');
+            setMsg(r.ok ? { ok: true, text: t.mailtest.ok.replace('{to}', r.to) } : { ok: false, text: t.mailtest.fail.replace('{error}', r.error ?? '') });
+          } catch (e) {
+            setMsg({ ok: false, text: err(e) });
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {t.mailtest.send}
+      </Button>
+      {msg && <p className={cx('rounded-xl px-4 py-3 text-sm', msg.ok ? 'bg-olive/10 text-olive' : 'bg-stitch/10 text-stitch')}>{msg.text}</p>}
+    </section>
   );
 }
