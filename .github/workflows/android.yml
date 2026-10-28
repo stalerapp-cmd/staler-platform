@@ -1,7 +1,9 @@
 name: Android APKs
 
-# Every push to main builds both APKs (download them from the run's "Artifacts").
-# Pushing a tag like v1.2.0 also publishes them on the Releases page.
+# Every push to main builds both APKs.
+# Download APKs from the workflow run's Artifacts.
+# Pushing a tag like v1.2.0 publishes them on Releases.
+
 on:
   push:
     branches: [main, master]
@@ -18,8 +20,9 @@ concurrency:
 jobs:
   apk:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
+
     strategy:
       fail-fast: false
       matrix:
@@ -30,30 +33,39 @@ jobs:
             slug: s-taler
             api_var: STALER_API_URL
             default_api: https://s-taler.onrender.com
+
           - name: TalerBank
             dir: apps/bank-web
             scheme: talerbank
             slug: talerbank
             api_var: BANK_API_URL
             default_api: https://talerbank.onrender.com
+
     defaults:
       run:
         working-directory: ${{ matrix.dir }}
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: ${{ matrix.dir }}/package-lock.json
 
-      - uses: actions/setup-java@v4
+      # Do not enable Gradle caching here.
+      # The Android project is generated later by Capacitor.
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Resolve API address
         env:
@@ -61,49 +73,73 @@ jobs:
           DEFAULT_API: ${{ matrix.default_api }}
         run: |
           url="${API_URL:-$DEFAULT_API}"
+
           if [ -z "$API_URL" ]; then
-            echo "::warning::Repository variable ${{ matrix.api_var }} is not set — using $DEFAULT_API. Set it under Settings → Secrets and variables → Actions → Variables."
+            echo "::warning::Repository variable ${{ matrix.api_var }} is not set. Using $DEFAULT_API."
           fi
-          case "$url" in https://*) ;; *) echo "::error::${{ matrix.api_var }} must start with https://"; exit 1 ;; esac
+
+          case "$url" in
+            https://*)
+              ;;
+            *)
+              echo "::error::${{ matrix.api_var }} must start with https://"
+              exit 1
+              ;;
+          esac
+
           echo "VITE_API_URL=${url%/}" >> "$GITHUB_ENV"
 
-      - name: Install
-        run: npm ci
+      - name: Install dependencies
+        run: npm ci --include=dev
 
-      - name: Unit tests
+      - name: Run unit tests
         run: npm test
 
-      - name: Build web bundle (native mode, with its own CSP)
+      - name: Build web bundle for Android
         run: npm run build:native
 
-      - name: Create and harden the Android project
+      - name: Create and harden Android project
         run: |
           npx cap add android
           node ../../scripts/android/prepare.mjs . ${{ matrix.scheme }}
 
-      - name: App icon and splash screen
+      - name: Generate app icon and splash screen
         continue-on-error: true
         run: npx -y @capacitor/assets@3.0.5 generate --android
 
       - name: Sync web bundle into Android
         run: npx cap sync android
 
-      - name: Version
+      - name: Set Android version
         run: |
           code=$(( GITHUB_RUN_NUMBER + 100 ))
           name="${GITHUB_REF_NAME#v}"
-          case "$GITHUB_REF" in refs/tags/v*) ;; *) name="1.0.${GITHUB_RUN_NUMBER}" ;; esac
-          sed -i -E "s/versionCode [0-9]+/versionCode ${code}/; s/versionName \"[^\"]+\"/versionName \"${name}\"/" android/app/build.gradle
+
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              ;;
+            *)
+              name="1.0.${GITHUB_RUN_NUMBER}"
+              ;;
+          esac
+
+          sed -i -E \
+            "s/versionCode [0-9]+/versionCode ${code}/; s/versionName \"[^\"]+\"/versionName \"${name}\"/" \
+            android/app/build.gradle
 
       - name: Build debug APK
         working-directory: ${{ matrix.dir }}/android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
-          mkdir -p "$GITHUB_WORKSPACE/out"
-          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/out/${{ matrix.slug }}-debug.apk"
 
-      - name: Build signed release APK (when signing secrets exist)
+          ./gradlew --no-daemon assembleDebug
+
+          mkdir -p "$GITHUB_WORKSPACE/out"
+
+          cp app/build/outputs/apk/debug/app-debug.apk \
+            "$GITHUB_WORKSPACE/out/${{ matrix.slug }}-debug.apk"
+
+      - name: Build signed release APK
         working-directory: ${{ matrix.dir }}/android
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -112,24 +148,41 @@ jobs:
           KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$KEYSTORE_B64" ]; then
-            echo "::notice::No ANDROID_KEYSTORE_BASE64 secret — skipping the signed release APK (the debug APK is still built)."
+            echo "::notice::No Android keystore configured. Skipping signed release APK."
             exit 0
           fi
+
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
           ./gradlew --no-daemon assembleRelease
+
           bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$bt/zipalign" -p -f 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
-          "$bt/apksigner" sign --ks "$RUNNER_TEMP/release.jks" --ks-pass env:KS_PASS \
-            --ks-key-alias "$KEY_ALIAS" --key-pass env:KEY_PASS \
-            --out "$GITHUB_WORKSPACE/out/${{ matrix.slug }}-release.apk" "$RUNNER_TEMP/aligned.apk"
-          "$bt/apksigner" verify --print-certs "$GITHUB_WORKSPACE/out/${{ matrix.slug }}-release.apk"
+
+          "$bt/zipalign" -p -f 4 \
+            app/build/outputs/apk/release/app-release-unsigned.apk \
+            "$RUNNER_TEMP/aligned.apk"
+
+          "$bt/apksigner" sign \
+            --ks "$RUNNER_TEMP/release.jks" \
+            --ks-pass env:KS_PASS \
+            --ks-key-alias "$KEY_ALIAS" \
+            --key-pass env:KEY_PASS \
+            --out "$GITHUB_WORKSPACE/out/${{ matrix.slug }}-release.apk" \
+            "$RUNNER_TEMP/aligned.apk"
+
+          "$bt/apksigner" verify \
+            --print-certs \
+            "$GITHUB_WORKSPACE/out/${{ matrix.slug }}-release.apk"
+
           rm -f "$RUNNER_TEMP/release.jks"
 
-      - name: Checksums
+      - name: Generate checksums
         working-directory: ${{ github.workspace }}/out
-        run: sha256sum *.apk | tee ${{ matrix.slug }}.sha256
+        run: |
+          sha256sum *.apk | tee ${{ matrix.slug }}.sha256
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.slug }}-apk
           path: out/*
@@ -140,15 +193,20 @@ jobs:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: apk
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
     permissions:
       contents: write
+
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
         with:
           path: out
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
         with:
           files: out/*
           generate_release_notes: true
