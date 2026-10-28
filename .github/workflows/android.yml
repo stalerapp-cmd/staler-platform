@@ -52,7 +52,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-          cache: gradle
 
       - uses: android-actions/setup-android@v3
 
