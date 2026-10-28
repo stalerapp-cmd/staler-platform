@@ -82,6 +82,23 @@ async function deliver(mail: Mail) {
   await transporter!.sendMail({ from, ...mail });
 }
 
+/** Startup self-check: confirms the mail route works (logs in to SMTP via the relay, sends nothing). */
+export async function checkMailSetup(): Promise<void> {
+  if (env.MAIL_MODE !== 'smtp' || !env.MAIL_RELAY_URL || !env.MAIL_RELAY_SECRET) {
+    logger.info({ mode: env.MAIL_MODE, relay: Boolean(env.MAIL_RELAY_URL) }, 'mail setup');
+    return;
+  }
+  try {
+    await postJson(env.MAIL_RELAY_URL, { 'x-relay-secret': env.MAIL_RELAY_SECRET }, {
+      verify: true,
+      smtp: { host: env.SMTP_HOST, port: env.SMTP_PORT, user: env.SMTP_USER, pass: env.SMTP_PASS },
+    });
+    logger.info({ host: env.SMTP_HOST }, 'mail relay ready: SMTP login verified');
+  } catch (err) {
+    logger.error({ err }, 'mail relay check failed — e-mails will not be delivered until this is fixed');
+  }
+}
+
 /**
  * Sends in the background: the HTTP request that triggered the mail (sign-up,
  * password reset…) answers immediately instead of waiting for the mail server.

@@ -43,20 +43,29 @@ Deno.serve(async (req) => {
   const s = b?.smtp ?? {};
   const m = b?.mail ?? {};
   if (!ALLOWED_HOSTS.has(String(s.host)) || !s.user || !s.pass) return json(400, { ok: false, error: 'smtp config' });
+  const port = Number(s.port) === 587 || Number(s.port) === 25 ? 465 : Number(s.port) || 465;
+  const t = nodemailer.createTransport({
+    host: s.host,
+    port,
+    secure: port === 465,
+    auth: { user: String(s.user), pass: String(s.pass) },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
+    tls: { minVersion: 'TLSv1.2', servername: s.host },
+  });
+  // {verify:true}: check the SMTP login without sending anything (used at server start).
+  if (b?.verify === true) {
+    try {
+      await t.verify();
+      return json(200, { ok: true, verified: true });
+    } catch (e) {
+      return json(502, { ok: false, error: (e as Error)?.message?.slice(0, 200) });
+    }
+  }
   if (!isEmail(m.to) || typeof m.subject !== 'string' || m.subject.length > 200) return json(400, { ok: false, error: 'mail' });
   if (String(m.html ?? '').length > 200_000 || String(m.text ?? '').length > 50_000) return json(413, { ok: false });
-  const port = Number(s.port) === 587 || Number(s.port) === 25 ? 465 : Number(s.port) || 465;
   try {
-    const t = nodemailer.createTransport({
-      host: s.host,
-      port,
-      secure: port === 465,
-      auth: { user: String(s.user), pass: String(s.pass) },
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 20_000,
-      tls: { minVersion: 'TLSv1.2', servername: s.host },
-    });
     const info = await t.sendMail({ from: String(m.from || s.user), to: m.to, subject: m.subject, html: m.html, text: m.text });
     return json(200, { ok: true, id: info.messageId });
   } catch (e) {

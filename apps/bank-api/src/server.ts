@@ -3,12 +3,14 @@ import { createApp } from './app.js';
 import { migrate } from './db/migrate.js';
 import { bootstrap } from './db/bootstrap.js';
 import { logger } from './lib/logger.js';
+import { checkMailSetup } from './lib/mailer.js';
 import { pool, S, warmPool } from './lib/db.js';
 
 async function main() {
   if (env.RUN_MIGRATIONS) await migrate();
   await bootstrap();
   await warmPool();
+  void checkMailSetup();
   // Keep pooled connections alive between visits.
   setInterval(() => void warmPool(2), 60_000).unref();
   const app = createApp();
