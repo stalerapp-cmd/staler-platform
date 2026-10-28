@@ -57,6 +57,12 @@ const schema = z.object({
 
   MAIL_MODE: z.enum(['smtp', 'brevo', 'resend', 'log', 'memory']).default('log'),
   /** HTTPS relay that speaks SMTP for us (Render's free plan blocks SMTP ports). */
+  /** Google Identity Services client ID — enables "Continue with Google" when set. */
+  GOOGLE_CLIENT_ID: z.string().regex(/^[\w-]+\.apps\.googleusercontent\.com$/).optional(),
+  /** Twilio Verify — enables SMS codes when all three are set. */
+  TWILIO_ACCOUNT_SID: z.string().regex(/^AC[0-9a-f]{32}$/).optional(),
+  TWILIO_AUTH_TOKEN: z.string().min(16).optional(),
+  TWILIO_VERIFY_SID: z.string().regex(/^VA[0-9a-f]{32}$/).optional(),
   MAIL_RELAY_URL: z.string().url().optional(),
   MAIL_RELAY_SECRET: z.string().min(16).optional(),
   /** API key for MAIL_MODE=brevo or resend. */

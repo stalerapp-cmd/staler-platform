@@ -31,6 +31,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { usePerm } from '../lib/perm';
+import { RoleBadge } from '../components/RoleBadge';
+import { BioOffer } from '../components/AppLock';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import { get, post } from '../lib/api';
@@ -238,6 +240,11 @@ export default function AppShell({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
   const confirm = useConfirm();
+  const signOut = async () => {
+    if (!(await confirm({ title: t.ask.signOutTitle, body: t.ask.signOutBody, confirmLabel: t.ask.signOutOk }))) return;
+    await logout();
+    navigate('/login');
+  };
   useEffect(() => {
     setMenu(false);
   }, [loc.pathname]);
@@ -272,11 +279,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       <div className="mt-auto pt-4">
         <SideLink item={settings} onClick={onClick} animated={animated} />
         <button
-          onClick={async () => {
-            if (!(await confirm({ title: t.ask.signOutTitle, body: t.ask.signOutBody, confirmLabel: t.ask.signOutOk }))) return;
-            await logout();
-            navigate('/login');
-          }}
+          onClick={signOut}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] text-muted transition hover:bg-stitch/10 hover:text-stitch"
         >
           <LogOut className="h-5 w-5 flip-rtl" />
@@ -298,6 +301,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
 
       <div className="min-w-0">
         <Announcement />
+        <BioOffer />
         <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-bg/80 backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-1">
@@ -321,8 +325,20 @@ export default function AppShell({ children }: { children?: ReactNode }) {
               </div>
               <MessagesButton />
               <Notifications />
-              <NavLink to="/app/settings" className="ms-1 rounded-full" aria-label={t.nav.settings}>
-                <Avatar name={user?.full_name} src={user?.profile_image} size={36} />
+              <button
+                onClick={signOut}
+                className="rounded-xl p-2.5 text-muted transition hover:bg-stitch/10 hover:text-stitch active:scale-95"
+                aria-label={t.common.signOut}
+                title={t.common.signOut}
+              >
+                <LogOut className="h-5 w-5 flip-rtl" />
+              </button>
+              <NavLink to="/app/settings" className="ms-1 flex items-center gap-2 rounded-full" aria-label={t.nav.settings}>
+                <RoleBadge className="hidden sm:inline-flex" />
+                <span className="relative">
+                  <Avatar name={user?.full_name} src={user?.profile_image} size={36} />
+                  <RoleBadge compact className="absolute -bottom-1 -end-1 !px-1 !py-0.5 ring-2 ring-bg sm:hidden" />
+                </span>
               </NavLink>
             </div>
           </div>
@@ -391,6 +407,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                   <div className="min-w-0">
                     <p className="truncate font-medium">{user?.full_name}</p>
                     <p className="truncate text-xs text-muted">{user?.email}</p>
+                    <RoleBadge className="mt-1.5" />
                   </div>
                 </div>
                 <button onClick={() => setMenu(false)} className="rounded-lg p-1.5 text-muted" aria-label={t.common.close}>

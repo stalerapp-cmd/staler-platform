@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Camera, Laptop, LogOut, ShieldAlert, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
 import { applySession, del, patch, post, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { RoleBadge } from '../components/RoleBadge';
+import { BioToggle } from '../components/AppLock';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/hooks';
@@ -100,6 +102,7 @@ export default function Settings() {
           <div className="min-w-0">
             <p className="font-display text-xl">{user?.full_name}</p>
             <p className="text-sm text-muted">{user?.email}</p>
+            <RoleBadge className="mt-2" />
             {user?.profile_image && (
               <button className="mt-1 text-sm text-stitch" onClick={async () => {
                   if (!(await confirm({ title: t.ask.photoTitle, body: t.ask.photoBody, confirmLabel: t.ask.photoOk, tone: 'danger' }))) return;
@@ -223,6 +226,8 @@ export default function Settings() {
           </div>
         </form>
       </Section>
+
+      <BioToggle />
 
       <Section
         title={t.settings.twofa}

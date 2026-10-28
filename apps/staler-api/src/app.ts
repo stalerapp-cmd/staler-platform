@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { makeIndexRenderer, mountReleaseRoute, mountSeoFiles } from './lib/site.js';
 import { site } from './config/site.js';
+import { smsEnabled } from './lib/sms.js';
 import { z } from 'zod';
 import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
@@ -85,6 +86,8 @@ export function createApp(): Express {
         maxTransfer: env.MAX_TRANSFER,
         dailyLimit: env.DAILY_TRANSFER_LIMIT,
         bankUrl: env.BANK_PUBLIC_URL ?? env.BANK_API_URL,
+        googleClientId: env.GOOGLE_CLIENT_ID ?? null,
+        sms: smsEnabled(),
         allowRegistrations: s.allow_registrations ?? true,
         maintenance: s.maintenance_mode ?? false,
         announcement: s.announcement ?? null,
@@ -148,7 +151,6 @@ export function createApp(): Express {
     app.get(/^\/assets\//, (_req, res) => res.status(404).end());
     app.get(/^\/(?!api\/|files\/|health).*/, (_req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Vary', 'Accept-Language');
       res.type('html').send(renderIndex(_req));
     });
     logger.info({ dist }, 'serving web app');

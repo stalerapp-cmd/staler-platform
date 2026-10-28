@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 const en = {
   brand: { name: 'TalerBank', tagline: 'Your money, safe. Your bank, in your pocket.' },
+  bio: { unlockTitle: 'Unlock', unlockReason: 'Confirm it’s you', unlock: 'Unlock with fingerprint', usePassword: 'Sign in with password instead', lockedLead: 'Locked to keep your money safe.', enableTitle: 'Open with your fingerprint?', enableLead: 'Next time, unlock with your fingerprint or phone PIN instead of typing your password. You can turn this off in Settings.', enable: 'Turn on', notNow: 'Not now', enabled: 'Fingerprint unlock is on', toggle: 'Unlock with fingerprint', toggleD: 'Use your fingerprint, face or phone PIN instead of your password on this phone.' },
+  account: { user: 'Customer', admin: 'Admin', super: 'Super admin' } as Record<string, string>,
   landing: {
     title: 'A bank that keeps its word.', open: 'Open an account', signIn: 'Sign in',
     lead: 'Open an account with its own IBAN in minutes. Send instant transfers, pay and request by QR, and fund your S-Taler wallet — with an alert for every move.',
@@ -31,6 +33,8 @@ const en = {
     ledger: 'All transactions', exchange: 'Exchange & reserves', audit: 'Audit log', system: 'Bank settings', more: 'More', home: 'Home', statementsTab: 'Statement',
   },
   auth: {
+    phone: 'Mobile number', or: 'or', viaEmail: 'E-mail', viaSms: 'SMS', sendVia: 'Send my code by', smsNeedsPhone: 'Add your phone number to get the code by SMS.', verifyLeadSms: 'We sent a 6-digit code by SMS to',
+    resendIn: 'Send a new code in', noMailTitle: 'No code yet?', noMail1: 'Check Spam, Promotions and Updates — first e-mails often land there.', noMail2: 'It can take up to a minute to arrive.', noMail3: 'Typo in the address?', changeEmail: 'Change e-mail', reviewTitle: 'Is this e-mail right?', reviewBody: 'We’ll send your 6-digit code to {email}. Make sure it’s an inbox you can open now.', reviewOk: 'Yes, send the code',
     confirmPassword: 'Confirm password', mismatch: 'The two passwords don’t match.',
     welcome: 'Welcome to TalerBank', lead: 'Sign in with your e-mail or username.', login: 'E-mail or username', password: 'Password', signIn: 'Sign in',
     noAccount: 'No account yet?', open: 'Open an account', have: 'Already a customer?', forgot: 'Forgot password?', registerTitle: 'Open your account',
@@ -158,6 +162,8 @@ type Dict = typeof en;
 
 const ar: Dict = {
   brand: { name: 'TalerBank', tagline: 'فلوسك بأمان، وبنكك بجيبتك.' },
+  bio: { unlockTitle: 'فتح القفل', unlockReason: 'أكّد إنه إنت', unlock: 'افتح بالبصمة', usePassword: 'ادخل بكلمة المرور بدلها', lockedLead: 'مقفول عشان تضل مصاريك بأمان.', enableTitle: 'بدك تفتح ببصمتك؟', enableLead: 'المرة الجاية افتح ببصمتك أو رمز قفل الجوال بدل ما تكتب كلمة المرور. بتقدر تطفيها من الإعدادات.', enable: 'شغّلها', notNow: 'مش هلّأ', enabled: 'تم تفعيل الفتح بالبصمة', toggle: 'الفتح بالبصمة', toggleD: 'استخدم بصمتك أو وجهك أو رمز قفل الجوال بدل كلمة المرور على هالجوال.' },
+  account: { user: 'عميل', admin: 'مدير', super: 'المدير العام' },
   landing: {
     title: 'بنك قدّ كلمته.', open: 'افتح حساب', signIn: 'تسجيل الدخول',
     lead: 'افتح حساب برقم IBAN خاص فيك خلال دقائق. حوّل فورًا، ادفع واطلب بالـ QR، واشحن محفظة S-Taler — ومع كل حركة بيوصلك تنبيه.',
@@ -187,6 +193,8 @@ const ar: Dict = {
     exchange: 'الصرّاف والاحتياطي', audit: 'سجل التدقيق', system: 'إعدادات البنك', more: 'المزيد', home: 'الرئيسية', statementsTab: 'الكشوف',
   },
   auth: {
+    phone: 'رقم الجوال', or: 'أو', viaEmail: 'الإيميل', viaSms: 'رسالة SMS', sendVia: 'ابعتلي الرمز على', smsNeedsPhone: 'أضف رقم جوالك لتستلم الرمز برسالة SMS.', verifyLeadSms: 'بعتنالك رمز من 6 أرقام برسالة SMS على',
+    resendIn: 'رمز جديد بعد', noMailTitle: 'ما وصلك الرمز؟', noMail1: 'افحص البريد المزعج (Spam) والعروض (Promotions) — أول رسالة كثير بتروح هناك.', noMail2: 'ممكن تاخد لحد دقيقة لتوصل.', noMail3: 'في غلط بالإيميل؟', changeEmail: 'غيّر الإيميل', reviewTitle: 'الإيميل صحيح؟', reviewBody: 'رح نبعت الرمز المكوّن من 6 أرقام على {email}. تأكد إنه إيميل بتقدر تفتحه هلّأ.', reviewOk: 'آه، ابعت الرمز',
     confirmPassword: 'تأكيد كلمة المرور', mismatch: 'كلمتا المرور مش متطابقتين.',
     welcome: 'أهلًا بك في TalerBank', lead: 'سجّل الدخول ببريدك أو اسم المستخدم.', login: 'البريد أو اسم المستخدم', password: 'كلمة المرور', signIn: 'دخول',
     noAccount: 'ما عندك حساب؟', open: 'افتح حسابًا', have: 'عميل حالي؟', forgot: 'نسيت كلمة المرور؟', registerTitle: 'افتح حسابك',
@@ -325,7 +333,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-    return navigator.language?.startsWith('en') ? 'en' : 'ar';
+    return 'ar';
   });
   const setLang = useCallback((l: Lang) => {
     setLangState(l);

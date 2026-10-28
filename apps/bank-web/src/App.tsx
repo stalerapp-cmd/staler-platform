@@ -5,6 +5,7 @@ import Shell from './layouts/Shell';
 import { Guilloche } from './components/Guilloche';
 import { Spinner } from './components/ui';
 import { ErrorBoundary, lazyRetry } from './components/Boundary';
+import { AppLock } from './components/AppLock';
 import { Forgot, Login, Register, Verify } from './pages/Auth';
 import Landing from './pages/Landing';
 import { isNative } from './lib/api';
@@ -67,6 +68,7 @@ const admin = (el: ReactNode) => <Private roles={['admin']}>{page(el)}</Private>
 export default function App() {
   return (
     <ErrorBoundary full>
+    <AppLock />
     <BrowserRouter>
       <Routes>
         <Route path="/" element={isNative ? <Navigate to="/login" replace /> : <GuestOnly><Landing /></GuestOnly>} />

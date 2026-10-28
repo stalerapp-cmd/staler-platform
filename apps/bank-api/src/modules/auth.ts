@@ -8,6 +8,8 @@ import { AppError, badRequest, conflict, forbidden, notFound, tooMany, unauthori
 import { ah } from '../lib/http.js';
 import { signToken, verifyToken } from '../lib/jwt.js';
 import { codeMail, noticeMail, sendMail } from '../lib/mailer.js';
+import { verifyGoogleCredential } from '../lib/google.js';
+import { checkSmsCode, sendSmsCode, smsEnabled } from '../lib/sms.js';
 import { hashPassword, needsRehash, passwordSchema, verifyPassword } from '../lib/passwords.js';
 import { generateTotpSecret, otpauthUrl, verifyTotp } from '../lib/totp.js';
 import { email, fullName, otpCode, totpCode, username, validate, uuid } from '../lib/validate.js';
@@ -46,12 +48,12 @@ export async function publicUser(userId: string) {
 }
 
 /** Creates the customer, their first account (valid IBAN) and pays the optional sign-up bonus. */
-async function createCustomer(p: { full_name: string; email: string; username: string; password_hash: string; language: string }) {
+async function createCustomer(p: { full_name: string; email: string; username: string; password_hash: string; language: string; phone?: string | null }) {
   return tx(async (c) => {
     const user = await one<{ id: string; role: string; token_version: number }>(
-      `INSERT INTO ${S}.users (full_name, email, username, password_hash, role, status, email_verified, language, password_changed_at)
-       VALUES ($1, $2, $3, $4, 'user', 'active', true, $5, now()) RETURNING id, role, token_version`,
-      [p.full_name, p.email, p.username, p.password_hash, p.language],
+      `INSERT INTO ${S}.users (full_name, email, username, password_hash, role, status, email_verified, language, password_changed_at, phone)
+       VALUES ($1, $2, $3, $4, 'user', 'active', true, $5, now(), $6) RETURNING id, role, token_version`,
+      [p.full_name, p.email, p.username, p.password_hash, p.language, p.phone ?? null],
       c,
     );
     const iban = generateIban();
@@ -84,10 +86,21 @@ authRouter.post(
   '/register',
   registerLimiter,
   validate({
-    body: z.object({ fullName, email, username, password: passwordSchema, language: lang }).strict(),
+    body: z
+      .object({
+        fullName,
+        email,
+        username,
+        password: passwordSchema,
+        language: lang,
+        phone: z.string().trim().regex(/^\+?[0-9 ()-]{7,20}$/).optional(),
+        method: z.enum(['email', 'sms']).default('email'),
+      })
+      .strict(),
   }),
   ah(async (req, res) => {
-    const { fullName: name, email: mail, username: uname, password, language } = req.body;
+    const { fullName: name, email: mail, username: uname, password, language, phone, method } = req.body;
+    if (method === 'sms' && (!phone || !smsEnabled())) throw badRequest('SMS_DISABLED', 'SMS codes are not available — use e-mail');
     const setting = await one<{ value: unknown }>(`SELECT value FROM ${S}.settings WHERE key = 'allow_registrations'`);
     if (setting && setting.value === false) throw forbidden('Registrations are currently closed', 'REGISTRATION_CLOSED');
     if (password.toLowerCase().includes(uname) || password.toLowerCase().includes(mail.split('@')[0]!)) {
@@ -109,14 +122,16 @@ authRouter.post(
 
     const code = numericCode(6);
     await pool.query(
-      `INSERT INTO ${S}.pending_users (full_name, email, username, password_hash, role, verification_code, code_expires_at, expires_at, attempts, language)
-       VALUES ($1, $2, $3, $4, 'user', $5, now() + interval '${CODE_TTL_MIN} minutes', now() + interval '24 hours', 0, $6)
+      `INSERT INTO ${S}.pending_users (full_name, email, username, password_hash, role, verification_code, code_expires_at, expires_at, attempts, language, phone, verification_method)
+       VALUES ($1, $2, $3, $4, 'user', $5, now() + interval '${CODE_TTL_MIN} minutes', now() + interval '24 hours', 0, $6, $7, $8)
        ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, username = EXCLUDED.username,
          password_hash = EXCLUDED.password_hash, verification_code = EXCLUDED.verification_code,
-         code_expires_at = EXCLUDED.code_expires_at, expires_at = EXCLUDED.expires_at, attempts = 0, language = EXCLUDED.language`,
-      [name, mail, uname, await hashPassword(password), codeHash('verify', mail, code), language],
+         code_expires_at = EXCLUDED.code_expires_at, expires_at = EXCLUDED.expires_at, attempts = 0, language = EXCLUDED.language,
+         phone = EXCLUDED.phone, verification_method = EXCLUDED.verification_method`,
+      [name, mail, uname, await hashPassword(password), codeHash('verify', mail, code), language, phone ?? null, method],
     );
-    await sendMail(codeMail(mail, 'verify', code, language));
+    if (method === 'sms') await sendSmsCode(phone!, language);
+    else await sendMail(codeMail(mail, 'verify', code, language));
     res.status(201).json(generic);
   }),
 );
@@ -130,7 +145,11 @@ authRouter.post(
     const p = await one<any>(`SELECT * FROM ${S}.pending_users WHERE lower(email) = $1`, [mail]);
     if (!p) throw badRequest('INVALID_CODE', 'Invalid or expired code');
     if (p.attempts >= MAX_CODE_ATTEMPTS) throw tooMany('Too many wrong codes. Request a new one.', 'CODE_LOCKED');
-    if (new Date(p.code_expires_at) < new Date() || p.verification_code !== codeHash('verify', mail, code)) {
+    const codeOk =
+      p.verification_method === 'sms' && p.phone
+        ? await checkSmsCode(p.phone, code)
+        : new Date(p.code_expires_at) >= new Date() && p.verification_code === codeHash('verify', mail, code);
+    if (!codeOk) {
       await pool.query(`UPDATE ${S}.pending_users SET attempts = attempts + 1 WHERE id = $1`, [p.id]);
       throw badRequest('INVALID_CODE', 'Invalid or expired code');
     }
@@ -142,6 +161,7 @@ authRouter.post(
       username: p.username ?? mail.split('@')[0]!.replace(/[^a-z0-9_]/g, '').slice(0, 24) + numericCode(3),
       password_hash: p.password_hash,
       language: p.language ?? 'en',
+      phone: p.phone ?? null,
     });
     await audit({ userId: user.id, action: 'auth.registered' }, req);
     const session = await issueSession(req, res, user);
@@ -154,16 +174,50 @@ authRouter.post(
   codeLimiter,
   validate({ body: z.object({ email }).strict() }),
   ah(async (req, res) => {
-    const p = await one<any>(`SELECT id, language FROM ${S}.pending_users WHERE lower(email) = $1 AND expires_at > now()`, [req.body.email]);
+    const p = await one<any>(`SELECT id, language, phone, verification_method FROM ${S}.pending_users WHERE lower(email) = $1 AND expires_at > now()`, [req.body.email]);
     if (p) {
       const code = numericCode(6);
       await pool.query(
         `UPDATE ${S}.pending_users SET verification_code = $2, code_expires_at = now() + interval '${CODE_TTL_MIN} minutes', attempts = 0 WHERE id = $1`,
         [p.id, codeHash('verify', req.body.email, code)],
       );
-      await sendMail(codeMail(req.body.email, 'verify', code, p.language ?? 'en'));
+      if (p.verification_method === 'sms' && p.phone && smsEnabled()) await sendSmsCode(p.phone, p.language ?? 'ar');
+      else await sendMail(codeMail(req.body.email, 'verify', code, p.language ?? 'en'));
     }
     res.json({ success: true, message: 'If a registration is pending, a new code has been sent.' });
+  }),
+);
+
+// ------------------------------------------------------- Continue with Google
+authRouter.post(
+  '/google',
+  authLimiter,
+  validate({ body: z.object({ credential: z.string().min(100).max(4096), language: lang.optional() }).strict() }),
+  ah(async (req, res) => {
+    const g = await verifyGoogleCredential(req.body.credential);
+    let u = await one<any>(`SELECT id, role, status, totp_enabled, token_version FROM ${S}.users WHERE lower(email) = $1`, [g.email]);
+    if (!u) {
+      const setting = await one<{ value: unknown }>(`SELECT value FROM ${S}.settings WHERE key = 'allow_registrations'`);
+      if (setting && setting.value === false) throw forbidden('Registrations are currently closed', 'REGISTRATION_CLOSED');
+      await pool.query(`DELETE FROM ${S}.pending_users WHERE lower(email) = $1`, [g.email]);
+      const base = g.email.split('@')[0]!.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20) || 'client';
+      const created = await createCustomer({
+        full_name: g.name,
+        email: g.email,
+        username: `${base}${numericCode(4)}`,
+        password_hash: await hashPassword(numericCode(12) + numericCode(12)), // unusable until reset
+        language: req.body.language ?? 'ar',
+      });
+      await audit({ userId: created.id, action: 'auth.registered', details: { via: 'google' } }, req);
+      u = { ...created, status: 'active', totp_enabled: false };
+    }
+    if (u.status !== 'active') throw forbidden('This account is suspended', 'ACCOUNT_SUSPENDED');
+    if (u.totp_enabled) {
+      const mfaToken = await signToken({ sub: u.id, role: u.role, tv: u.token_version, sid: 'mfa', typ: 'mfa' }, 300);
+      return res.json({ success: true, data: { mfaRequired: true, mfaToken } });
+    }
+    await audit({ userId: u.id, action: 'auth.login_google' }, req);
+    res.json({ success: true, data: await completeLogin(req, res, u.id) });
   }),
 );
 

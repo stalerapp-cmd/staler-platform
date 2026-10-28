@@ -15,7 +15,18 @@ import { AuthProvider } from './lib/auth';
 import { ToastProvider } from './components/Toast';
 import { ConfirmProvider } from './components/Confirm';
 import { CartProvider } from './pages/Store';
-import { isNative } from './lib/api';
+import { apiUrl, isNative } from './lib/api';
+
+// The app talks to a server that may be asleep (free hosting sleeps when idle).
+// Wake it as soon as the app opens, so it's ready by the time a form is sent.
+if (isNative) {
+  const warm = () => void fetch(apiUrl('/health'), { cache: 'no-store' }).catch(() => {});
+  warm();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') warm();
+  });
+}
+
 
 if (isNative) {
   void StatusBar.setStyle({ style: Style.Dark }).catch(() => {});

@@ -5,6 +5,7 @@ import AppShell from './layouts/AppShell';
 import { Logo } from './components/Tatreez';
 import { Spinner } from './components/ui';
 import { ErrorBoundary, lazyRetry } from './components/Boundary';
+import { AppLock } from './components/AppLock';
 import Landing from './pages/Landing';
 import { Forgot, Login, Register, Verify } from './pages/Auth';
 
@@ -73,6 +74,7 @@ const page = (el: ReactNode) => (
 export default function App() {
   return (
     <ErrorBoundary full>
+    <AppLock />
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<GuestOnly><Landing /></GuestOnly>} />

@@ -34,7 +34,13 @@ const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 function fromAddress() {
-  return env.MAIL_FROM ?? `"${env.SITE_NAME}" <${env.SMTP_USER ?? 'no-reply@example.com'}>`;
+  const f = env.MAIL_FROM ?? `"${env.SITE_NAME}" <${env.SMTP_USER ?? 'no-reply@example.com'}>`;
+  // Gmail only delivers reliably (and keeps mail out of Spam) when the sender
+  // address is the account that logs in. Keep the display name, fix the address.
+  if (/gmail\.com$|googlemail\.com$/i.test(env.SMTP_HOST ?? '') && env.SMTP_USER) {
+    return `"${parseFrom(f).name.replace(/"/g, '')}" <${env.SMTP_USER}>`;
+  }
+  return f;
 }
 function parseFrom(f: string) {
   const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(f);

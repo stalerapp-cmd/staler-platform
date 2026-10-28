@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Laptop, LogOut, ShieldAlert, ShieldCheck, Smartphone, Lock } from 'lucide-react';
 import { applySession, del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { RoleBadge } from '../components/RoleBadge';
+import { BioToggle } from '../components/AppLock';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/hooks';
@@ -73,6 +75,7 @@ export default function Settings() {
             <p className="num truncate text-sm text-muted">
               @{user?.username} · {user?.email}
             </p>
+            <RoleBadge className="mt-2" />
           </div>
         </div>
         <form
@@ -140,6 +143,8 @@ export default function Settings() {
           </div>
         </form>
       </Section>
+
+      <BioToggle />
 
       <Section
         title={t.settings.twofa}

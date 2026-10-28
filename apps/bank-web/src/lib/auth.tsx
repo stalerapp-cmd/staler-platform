@@ -1,3 +1,4 @@
+import { bioEnabled } from './biometric';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { applySession, clearSession, post, get, refreshSession, session } from './api';
 
@@ -22,7 +23,14 @@ interface AuthState {
   user: User | null;
   ready: boolean;
   signedOutForIdle: boolean;
+  /** App is locked behind fingerprint / phone PIN (Android, when enabled). */
+  locked: boolean;
+  unlock: () => void;
+  /** Re-read the fingerprint setting after it changes in Settings. */
+  refreshBio: () => void;
   login: (login: string, password: string) => Promise<{ mfaToken?: string }>;
+  /** Continue with Google: signs in, or creates the account on first use. */
+  google: (credential: string, extra?: Record<string, unknown>) => Promise<{ mfaToken?: string }>;
   completeMfa: (mfaToken: string, code: string) => Promise<void>;
   finishVerification: (data: any) => Promise<void>;
   logout: () => Promise<void>;
@@ -37,13 +45,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [signedOutForIdle, setIdle] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const bio = useRef(false);
+  const hiddenAt = useRef<number | null>(null);
   const lastActivity = useRef(Date.now());
 
   useEffect(() => {
     return session.onChange((u) => setUser(u)); // unsubscribe on unmount
   }, []);
   useEffect(() => {
-    refreshSession().finally(() => setReady(true));
+    void (async () => {
+      bio.current = await bioEnabled();
+      const u = await refreshSession();
+      if (u && bio.current) setLocked(true); // reopening the app: prove it's you first
+      setReady(true);
+    })();
+  }, []);
+
+  // Back from the background after a minute → lock again (when fingerprint unlock is on).
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') hiddenAt.current = Date.now();
+      else if (hiddenAt.current && Date.now() - hiddenAt.current > 60_000 && bio.current && session.user) setLocked(true);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
 
   const logout = useCallback(async () => {
@@ -63,8 +89,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     events.forEach((e) => window.addEventListener(e, bump, { passive: true }));
     const timer = window.setInterval(() => {
       if (Date.now() - lastActivity.current > IDLE_MS) {
-        setIdle(true);
-        void logout();
+        lastActivity.current = Date.now();
+        if (bio.current) setLocked(true); // fingerprint unlock on: lock instead of signing out
+        else {
+          setIdle(true);
+          void logout();
+        }
       }
     }, 30_000);
     return () => {
@@ -78,9 +108,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       signedOutForIdle,
+      locked,
+      unlock: () => setLocked(false),
+      refreshBio: () => {
+        void bioEnabled().then((on) => {
+          bio.current = on;
+        });
+      },
       setUser,
       async login(login, password) {
         const data = await post('/api/auth/login', { login, password });
+        if (data.mfaRequired) return { mfaToken: data.mfaToken };
+        setIdle(false);
+        await applySession(data);
+        return {};
+      },
+      async google(credential, extra) {
+        const data = await post('/api/auth/google', { credential, ...(extra ?? {}) });
         if (data.mfaRequired) return { mfaToken: data.mfaToken };
         setIdle(false);
         await applySession(data);
@@ -100,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(d.user);
       },
     }),
-    [user, ready, signedOutForIdle, logout],
+    [user, ready, signedOutForIdle, locked, logout],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -11,7 +11,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-    return 'dark'; // the vault look is the default
+    return 'light'; // Arabic + light is the default for everyone
   });
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

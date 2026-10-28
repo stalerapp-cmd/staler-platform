@@ -28,7 +28,7 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 export function pickLang(req: Request): 'ar' | 'en' {
   const q = String(req.query.lang ?? '').toLowerCase();
   if (q === 'en' || q === 'ar') return q;
-  return /^en\b/i.test(String(req.headers['accept-language'] ?? '')) ? 'en' : 'ar';
+  return 'ar'; // Arabic by default; English via ?lang=en
 }
 
 export function makeIndexRenderer(indexFile: string, cfg: SiteConfig) {

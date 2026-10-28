@@ -6,9 +6,14 @@ import { ApiError, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { Emblem, Guilloche } from '../components/Guilloche';
-import { Button, CodeInput, ErrorNote, Field, PasswordStrength } from '../components/ui';
+import { Button, CodeInput, ErrorNote, Field, PasswordStrength, Segmented } from '../components/ui';
 import { TopControls } from '../layouts/Shell';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/Confirm';
+import { AuthBack, MailTips, ResendCode } from '../components/AuthExtras';
+import { GoogleButton } from '../components/GoogleButton';
+import { usePublicConfig } from '../lib/config';
+import { fill } from '../lib/format';
 
 export function AuthLayout({ children }: { children: ReactNode }) {
   const { t } = useI18n();
@@ -21,10 +26,13 @@ export function AuthLayout({ children }: { children: ReactNode }) {
     <div className="grid min-h-dvh bg-bg lg:grid-cols-[1fr_1.05fr]">
       <div className="flex flex-col">
         <div className="safe-top flex items-center justify-between px-5 py-4">
-          <Link to="/" className="flex items-center gap-2.5">
-            <Emblem className="h-9 w-9" />
-            <span className="font-display text-2xl">TalerBank</span>
-          </Link>
+          <div className="flex items-center gap-1">
+            <AuthBack />
+            <Link to="/" className="flex items-center gap-2.5">
+              <Emblem className="h-9 w-9" />
+              <span className="font-display text-2xl">TalerBank</span>
+            </Link>
+          </div>
           <TopControls />
         </div>
         <div className="flex flex-1 items-center justify-center px-5 pb-12">
@@ -74,8 +82,8 @@ function Secret({ label, value, onChange, autoComplete, error }: { label: string
 }
 
 export function Login() {
-  const { t, err } = useI18n();
-  const { login, completeMfa, signedOutForIdle } = useAuth();
+  const { t, err, lang } = useI18n();
+  const { login, completeMfa, signedOutForIdle, google } = useAuth();
   const nav = useNavigate();
   const loc = useLocation() as { state?: { from?: string } };
   const [id, setId] = useState('');
@@ -85,6 +93,19 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const go = () => nav(loc.state?.from ?? '/app', { replace: true });
+  const onGoogle = async (credential: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await google(credential, { language: lang });
+      if (r.mfaToken) setMfa(r.mfaToken);
+      else go();
+    } catch (e2) {
+      setError(err(e2));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <AuthLayout>
       <h1 className="text-4xl">{mfa ? t.auth.mfaTitle : t.auth.welcome}</h1>
@@ -131,6 +152,7 @@ export function Login() {
           {mfa ? t.common.confirm : t.auth.signIn}
         </Button>
       </form>
+      {!mfa && <GoogleButton onCredential={onGoogle} />}
       {!mfa && (
         <p className="mt-8 text-center text-muted">
           {t.auth.noAccount}{' '}
@@ -146,7 +168,12 @@ export function Login() {
 export function Register() {
   const { t, err, lang } = useI18n();
   const nav = useNavigate();
-  const [f, setF] = useState({ fullName: '', email: '', username: '', password: '' });
+  const confirm = useConfirm();
+  const cfg = usePublicConfig();
+  const { google } = useAuth();
+  const [method, setMethod] = useState<'email' | 'sms'>('email');
+  const prefill = (useLocation() as { state?: { email?: string } }).state?.email ?? '';
+  const [f, setF] = useState({ fullName: '', email: prefill, username: '', password: '', phone: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fe, setFe] = useState<Record<string, string>>({});
@@ -161,12 +188,22 @@ export function Register() {
         onSubmit={async (e) => {
           e.preventDefault();
           if (f.password !== pw2) return setFe({ password2: t.auth.mismatch });
+          if (method === 'sms' && !f.phone.trim()) return setError(t.auth.smsNeedsPhone);
+          if (!(await confirm({ title: t.auth.reviewTitle, body: fill(t.auth.reviewBody, { email: method === 'sms' ? f.phone.trim() : f.email.trim() }), confirmLabel: t.auth.reviewOk }))) return;
           setBusy(true);
           setError(null);
           setFe({});
           try {
-            await post('/api/auth/register', { fullName: f.fullName.trim(), email: f.email.trim(), username: f.username.trim().toLowerCase(), password: f.password, language: lang });
-            nav('/verify', { state: { email: f.email.trim() } });
+            await post('/api/auth/register', {
+              fullName: f.fullName.trim(),
+              email: f.email.trim(),
+              username: f.username.trim().toLowerCase(),
+              password: f.password,
+              language: lang,
+              ...(f.phone.trim() ? { phone: f.phone.trim() } : {}),
+              method,
+            });
+            nav('/verify', { state: { email: f.email.trim(), sms: method === 'sms' ? f.phone.trim() : undefined } });
           } catch (e2) {
             if (e2 instanceof ApiError && Array.isArray(e2.details)) setFe(Object.fromEntries((e2.details as any[]).map((d) => [d.path, d.message])));
             setError(err(e2));
@@ -178,6 +215,7 @@ export function Register() {
         <Field label={t.auth.fullName} value={f.fullName} onChange={set('fullName')} autoComplete="name" required error={fe.fullName} />
         <Field label={t.auth.email} type="email" value={f.email} onChange={set('email')} autoComplete="email" dir="ltr" required error={fe.email} />
         <Field label={t.auth.username} value={f.username} onChange={set('username')} autoComplete="username" dir="ltr" required hint={t.auth.usernameHint} error={fe.username} />
+        <Field label={`${t.auth.phone} (${t.common.optional})`} type="tel" value={f.phone} onChange={set('phone')} autoComplete="tel" dir="ltr" error={fe.phone} />
         <div>
           <Secret label={t.auth.password} value={f.password} onChange={(v) => setF({ ...f, password: v })} autoComplete="new-password" />
           <PasswordStrength value={f.password} />
@@ -189,11 +227,31 @@ export function Register() {
           autoComplete="new-password"
           error={fe.password2 ?? (pw2 && !f.password.startsWith(pw2) ? t.auth.mismatch : null)}
         />
+        {cfg?.sms && (
+          <div>
+            <p className="mb-2 text-sm font-medium text-ink/80">{t.auth.sendVia}</p>
+            <Segmented value={method} onChange={setMethod} options={[{ value: 'email', label: t.auth.viaEmail }, { value: 'sms', label: t.auth.viaSms }]} />
+          </div>
+        )}
         <ErrorNote>{error}</ErrorNote>
         <Button block size="lg" loading={busy}>
           {t.auth.create}
         </Button>
       </form>
+      <GoogleButton
+        text="signup_with"
+        onCredential={async (cred) => {
+          setBusy(true);
+          try {
+            const r = await google(cred, { language: lang });
+            nav(r.mfaToken ? '/login' : '/app', { replace: true });
+          } catch (e2) {
+            setError(err(e2));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
       <p className="mt-6 text-center text-muted">
         {t.auth.have}{' '}
         <Link to="/login" className="font-medium text-ink underline decoration-gold decoration-2 underline-offset-4">
@@ -209,7 +267,7 @@ export function Verify() {
   const toast = useToast();
   const nav = useNavigate();
   const { finishVerification } = useAuth();
-  const loc = useLocation() as { state?: { email?: string } };
+  const loc = useLocation() as { state?: { email?: string; sms?: string } };
   const [email, setEmail] = useState(loc.state?.email ?? '');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -218,7 +276,7 @@ export function Verify() {
     <AuthLayout>
       <h1 className="text-4xl">{t.auth.verifyTitle}</h1>
       <p className="mt-2 text-muted">
-        {t.auth.verifyLead} <span className="num text-ink">{email}</span>
+        {loc.state?.sms ? t.auth.verifyLeadSms : t.auth.verifyLead} <span className="num font-medium text-ink" dir="ltr">{loc.state?.sms ?? email}</span>
       </p>
       <form
         className="mt-8 space-y-5"
@@ -243,17 +301,13 @@ export function Verify() {
         <Button block size="lg" loading={busy} disabled={code.length !== 6}>
           {t.auth.verify}
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          block
-          onClick={async () => {
+        <ResendCode
+          onResend={async () => {
             await post('/api/auth/resend-code', { email: email.trim() }).catch(() => {});
             toast(t.auth.resent);
           }}
-        >
-          {t.auth.resend}
-        </Button>
+        />
+        <MailTips onChangeEmail={() => nav('/register', { state: { email } })} />
       </form>
     </AuthLayout>
   );

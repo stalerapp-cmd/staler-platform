@@ -11,7 +11,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'light'; // Arabic + light is the default for everyone
   });
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

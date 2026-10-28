@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { makeIndexRenderer, mountReleaseRoute, mountSeoFiles } from './lib/site.js';
 import { site } from './config/site.js';
+import { smsEnabled } from './lib/sms.js';
 import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { pool, S } from './lib/db.js';
@@ -81,6 +82,8 @@ export function createApp(): Express {
         maxTransfer: env.MAX_TRANSFER,
         dailyLimit: env.DAILY_TRANSFER_LIMIT,
         publicUrl: env.PUBLIC_URL,
+        googleClientId: env.GOOGLE_CLIENT_ID ?? null,
+        sms: smsEnabled(),
       },
     });
   });
@@ -114,7 +117,6 @@ export function createApp(): Express {
     app.get(/^\/assets\//, (_req, res) => res.status(404).end());
     app.get(/^\/(?!api\/|taler-|link\/|health).*/, (_req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Vary', 'Accept-Language');
       res.type('html').send(renderIndex(_req));
     });
     logger.info({ dist }, 'serving web app');

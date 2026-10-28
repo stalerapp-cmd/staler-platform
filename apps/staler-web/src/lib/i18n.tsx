@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 const en = {
   brand: { name: 'S-Taler', tagline: 'Your Palestinian wallet' },
+  bio: { unlockTitle: 'Unlock', unlockReason: 'Confirm it’s you', unlock: 'Unlock with fingerprint', usePassword: 'Sign in with password instead', lockedLead: 'Locked to keep your money safe.', enableTitle: 'Open with your fingerprint?', enableLead: 'Next time, unlock with your fingerprint or phone PIN instead of typing your password. You can turn this off in Settings.', enable: 'Turn on', notNow: 'Not now', enabled: 'Fingerprint unlock is on', toggle: 'Unlock with fingerprint', toggleD: 'Use your fingerprint, face or phone PIN instead of your password on this phone.' },
+  account: { user: 'Personal account', merchant: 'Business account', exchange: 'Cash agent', admin: 'Admin', super: 'Super admin' } as Record<string, string>,
   dl: {
     title: 'Take it with you.', lead: 'Our Android apps, always the newest version — straight from here, no store needed.',
     wallet: 'Wallet', bank: 'Bank', walletD: 'Send, receive and pay by QR from your pocket.', bankD: 'Your account, transfers and statements in one tap.',
@@ -34,6 +36,8 @@ const en = {
     stat1: 'transfer fees between wallets', stat2: 'to send money', stat3: 'encryption on sensitive data',
   },
   auth: {
+    or: 'or', viaEmail: 'E-mail', viaSms: 'SMS', sendVia: 'Send my code by', smsNeedsPhone: 'Add your phone number to get the code by SMS.', verifyLeadSms: 'We sent a 6-digit code by SMS to',
+    resendIn: 'Send a new code in', noMailTitle: 'No code yet?', noMail1: 'Check Spam, Promotions and Updates — first e-mails often land there.', noMail2: 'It can take up to a minute to arrive.', noMail3: 'Typo in the address?', changeEmail: 'Change e-mail', reviewTitle: 'Is this e-mail right?', reviewBody: 'We’ll send your 6-digit code to {email}. Make sure it’s an inbox you can open now.', reviewOk: 'Yes, send the code',
     confirmPassword: 'Confirm password', mismatch: 'The two passwords don’t match.',
     welcome: 'Welcome back', loginLead: 'Sign in to your wallet.', email: 'E-mail', password: 'Password', newPassword: 'New password',
     login: 'Sign in', noAccount: 'New here?', createOne: 'Create a wallet', haveAccount: 'Already have a wallet?', forgot: 'Forgot password?',
@@ -200,6 +204,8 @@ type Dict = typeof en;
 
 const ar: Dict = {
   brand: { name: 'S-Taler', tagline: 'محفظتك الفلسطينية' },
+  bio: { unlockTitle: 'فتح القفل', unlockReason: 'أكّد إنه إنت', unlock: 'افتح بالبصمة', usePassword: 'ادخل بكلمة المرور بدلها', lockedLead: 'مقفول عشان تضل مصاريك بأمان.', enableTitle: 'بدك تفتح ببصمتك؟', enableLead: 'المرة الجاية افتح ببصمتك أو رمز قفل الجوال بدل ما تكتب كلمة المرور. بتقدر تطفيها من الإعدادات.', enable: 'شغّلها', notNow: 'مش هلّأ', enabled: 'تم تفعيل الفتح بالبصمة', toggle: 'الفتح بالبصمة', toggleD: 'استخدم بصمتك أو وجهك أو رمز قفل الجوال بدل كلمة المرور على هالجوال.' },
+  account: { user: 'حساب شخصي', merchant: 'حساب تاجر', exchange: 'وكيل صرف', admin: 'مدير', super: 'المدير العام' },
   dl: {
     title: 'خلّيه معك وين ما رحت.', lead: 'تطبيقاتنا لأندرويد، دايمًا بآخر نسخة — نزّلها من هون مباشرة، بدون متجر.',
     wallet: 'المحفظة', bank: 'البنك', walletD: 'حوّل واستلم وادفع بالـ QR من جيبتك.', bankD: 'حسابك وحوالاتك وكشوفك بكبسة وحدة.',
@@ -231,6 +237,8 @@ const ar: Dict = {
     stat1: 'رسوم التحويل بين المحافظ', stat2: 'لتحويل المصاري', stat3: 'تشفير للبيانات الحساسة',
   },
   auth: {
+    or: 'أو', viaEmail: 'الإيميل', viaSms: 'رسالة SMS', sendVia: 'ابعتلي الرمز على', smsNeedsPhone: 'أضف رقم جوالك لتستلم الرمز برسالة SMS.', verifyLeadSms: 'بعتنالك رمز من 6 أرقام برسالة SMS على',
+    resendIn: 'رمز جديد بعد', noMailTitle: 'ما وصلك الرمز؟', noMail1: 'افحص البريد المزعج (Spam) والعروض (Promotions) — أول رسالة كثير بتروح هناك.', noMail2: 'ممكن تاخد لحد دقيقة لتوصل.', noMail3: 'في غلط بالإيميل؟', changeEmail: 'غيّر الإيميل', reviewTitle: 'الإيميل صحيح؟', reviewBody: 'رح نبعت الرمز المكوّن من 6 أرقام على {email}. تأكد إنه إيميل بتقدر تفتحه هلّأ.', reviewOk: 'آه، ابعت الرمز',
     confirmPassword: 'تأكيد كلمة المرور', mismatch: 'كلمتا المرور مش متطابقتين.',
     welcome: 'أهلًا من جديد', loginLead: 'سجّل دخولك لمحفظتك.', email: 'البريد الإلكتروني', password: 'كلمة المرور', newPassword: 'كلمة مرور جديدة', login: 'دخول',
     noAccount: 'جديد هون؟', createOne: 'افتح محفظة', haveAccount: 'عندك محفظة؟', forgot: 'نسيت كلمة المرور؟', registerTitle: 'افتح محفظتك', registerLead: 'بتاخد أقل من دقيقة.',
@@ -413,7 +421,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       }
       return q;
     }
-    return (read('st.lang') as Lang) ?? (navigator.language?.startsWith('en') ? 'en' : 'ar');
+    return (read('st.lang') as Lang) ?? 'ar';
   });
   const setLang = useCallback((l: Lang) => {
     setLangState(l);

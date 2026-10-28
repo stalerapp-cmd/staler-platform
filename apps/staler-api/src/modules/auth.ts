@@ -5,11 +5,13 @@ import QRCode from 'qrcode';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
-import { codeHash, decrypt, encrypt, numericCode } from '../lib/crypto.js';
+import { codeHash, decrypt, encrypt, numericCode, randomToken } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, forbidden, notFound, tooMany, unauthorized } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { signToken, verifyToken } from '../lib/jwt.js';
 import { codeMail, noticeMail, sendMail } from '../lib/mailer.js';
+import { verifyGoogleCredential } from '../lib/google.js';
+import { checkSmsCode, sendSmsCode, smsEnabled } from '../lib/sms.js';
 import { hashPassword, needsRehash, passwordSchema, verifyPassword } from '../lib/passwords.js';
 import { generateTotpSecret, otpauthUrl, verifyTotp } from '../lib/totp.js';
 import { email, fullName, otpCode, totpCode, uuid, validate } from '../lib/validate.js';
@@ -64,11 +66,14 @@ authRouter.post(
         accountType: z.enum(['user', 'merchant']).default('user'),
         phoneNumber: phone.optional(),
         language: lang,
+        /** Where the 6-digit code goes: e-mail (default) or SMS to phoneNumber. */
+        method: z.enum(['email', 'sms']).default('email'),
       })
       .strict(),
   }),
   ah(async (req, res) => {
-    const { fullName: name, email: mail, password, accountType, phoneNumber, language } = req.body;
+    const { fullName: name, email: mail, password, accountType, phoneNumber, language, method } = req.body;
+    if (method === 'sms' && (!phoneNumber || !smsEnabled())) throw badRequest('SMS_DISABLED', 'SMS codes are not available — use e-mail');
     if (!(await settings()).allow_registrations) throw forbidden('Registrations are currently closed', 'REGISTRATION_CLOSED');
     if (password.toLowerCase().includes(mail.split('@')[0]!)) throw badRequest('WEAK_PASSWORD', 'Password must not contain your e-mail');
     const generic = { success: true, message: 'If this e-mail can be registered, a verification code has been sent.' };
@@ -80,13 +85,14 @@ authRouter.post(
     await pool.query(
       `INSERT INTO ${S}.pending_users (email, password_hash, full_name, role, phone_number, verification_method, verification_code,
                                        code_expires_at, expires_at, attempts, language)
-       VALUES ($1, $2, $3, $4, $5, 'email', $6, now() + interval '${CODE_TTL_MIN} minutes', now() + interval '24 hours', 0, $7)
+       VALUES ($1, $2, $3, $4, $5, $8, $6, now() + interval '${CODE_TTL_MIN} minutes', now() + interval '24 hours', 0, $7)
        ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, full_name = EXCLUDED.full_name, role = EXCLUDED.role,
          phone_number = EXCLUDED.phone_number, verification_code = EXCLUDED.verification_code, code_expires_at = EXCLUDED.code_expires_at,
-         expires_at = EXCLUDED.expires_at, attempts = 0, language = EXCLUDED.language`,
-      [mail, await hashPassword(password), name, accountType, phoneNumber ?? null, codeHash('verify', mail, code), language],
+         expires_at = EXCLUDED.expires_at, attempts = 0, language = EXCLUDED.language, verification_method = EXCLUDED.verification_method`,
+      [mail, await hashPassword(password), name, accountType, phoneNumber ?? null, codeHash('verify', mail, code), language, method],
     );
-    await sendMail(codeMail(mail, 'verify', code, language));
+    if (method === 'sms') await sendSmsCode(phoneNumber!, language);
+    else await sendMail(codeMail(mail, 'verify', code, language));
     res.status(201).json(generic);
   }),
 );
@@ -100,7 +106,11 @@ authRouter.post(
     const p = await one<any>(`SELECT * FROM ${S}.pending_users WHERE lower(email) = $1`, [mail]);
     if (!p) throw badRequest('INVALID_CODE', 'Invalid or expired code');
     if (p.attempts >= MAX_CODE_ATTEMPTS) throw tooMany('Too many wrong codes. Request a new one.', 'CODE_LOCKED');
-    if (!p.code_expires_at || new Date(p.code_expires_at) < new Date() || p.verification_code !== codeHash('verify', mail, code)) {
+    const codeOk =
+      p.verification_method === 'sms' && p.phone_number
+        ? await checkSmsCode(p.phone_number, code)
+        : Boolean(p.code_expires_at) && new Date(p.code_expires_at) >= new Date() && p.verification_code === codeHash('verify', mail, code);
+    if (!codeOk) {
       await pool.query(`UPDATE ${S}.pending_users SET attempts = attempts + 1 WHERE id = $1`, [p.id]);
       throw badRequest('INVALID_CODE', 'Invalid or expired code');
     }
@@ -130,7 +140,7 @@ authRouter.post(
   codeLimiter,
   validate({ body: z.object({ email }).strict() }),
   ah(async (req, res) => {
-    const p = await one<any>(`SELECT id, language FROM ${S}.pending_users WHERE lower(email) = $1 AND (expires_at IS NULL OR expires_at > now())`, [
+    const p = await one<any>(`SELECT id, language, verification_method, phone_number FROM ${S}.pending_users WHERE lower(email) = $1 AND (expires_at IS NULL OR expires_at > now())`, [
       req.body.email,
     ]);
     if (p) {
@@ -139,7 +149,8 @@ authRouter.post(
         `UPDATE ${S}.pending_users SET verification_code = $2, code_expires_at = now() + interval '${CODE_TTL_MIN} minutes', attempts = 0 WHERE id = $1`,
         [p.id, codeHash('verify', req.body.email, code)],
       );
-      await sendMail(codeMail(req.body.email, 'verify', code, p.language ?? 'en'));
+      if (p.verification_method === 'sms' && p.phone_number && smsEnabled()) await sendSmsCode(p.phone_number, p.language ?? 'ar');
+      else await sendMail(codeMail(req.body.email, 'verify', code, p.language ?? 'en'));
     }
     res.json({ success: true, message: 'If a registration is pending, a new code has been sent.' });
   }),
@@ -166,6 +177,43 @@ async function completeLogin(req: Request, res: Response, userId: string) {
   const session = await issueSession(req, res, u);
   return { ...session, user: await publicUser(userId) };
 }
+
+// ------------------------------------------------------- Continue with Google
+authRouter.post(
+  '/google',
+  authLimiter,
+  validate({
+    body: z.object({ credential: z.string().min(100).max(4096), accountType: z.enum(['user', 'merchant']).optional(), language: lang.optional() }).strict(),
+  }),
+  ah(async (req, res) => {
+    const g = await verifyGoogleCredential(req.body.credential);
+    let u = await one<any>(`SELECT id, role, status, totp_enabled, token_version FROM ${S}.users WHERE lower(email) = $1`, [g.email]);
+    if (!u) {
+      if (!(await settings()).allow_registrations) throw forbidden('Registrations are currently closed', 'REGISTRATION_CLOSED');
+      const role = req.body.accountType === 'merchant' ? 'merchant' : 'user';
+      // Google already proved the e-mail; the password is random and unusable until the person sets one ("Forgot password").
+      u = await tx(async (c) => {
+        await c.query(`DELETE FROM ${S}.pending_users WHERE lower(email) = $1`, [g.email]);
+        const nu = await one<any>(
+          `INSERT INTO ${S}.users (email, password_hash, full_name, role, verification_method, email_verified, email_verified_at, language, password_changed_at)
+           VALUES ($1, $2, $3, $4, 'google', true, now(), $5, now()) RETURNING id, role, status, totp_enabled, token_version`,
+          [g.email, await hashPassword(randomToken(32)), g.name, role, req.body.language ?? 'ar'],
+          c,
+        );
+        await createWallet(c, nu.id);
+        return nu;
+      });
+      await audit({ userId: u.id, action: 'auth.registered', details: { role, via: 'google' } }, req);
+    }
+    if (u.status !== 'active') throw forbidden('This account is suspended', 'ACCOUNT_SUSPENDED');
+    if (u.totp_enabled) {
+      const mfaToken = await signToken({ sub: u.id, role: u.role, tv: u.token_version, sid: 'mfa', typ: 'mfa' }, 300);
+      return res.json({ success: true, data: { mfaRequired: true, mfaToken } });
+    }
+    await audit({ userId: u.id, action: 'auth.login_google' }, req);
+    res.json({ success: true, data: await completeLogin(req, res, u.id) });
+  }),
+);
 
 authRouter.post(
   '/login',

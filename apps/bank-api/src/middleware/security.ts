@@ -4,6 +4,8 @@ import rateLimit, { type Options } from 'express-rate-limit';
 import crypto from 'node:crypto';
 import { corsOrigins, env, isProd } from '../config/env.js';
 
+const GOOGLE = env.GOOGLE_CLIENT_ID ? ['https://accounts.google.com'] : [];
+
 /** Strict security headers. The SPA is built without inline scripts, so CSP can be tight. */
 export const securityHeaders = helmet({
   contentSecurityPolicy: {
@@ -11,13 +13,15 @@ export const securityHeaders = helmet({
     directives: {
       defaultSrc: ["'self'"],
       baseUri: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      scriptSrc: ["'self'", ...GOOGLE],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', ...GOOGLE],
+      frameSrc: GOOGLE.length ? GOOGLE : ["'none'"],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
       // Product photos and avatars live in Supabase Storage.
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.supabase.co'],
-      connectSrc: ["'self'"],
-      mediaSrc: ["'self'", 'blob:'],
+      // + OpenStreetMap tiles for order tracking maps.
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.supabase.co', 'https://tile.openstreetmap.org', 'https://*.tile.openstreetmap.org'],
+      connectSrc: ["'self'", ...GOOGLE],
+      mediaSrc: ["'self'", 'blob:', 'https://*.supabase.co'],
       workerSrc: ["'self'", 'blob:'],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
@@ -27,12 +31,13 @@ export const securityHeaders = helmet({
   },
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: 'same-site' },
-  referrerPolicy: { policy: 'no-referrer' },
+  // Origin only (never paths/queries) — Google sign-in needs to see which site it runs on.
+  referrerPolicy: { policy: 'strict-origin' },
   strictTransportSecurity: isProd ? { maxAge: 63072000, includeSubDomains: true, preload: true } : false,
 });
 
 export function permissionsPolicy(_req: Request, res: Response, next: NextFunction) {
-  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(self), payment=(), usb=(), interest-cohort=()');
   next();
 }
 
