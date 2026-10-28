@@ -1,0 +1,133 @@
+# Render Blueprint — two web services, each serving its API and its web app
+# from one origin (no CORS needed for the browser build).
+#
+#   TalerBank  ->  https://<talerbank-service>.onrender.com
+#   S-Taler    ->  https://<staler-service>.onrender.com
+#
+# Values marked `sync: false` are asked for when you create the Blueprint.
+# Never commit real secrets to this file.
+
+envVarGroups:
+  - name: taler-shared
+    envVars:
+      # Shared secret the S-Taler exchange uses to call TalerBank's wire gateway.
+      - key: EXCHANGE_API_TOKEN
+        generateValue: true
+      # HMAC key for TalerBank -> S-Taler webhooks.
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DB_SSL
+        value: require
+      - key: TRUST_PROXY
+        value: "1"
+      - key: CURRENCY
+        value: PS
+
+services:
+  - type: web
+    name: talerbank
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: >-
+      cd apps/bank-web && npm ci && npm run build &&
+      cd ../bank-api && npm ci && npm run build && npm prune --omit=dev
+    startCommand: cd apps/bank-api && node dist/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - fromGroup: taler-shared
+      - key: DATABASE_URL
+        sync: false # Supabase pooler URL (Session mode, port 5432) — see docs/DEPLOY.md
+      - key: DB_SCHEMA
+        value: talerbank
+      - key: PUBLIC_URL
+        sync: false # e.g. https://talerbank.onrender.com
+      - key: STALER_WEBHOOK_URL
+        sync: false # e.g. https://s-taler.onrender.com/api/bank/webhook
+      - key: CORS_ORIGINS
+        value: ""
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true # base64, 32 bytes — keep it forever, back it up
+      - key: BANK_ADMIN_EMAIL
+        sync: false
+      - key: BANK_ADMIN_PASSWORD
+        sync: false # 12+ chars; change it after first sign-in
+      - key: SIGNUP_BONUS
+        value: "0"
+      - key: MAX_TRANSFER
+        value: "10000"
+      - key: DAILY_TRANSFER_LIMIT
+        value: "50000"
+      - key: MAIL_MODE
+        value: smtp
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+
+  - type: web
+    name: s-taler
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: >-
+      cd apps/staler-web && npm ci && npm run build &&
+      cd ../staler-api && npm ci && npm run build && npm prune --omit=dev
+    startCommand: cd apps/staler-api && node dist/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - fromGroup: taler-shared
+      - key: DATABASE_URL
+        sync: false # same Supabase database as the bank (schema public)
+      - key: DB_SCHEMA
+        value: public
+      - key: PUBLIC_URL
+        sync: false # e.g. https://s-taler.onrender.com
+      - key: BANK_API_URL
+        sync: false # e.g. https://talerbank.onrender.com
+      - key: CORS_ORIGINS
+        value: ""
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: LEGACY_ENCRYPTION_KEY
+        sync: false # the ENCRYPTION_KEY of the OLD S-Taler server, to read old encrypted data; leave empty if none
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SUPABASE_URL
+        sync: false # optional: Supabase Storage for product files
+      - key: SUPABASE_SERVICE_KEY
+        sync: false # optional, server-side only — never put it in the web or Android app
+      - key: MAIL_MODE
+        value: smtp
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false

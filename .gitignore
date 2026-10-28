@@ -1,0 +1,30 @@
+# dependencies & builds
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.keystore
+*.jks
+keystore.properties
+
+# the Android projects are generated and hardened in CI (scripts/android/prepare.mjs)
+apps/*/android/
+apps/*/ios/
+*.apk
+*.aab
+
+# os / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

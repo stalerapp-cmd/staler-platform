@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------ tokens
+   Tatreez palette: night indigo, cross-stitch red, olive and gold thread. */
+:root {
+  --bg: 244 245 249;
+  --surface: 255 255 255;
+  --sunk: 236 238 245;
+  --ink: 20 27 61;
+  --muted: 91 99 131;
+  --line: 221 225 236;
+  --stitch: 200 52 74;
+  --olive: 94 122 46;
+  --gold: 217 167 58;
+  --night: 20 27 61;
+  --sky: 64 112 214;
+  color-scheme: light;
+}
+[data-theme='dark'] {
+  --bg: 13 18 48;
+  --surface: 22 29 69;
+  --sunk: 17 23 58;
+  --ink: 238 240 250;
+  --muted: 154 163 199;
+  --line: 42 51 102;
+  --stitch: 226 80 106;
+  --olive: 157 187 95;
+  --gold: 233 192 96;
+  --night: 8 11 32;
+  --sky: 120 160 255;
+  color-scheme: dark;
+}
+
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; text-size-adjust: 100%; }
+  body {
+    @apply bg-bg text-ink font-body antialiased;
+    font-size: 15.5px;
+    line-height: 1.6;
+    min-height: 100dvh;
+    font-feature-settings: 'tnum' 0;
+  }
+  h1, h2, h3 { @apply font-display; letter-spacing: -0.01em; line-height: 1.2; }
+  :focus-visible { outline: 2.5px solid rgb(var(--sky)); outline-offset: 2px; border-radius: 10px; }
+  ::selection { background: rgb(var(--stitch) / 0.22); }
+  input, textarea, select { font: inherit; }
+  [dir='rtl'] .flip-rtl { transform: scaleX(-1); }
+}
+
+@layer components {
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1, 'lnum' 1; direction: ltr; unicode-bidi: isolate; }
+  .card { @apply bg-surface rounded-2xl border border-line/70 shadow-lift; }
+  .field { @apply w-full rounded-xl border border-line bg-surface px-4 py-3 text-ink placeholder:text-muted/70 outline-none transition; }
+  .field:focus { border-color: rgb(var(--sky)); box-shadow: 0 0 0 4px rgb(var(--sky) / 0.15); }
+  .field[aria-invalid='true'] { border-color: rgb(var(--stitch)); box-shadow: 0 0 0 4px rgb(var(--stitch) / 0.12); }
+  .skeleton { background: linear-gradient(90deg, rgb(var(--sunk)) 0, rgb(var(--line)) 40%, rgb(var(--sunk)) 80%); background-size: 800px 100%; @apply animate-shimmer rounded-lg; }
+  /* A quiet cross-stitch ground used behind hero areas. */
+  .stitch-ground {
+    background-image:
+      radial-gradient(circle at 1px 1px, rgb(var(--ink) / 0.07) 1px, transparent 1.6px);
+    background-size: 14px 14px;
+  }
+}
+
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+.safe-top { padding-top: max(env(safe-area-inset-top), 0px); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
