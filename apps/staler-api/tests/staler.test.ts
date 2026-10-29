@@ -695,3 +695,13 @@ describe('account deletion', () => {
     expect(row.rows[0].full_name).toBe('Deleted user');
   });
 });
+
+describe('Google sign-in hand-off for the app', () => {
+  it('refuses unknown codes and wrong verifiers', async () => {
+    const r = await request(app).post('/api/auth/google/redeem').send({ code: 'x'.repeat(43), verifier: 'y'.repeat(43) });
+    expect(r.status).toBe(401);
+    expect(r.body.error.code).toBe('GOOGLE_HANDOFF');
+    const bad = await request(app).post('/api/auth/google/handoff').send({ credential: 'z'.repeat(120), challenge: 'short' });
+    expect(bad.status).toBe(400);
+  });
+});

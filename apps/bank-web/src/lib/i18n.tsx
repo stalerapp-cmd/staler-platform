@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 const en = {
   brand: { name: 'TalerBank', tagline: 'Your money, safe. Your bank, in your pocket.' },
+  navg: { banking: 'Banking', connect: 'Connections', admin: 'Administration', collapse: 'Collapse menu', expand: 'Expand menu', support: 'Support', supportLead: 'We answer every message. Pick what suits you.', emailUs: 'E-mail support', chatStaler: 'Chat with us in S-Taler', chatStalerD: 'Opens the support chat in your S-Taler wallet.', emailD: 'Write to us — we reply by e-mail.', hello: 'Hello' },
   mailtest: { title: 'E-mail check', lead: 'Send a test code to your own e-mail and see exactly what happened.', send: 'Send test e-mail', ok: 'Sent to {to}. If it isn’t in your inbox within a minute, look in Spam or Promotions and mark it “Not spam” — that teaches Gmail to deliver the next ones.', fail: 'Sending failed: {error}' },
   bio: { unlockTitle: 'Unlock', unlockReason: 'Confirm it’s you', unlock: 'Unlock with fingerprint', usePassword: 'Sign in with password instead', lockedLead: 'Locked to keep your money safe.', enableTitle: 'Open with your fingerprint?', enableLead: 'Next time, unlock with your fingerprint or phone PIN instead of typing your password. You can turn this off in Settings.', enable: 'Turn on', notNow: 'Not now', enabled: 'Fingerprint unlock is on', toggle: 'Unlock with fingerprint', toggleD: 'Use your fingerprint, face or phone PIN instead of your password on this phone.' },
   account: { user: 'Customer', admin: 'Admin', super: 'Super admin' } as Record<string, string>,
@@ -164,6 +165,7 @@ type Dict = typeof en;
 
 const ar: Dict = {
   brand: { name: 'TalerBank', tagline: 'فلوسك بأمان، وبنكك بجيبتك.' },
+  navg: { banking: 'الخدمات البنكية', connect: 'الربط', admin: 'الإدارة', collapse: 'صغّر القائمة', expand: 'كبّر القائمة', support: 'الدعم', supportLead: 'منرد على كل رسالة. اختار اللي بناسبك.', emailUs: 'راسل الدعم بالإيميل', chatStaler: 'احكي معنا بـ S-Taler', chatStalerD: 'بيفتح محادثة الدعم بمحفظتك S-Taler.', emailD: 'اكتبلنا — ومنرد عليك بالإيميل.', hello: 'مرحبا' },
   mailtest: { title: 'فحص الإيميل', lead: 'ابعت رمز تجريبي لإيميلك وشوف شو صار بالزبط.', send: 'ابعت إيميل تجريبي', ok: 'انبعت على {to}. إذا ما وصل الوارد خلال دقيقة، افحص البريد المزعج (Spam) أو العروض (Promotions) واكبس «ليس رسالة مزعجة» — هيك جيميل بيتعلّم يوصّل الجاية للوارد.', fail: 'ما زبط الإرسال: {error}' },
   bio: { unlockTitle: 'فتح القفل', unlockReason: 'أكّد إنه إنت', unlock: 'افتح بالبصمة', usePassword: 'ادخل بكلمة المرور بدلها', lockedLead: 'مقفول عشان تضل مصاريك بأمان.', enableTitle: 'بدك تفتح ببصمتك؟', enableLead: 'المرة الجاية افتح ببصمتك أو رمز قفل الجوال بدل ما تكتب كلمة المرور. بتقدر تطفيها من الإعدادات.', enable: 'شغّلها', notNow: 'مش هلّأ', enabled: 'تم تفعيل الفتح بالبصمة', toggle: 'الفتح بالبصمة', toggleD: 'استخدم بصمتك أو وجهك أو رمز قفل الجوال بدل كلمة المرور على هالجوال.' },
   account: { user: 'عميل', admin: 'مدير', super: 'المدير العام' },

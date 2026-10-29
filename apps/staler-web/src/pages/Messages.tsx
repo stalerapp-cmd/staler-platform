@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Copy, CornerUpLeft, ExternalLink, LifeBuoy, MessageCirclePlus, MessagesSquare, Pencil, SendHorizontal, Smile, Trash2, UserPlus, X } from 'lucide-react';
 import { del, get, patch, post, PUBLIC_ORIGIN } from '../lib/api';
 import { useI18n } from '../lib/i18n';
@@ -458,6 +458,16 @@ export default function Messages() {
   const [newOpen, setNewOpen] = useState(false);
   const confirm = useConfirm();
   const current = convs.data?.conversations.find((c) => String(c.id) === id);
+  const nav = useNavigate();
+  const [sp] = useSearchParams();
+  // ?support=1 (e.g. from TalerBank's support button) opens the support chat straight away.
+  useEffect(() => {
+    if (sp.get('support') !== '1') return;
+    post('/api/messages/conversations', { type: 'support' })
+      .then((r) => nav(`/app/messages/${r.conversationId}`, { replace: true }))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const other = current?.type !== 'support' ? current?.participants?.[0] : null;
 
   return (

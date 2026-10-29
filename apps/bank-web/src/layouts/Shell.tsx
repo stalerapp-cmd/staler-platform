@@ -1,10 +1,16 @@
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRightLeft,
   Bell,
+  ChevronDown,
+  LifeBuoy,
+  Mail,
+  MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
   BookText,
   FileClock,
   Home,
@@ -35,7 +41,8 @@ import { get, post } from '../lib/api';
 import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { localize, type Notice } from '../lib/notifications';
-import { Emblem } from '../components/Guilloche';
+import { Emblem, Guilloche } from '../components/Guilloche';
+import { usePublicConfig } from '../lib/config';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 import { useConfirm } from '../components/Confirm';
@@ -47,45 +54,87 @@ interface NavItem {
   end?: boolean;
   perm?: string;
 }
+interface NavGroup {
+  id: string;
+  label: string;
+  items: NavItem[];
+}
+const readLS = (k: string) => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+const writeLS = (k: string, v: string) => {
+  try {
+    localStorage.setItem(k, v);
+  } catch {
+    /* private mode */
+  }
+};
 
 function useNav() {
   const { t } = useI18n();
   const { user } = useAuth();
   const { can } = usePerm();
-  const main: NavItem[] = [
-    { to: '/app', label: t.nav.overview, icon: Home, end: true },
+  const quick: NavItem[] = [
     { to: '/app/transfer', label: t.nav.transfer, icon: ArrowRightLeft },
-    { to: '/app/transactions', label: t.nav.transactions, icon: BookText },
     { to: '/app/requests', label: t.nav.requests, icon: QrCode },
     { to: '/app/scan', label: t.nav.scan, icon: ScanLine },
-    { to: '/app/wallet', label: t.nav.wallet, icon: Wallet },
-    { to: '/app/apps', label: t.nav.apps, icon: KeyRound },
   ];
-  const role: NavItem[] = [];
+  const groups: NavGroup[] = [
+    {
+      id: 'banking',
+      label: t.navg.banking,
+      items: [
+        { to: '/app', label: t.nav.overview, icon: Home, end: true },
+        { to: '/app/transactions', label: t.nav.transactions, icon: BookText },
+      ],
+    },
+    {
+      id: 'connect',
+      label: t.navg.connect,
+      items: [
+        { to: '/app/wallet', label: t.nav.wallet, icon: Wallet },
+        { to: '/app/apps', label: t.nav.apps, icon: KeyRound },
+      ],
+    },
+  ];
   if (user?.role === 'admin') {
-    role.push(
-      { to: '/app/admin', label: t.nav.admin, icon: LayoutDashboard, end: true },
-      ...([
-        { to: '/app/admin/customers', label: t.nav.customers, icon: Users, perm: 'customers.view' },
-        { to: '/app/admin/ledger', label: t.nav.ledger, icon: Landmark, perm: 'ledger.view' },
-        { to: '/app/admin/exchange', label: t.nav.exchange, icon: Vault, perm: 'exchange.view' },
-        { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
-        { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
-        { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },
-      ] as NavItem[]).filter((i) => can(i.perm!)),
-    );
+    groups.unshift({
+      id: 'admin',
+      label: t.navg.admin,
+      items: [
+        { to: '/app/admin', label: t.nav.admin, icon: LayoutDashboard, end: true },
+        ...([
+          { to: '/app/admin/customers', label: t.nav.customers, icon: Users, perm: 'customers.view' },
+          { to: '/app/admin/ledger', label: t.nav.ledger, icon: Landmark, perm: 'ledger.view' },
+          { to: '/app/admin/exchange', label: t.nav.exchange, icon: Vault, perm: 'exchange.view' },
+          { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
+          { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
+          { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },
+        ] as NavItem[]).filter((i) => can(i.perm!)),
+      ],
+    });
   }
-  return { main, role, settings: { to: '/app/settings', label: t.nav.settings, icon: Settings2 } as NavItem };
+  return { quick, groups, settings: { to: '/app/settings', label: t.nav.settings, icon: Settings2 } as NavItem };
 }
 
-function SideLink({ item, onClick, animated = true }: { item: NavItem; onClick?: () => void; animated?: boolean }) {
+function SideLink({ item, onClick, animated = true, rail = false }: { item: NavItem; onClick?: () => void; animated?: boolean; rail?: boolean }) {
   return (
     <NavLink
       to={item.to}
       end={item.end}
       onClick={onClick}
+      title={rail ? item.label : undefined}
+      aria-label={rail ? item.label : undefined}
       className={({ isActive }) =>
-        cx('group relative flex items-center gap-3 rounded-xl px-2 py-1.5 text-[15px] transition', isActive ? (animated ? 'text-ink' : 'bg-sunk font-medium text-ink') : 'text-muted hover:bg-sunk hover:text-ink')
+        cx(
+          'group relative flex items-center gap-3 rounded-xl py-1.5 text-[15px] transition',
+          rail ? 'justify-center' : 'px-2',
+          isActive ? (animated ? 'text-ink' : 'bg-sunk font-medium text-ink') : 'text-muted hover:bg-sunk hover:text-ink',
+        )
       }
     >
       {({ isActive }) => (
@@ -99,10 +148,115 @@ function SideLink({ item, onClick, animated = true }: { item: NavItem; onClick?:
           >
             <item.icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.2 : 1.8} />
           </span>
-          <span className="relative">{item.label}</span>
+          {!rail && <span className="relative truncate">{item.label}</span>}
         </>
       )}
     </NavLink>
+  );
+}
+
+function QuickTiles({ items, onClick, rail }: { items: NavItem[]; onClick?: () => void; rail?: boolean }) {
+  return (
+    <div className={cx('mb-3 grid gap-2', rail ? 'grid-cols-1' : 'grid-cols-3')}>
+      {items.map((i, n) => (
+        <NavLink
+          key={i.to}
+          to={i.to}
+          onClick={onClick}
+          title={rail ? i.label : undefined}
+          aria-label={i.label}
+          className={({ isActive }) =>
+            cx(
+              'group relative flex flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl text-xs font-medium transition active:scale-95',
+              rail ? 'h-12' : 'h-[70px]',
+              isActive ? 'bg-gold text-night shadow-md shadow-gold/30' : n === 0 ? 'bg-night text-[#F3DDA6] dark:bg-white/10' : 'bg-sunk text-ink hover:bg-line/70',
+            )
+          }
+        >
+          <span className="pointer-events-none absolute inset-[4px] rounded-[13px] border border-dashed border-current opacity-25" />
+          <i.icon className="h-5 w-5 transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-110" strokeWidth={1.9} />
+          {!rail && <span>{i.label}</span>}
+        </NavLink>
+      ))}
+    </div>
+  );
+}
+
+function Group({ g, onClick, animated, rail }: { g: NavGroup; onClick?: () => void; animated: boolean; rail: boolean }) {
+  const loc = useLocation();
+  const holdsActive = g.items.some((i) => (i.end ? loc.pathname === i.to : loc.pathname.startsWith(i.to)));
+  const [open, setOpen] = useState(() => readLS(`tb.nav.${g.id}`) !== '0');
+  const shown = rail || open || holdsActive;
+  if (!g.items.length) return null;
+  return (
+    <div className="mb-1.5">
+      {rail ? (
+        <div className="mx-3 my-2 border-t border-dashed border-line" />
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            writeLS(`tb.nav.${g.id}`, open ? '0' : '1');
+            setOpen(!open);
+          }}
+          aria-expanded={shown}
+          className="flex w-full items-center justify-between rounded-lg px-2 pb-1 pt-2.5 text-[12px] font-semibold text-muted/90 transition hover:text-ink"
+        >
+          <span className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-gold" />
+            {g.label}
+          </span>
+          <ChevronDown className={cx('h-4 w-4 transition-transform duration-300', shown ? 'rotate-0' : 'ltr:-rotate-90 rtl:rotate-90')} />
+        </button>
+      )}
+      <AnimatePresence initial={false}>
+        {shown && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-0.5 overflow-hidden">
+            {g.items.map((i) => (
+              <SideLink key={i.to} item={i} onClick={onClick} animated={animated} rail={rail} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** Support: e-mail, or the support chat in the S-Taler wallet. */
+function SupportSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
+  const cfg = usePublicConfig();
+  const mail = (cfg?.supportEmail as string | null) ?? null;
+  const items = [
+    ...(mail ? [{ href: `mailto:${mail}?subject=TalerBank`, icon: Mail, title: t.navg.emailUs, d: `${t.navg.emailD} ${mail}`, c: 'bg-night text-[#F3DDA6]' }] : []),
+    { href: 'https://s-taler.onrender.com/app/messages?support=1', icon: MessageCircle, title: t.navg.chatStaler, d: t.navg.chatStalerD, c: 'bg-olive text-white' },
+  ];
+  return (
+    <Sheet open={open} onClose={onClose} title={t.navg.support}>
+      <p className="mb-4 text-muted">{t.navg.supportLead}</p>
+      <div className="space-y-3">
+        {items.map((i, n) => (
+          <motion.a
+            key={i.href}
+            href={i.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: n * 0.06 }}
+            className="framed flex items-center gap-4 rounded-2xl bg-sunk/60 p-4 transition hover:bg-sunk"
+          >
+            <span className={cx('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', i.c)}>
+              <i.icon className="h-6 w-6" />
+            </span>
+            <span className="min-w-0">
+              <span className="block font-semibold">{i.title}</span>
+              <span className="block break-words text-sm text-muted">{i.d}</span>
+            </span>
+          </motion.a>
+        ))}
+      </div>
+    </Sheet>
   );
 }
 
@@ -178,11 +332,13 @@ export function TopControls() {
 
 export default function AppShell({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth();
-  const { t, lang } = useI18n();
-  const { main, role, settings } = useNav();
+  const { t } = useI18n();
+  const { quick, groups, settings } = useNav();
   const loc = useLocation();
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
+  const [support, setSupport] = useState(false);
+  const [rail, setRail] = useState(() => readLS('tb.rail') === '1');
   const confirm = useConfirm();
   const signOut = async () => {
     if (!(await confirm({ title: t.ask.signOutTitle, body: t.ask.signOutBody, confirmLabel: t.ask.signOutOk }))) return;
@@ -211,77 +367,97 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     { to: '/app/transactions', label: t.nav.statementsTab, icon: BookText },
   ];
 
-  const sidebar = (onClick?: () => void, animated = true) => (
-    <nav className="flex h-full flex-col gap-1" aria-label="Main">
-      {main.map((i) => (
-        <SideLink key={i.to} item={i} onClick={onClick} animated={animated} />
+  const sidebar = (onClick?: () => void, animated = true, isRail = false) => (
+    <nav className="flex h-full flex-col" aria-label="Main">
+      <QuickTiles items={quick} onClick={onClick} rail={isRail} />
+      {groups.map((g) => (
+        <Group key={g.id} g={g} onClick={onClick} animated={animated} rail={isRail} />
       ))}
-      {role.length > 0 && <div className="mx-3 my-3 border-t border-dashed border-line" />}
-      {role.map((i) => (
-        <SideLink key={i.to} item={i} onClick={onClick} animated={animated} />
-      ))}
-      <div className="mt-auto pt-4">
-        <SideLink item={settings} onClick={onClick} animated={animated} />
+      <div className="mt-auto flex flex-col gap-0.5 border-t border-dashed border-line pt-3">
+        <button
+          onClick={() => {
+            onClick?.();
+            setSupport(true);
+          }}
+          title={isRail ? t.navg.support : undefined}
+          className={cx('group flex items-center gap-3 rounded-xl py-1.5 text-[15px] text-olive transition hover:bg-olive/10', isRail ? 'justify-center' : 'px-2')}
+        >
+          <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-olive/12 transition group-hover:rotate-12">
+            <LifeBuoy className="h-[18px] w-[18px]" />
+          </span>
+          {!isRail && t.navg.support}
+        </button>
+        <SideLink item={settings} onClick={onClick} animated={animated} rail={isRail} />
         <button
           onClick={signOut}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] text-muted transition hover:bg-stitch/10 hover:text-stitch"
+          title={isRail ? t.common.signOut : undefined}
+          className={cx('flex items-center gap-3 rounded-xl py-1.5 text-[15px] text-muted transition hover:bg-stitch/10 hover:text-stitch', isRail ? 'justify-center' : 'px-2')}
         >
-          <LogOut className="h-5 w-5 flip-rtl" />
-          {t.common.signOut}
+          <span className="grid h-8 w-8 place-items-center">
+            <LogOut className="h-[18px] w-[18px] flip-rtl" />
+          </span>
+          {!isRail && t.common.signOut}
         </button>
       </div>
     </nav>
   );
 
   return (
-    <div className="safe-x min-h-dvh lg:grid lg:grid-cols-[260px_1fr]">
-      <aside className="sticky top-0 hidden h-dvh flex-col border-e border-line bg-surface/60 px-4 py-6 backdrop-blur lg:flex">
-        <NavLink to="/app" className="mb-8 flex items-center gap-3 px-2">
-          <Emblem />
-          <span className="font-display text-2xl">TalerBank</span>
-        </NavLink>
-        <div className="min-h-0 flex-1 overflow-y-auto">{sidebar()}</div>
+    <div className={cx('app-ground safe-x min-h-dvh lg:grid lg:transition-[grid-template-columns] lg:duration-300', rail ? 'lg:grid-cols-[84px_1fr]' : 'lg:grid-cols-[272px_1fr]')}>
+      <aside className="sticky top-0 hidden h-dvh flex-col border-e border-line bg-surface/80 py-5 backdrop-blur lg:flex">
+        <div className={cx('mb-5 flex items-center', rail ? 'flex-col gap-3 px-2' : 'justify-between px-5')}>
+          <NavLink to="/app" className="flex items-center gap-3">
+            <Emblem />
+            {!rail && <span className="font-display text-2xl">TalerBank</span>}
+          </NavLink>
+          <button
+            onClick={() => {
+              writeLS('tb.rail', rail ? '0' : '1');
+              setRail(!rail);
+            }}
+            className="grid h-9 w-9 place-items-center rounded-xl text-muted transition hover:bg-sunk hover:text-ink"
+            aria-label={rail ? t.navg.expand : t.navg.collapse}
+            title={rail ? t.navg.expand : t.navg.collapse}
+          >
+            {rail ? <PanelLeftOpen className="h-5 w-5 flip-rtl" /> : <PanelLeftClose className="h-5 w-5 flip-rtl" />}
+          </button>
+        </div>
+        <div className={cx('min-h-0 flex-1 overflow-y-auto overflow-x-hidden', rail ? 'px-3' : 'px-4')}>{sidebar(undefined, true, rail)}</div>
       </aside>
 
       <div className="min-w-0">
         <BioOffer />
-        <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-bg/80 backdrop-blur-md">
+        <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-bg/85 backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
-            <div className="flex min-w-0 items-center gap-1">
+            <div className="flex min-w-0 items-center gap-1.5">
               {loc.pathname !== '/app' && <BackButton />}
-              <div className="flex items-center gap-2 lg:hidden">
-                <button onClick={() => setMenu(true)} className="rounded-xl p-2.5 text-muted hover:bg-sunk" aria-label={t.common.menu}>
-                  <Menu className="h-5 w-5" />
-                </button>
-                <Emblem className="h-8 w-8" />
-              </div>
-              <div className="hidden text-sm text-muted lg:block">
-                {t.home.greeting}
-                {lang === 'ar' ? '، ' : ', '}
-                <span className="font-medium text-ink">{user?.full_name?.split(' ')[0]}</span>
-              </div>
+              <NavLink to="/app/settings" className="flex min-w-0 items-center gap-2.5 rounded-2xl py-1 pe-2 transition hover:bg-sunk" aria-label={t.nav.settings}>
+                <span className="relative shrink-0 rounded-full ring-2 ring-gold/50">
+                  <Avatar name={user?.full_name} size={38} />
+                </span>
+                <span className="min-w-0 leading-tight">
+                  <span className="block text-[11px] text-muted">{t.navg.hello}</span>
+                  <span className="block max-w-[34vw] truncate text-sm font-semibold sm:max-w-[220px]">{user?.full_name?.split(' ')[0]}</span>
+                </span>
+                <RoleBadge className="hidden md:inline-flex" />
+              </NavLink>
             </div>
             <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-              {/* Small phones: language and theme live in the side menu to keep the bar uncluttered. */}
               <div className="hidden sm:block">
                 <TopControls />
               </div>
+              <button onClick={() => setSupport(true)} className="rounded-xl p-2.5 text-olive transition hover:bg-olive/10" aria-label={t.navg.support} title={t.navg.support}>
+                <LifeBuoy className="h-5 w-5" />
+              </button>
               <Notifications />
               <button
                 onClick={signOut}
-                className="rounded-xl p-2.5 text-muted transition hover:bg-stitch/10 hover:text-stitch active:scale-95"
+                className="hidden rounded-xl p-2.5 text-muted transition hover:bg-stitch/10 hover:text-stitch active:scale-95 sm:block"
                 aria-label={t.common.signOut}
                 title={t.common.signOut}
               >
                 <LogOut className="h-5 w-5 flip-rtl" />
               </button>
-              <NavLink to="/app/settings" className="ms-1 flex items-center gap-2 rounded-full" aria-label={t.nav.settings}>
-                <RoleBadge className="hidden sm:inline-flex" />
-                <span className="relative">
-                  <Avatar name={user?.full_name} size={36} />
-                  <RoleBadge compact className="absolute -bottom-1 -end-1 !px-1 !py-0.5 ring-2 ring-bg sm:hidden" />
-                </span>
-              </NavLink>
             </div>
           </div>
         </header>
@@ -323,45 +499,44 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         </div>
       </nav>
 
-      {/* Side menu: always mounted and driven by CSS, so it can always be opened again
-          and never leaves an invisible layer over the app. */}
-      <div
-        className={cx('fixed inset-0 z-50 lg:hidden', !menu && 'pointer-events-none')}
-        aria-hidden={!menu}
-        {...((!menu ? { inert: '' } : {}) as any)}
-      >
-        <div
-          className={cx('absolute inset-0 bg-night/50 transition-opacity duration-300', menu ? 'opacity-100' : 'opacity-0')}
-          onClick={() => setMenu(false)}
-        />
+      <div className={cx('fixed inset-0 z-50 lg:hidden', !menu && 'pointer-events-none')} aria-hidden={!menu} {...((!menu ? { inert: '' } : {}) as any)}>
+        <div className={cx('absolute inset-0 bg-night/55 backdrop-blur-[2px] transition-opacity duration-300', menu ? 'opacity-100' : 'opacity-0')} onClick={() => setMenu(false)} />
         <aside
           role="dialog"
           aria-modal="true"
           aria-label={t.common.menu}
           className={cx(
-            'safe-top safe-bottom absolute inset-y-0 start-0 flex w-[84%] max-w-xs flex-col bg-surface px-4 py-5 shadow-card transition-transform duration-300 ease-out will-change-transform',
+            'safe-bottom absolute inset-y-0 start-0 flex w-[86%] max-w-[340px] flex-col overflow-hidden bg-surface shadow-card transition-transform duration-300 ease-out will-change-transform ltr:rounded-r-[28px] rtl:rounded-l-[28px]',
             menu ? 'translate-x-0' : 'ltr:-translate-x-full rtl:translate-x-full',
           )}
         >
-              <div className="mb-6 flex items-center justify-between px-2">
-                <div className="flex items-center gap-3">
-                  <Avatar name={user?.full_name} />
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{user?.full_name}</p>
-                    <p className="truncate text-xs text-muted">{user?.email}</p>
-                    <RoleBadge className="mt-1.5" />
-                  </div>
+          <div className="note note-vault safe-top overflow-hidden px-5 pb-5 pt-4">
+            <div className="pointer-events-none absolute -end-14 -top-10 h-44 w-44 opacity-60">
+              <Guilloche className="h-full w-full" color="#E2C27A" draw={false} />
+            </div>
+            <div className="relative flex items-start justify-between">
+              <NavLink to="/app/settings" onClick={() => setMenu(false)} className="flex min-w-0 items-center gap-3">
+                <span className="rounded-full ring-2 ring-[#E2C27A]/60">
+                  <Avatar name={user?.full_name} size={48} />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-[#FBF6EA]">{user?.full_name}</p>
+                  <p className="truncate text-xs text-[#FBF6EA]/70">{user?.email}</p>
+                  <RoleBadge onDark className="mt-1.5" />
                 </div>
-                <button onClick={() => setMenu(false)} className="rounded-lg p-1.5 text-muted" aria-label={t.common.close}>
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="mb-3 flex justify-end border-b border-line pb-3 sm:hidden">
-                <TopControls />
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto pb-6">{sidebar(() => setMenu(false), false)}</div>
+              </NavLink>
+              <button onClick={() => setMenu(false)} className="rounded-xl p-2 text-[#FBF6EA]/80 hover:bg-white/10" aria-label={t.common.close}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="relative mt-3 flex justify-end sm:hidden [&_button]:text-[#FBF6EA]/85">
+              <TopControls />
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4">{sidebar(() => setMenu(false), false)}</div>
         </aside>
       </div>
+      <SupportSheet open={support} onClose={() => setSupport(false)} />
     </div>
   );
 }

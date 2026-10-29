@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Inbox } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
+import { isNative } from '../lib/api';
 import { Button } from './ui';
 
 /** Back arrow for the sign-in screens: goes back if there is somewhere to go, otherwise home. */
 export function AuthBack() {
   const { t } = useI18n();
   const nav = useNavigate();
+  // In the app the sign-in screen is the first screen: with nothing behind it, a back arrow would do nothing.
+  if (isNative && (window.history.state?.idx ?? 0) === 0) return <span className="w-2" />;
   return (
     <button
       type="button"

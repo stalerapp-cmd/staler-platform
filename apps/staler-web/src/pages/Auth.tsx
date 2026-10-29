@@ -85,7 +85,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           <AuthBack />
           <TopControls />
         </div>
-        <div className="relative -mt-10 flex flex-1 justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center">
+        <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center">
           <motion.div
             initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}

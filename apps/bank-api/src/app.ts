@@ -86,6 +86,7 @@ export function createApp(): Express {
         publicUrl: env.PUBLIC_URL,
         googleClientId: env.GOOGLE_CLIENT_ID ?? null,
         sms: smsEnabled(),
+        supportEmail: env.SUPPORT_EMAIL ?? (env.SMTP_USER?.includes('@') ? env.SMTP_USER : null),
       },
     });
   });

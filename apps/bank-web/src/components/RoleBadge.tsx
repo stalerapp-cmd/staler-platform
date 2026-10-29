@@ -6,15 +6,16 @@ import { cx } from './ui';
 const ICONS: Record<string, typeof UserIcon> = { user: UserIcon, merchant: Store, exchange: Briefcase, admin: ShieldCheck, super: Crown };
 
 /** The account type, always visible: personal, business, admin… */
-export function RoleBadge({ className, compact = false }: { className?: string; compact?: boolean }) {
+export function RoleBadge({ className, compact = false, onDark = false }: { className?: string; compact?: boolean; onDark?: boolean }) {
   const { user } = useAuth();
   const { t } = useI18n();
   if (!user) return null;
   const u = user as typeof user & { admin_level?: string | null };
   const key: string = u.role === 'admin' && u.admin_level === 'super_admin' ? 'super' : u.role;
   const Icon = ICONS[key] ?? BadgeCheck;
-  const tone =
-    key === 'super' || key === 'admin'
+  const tone = onDark
+    ? 'bg-white/15 text-[#FBF6EA] ring-white/30'
+    : key === 'super' || key === 'admin'
       ? 'bg-gold/15 text-gold ring-gold/30'
       : key === 'merchant' || key === 'exchange'
         ? 'bg-olive/15 text-olive ring-olive/30'

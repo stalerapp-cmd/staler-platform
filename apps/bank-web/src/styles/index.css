@@ -113,3 +113,35 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 /* Grid and flex children may shrink below their content (long names, IBANs, truncated text)
    instead of widening the page on phones. */
 .grid > * { min-width: 0; }
+
+/* ------------------------------------------------------------- page note
+   Every bank page opens on a "banknote": engraved hairlines, a brass guilloché
+   rosette drawing itself in, and a dashed security frame. */
+.note { position: relative; isolation: isolate; color: #F5EFE0; }
+.note::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; opacity: 0.14;
+  background-image: repeating-linear-gradient(115deg, currentColor 0 1px, transparent 1px 7px);
+  -webkit-mask-image: linear-gradient(to var(--note-fade, left), #000, transparent 75%);
+  mask-image: linear-gradient(to var(--note-fade, left), #000, transparent 75%);
+}
+[dir='rtl'] .note { --note-fade: right; }
+.note::after { content: ''; position: absolute; inset: 7px; border-radius: 20px; pointer-events: none; border: 1px dashed rgb(201 164 92 / 0.55); }
+.note-vault { background: radial-gradient(120% 140% at 85% 0%, #1E3A32 0%, #0C1A17 60%); }
+.note-brass { background: radial-gradient(120% 140% at 85% 0%, #B9913F 0%, #7A5C1E 70%); }
+.note-ruby { background: radial-gradient(120% 140% at 85% 0%, #B33A3F 0%, #5E1C24 75%); }
+.note-sage { background: radial-gradient(120% 140% at 85% 0%, #4F8A70 0%, #1F4A3A 75%); }
+.note-sky { background: radial-gradient(120% 140% at 85% 0%, #3E7DB4 0%, #163A5C 75%); }
+.note .lead { color: rgb(245 239 224 / 0.8); }
+
+.app-ground {
+  background-color: rgb(var(--bg));
+  background-image: radial-gradient(rgb(var(--ink) / 0.05) 1px, transparent 1.3px);
+  background-size: 18px 18px;
+  background-attachment: fixed;
+}
+.framed { position: relative; }
+.framed::after { content: ''; position: absolute; inset: 6px; border-radius: inherit; border: 1px dashed rgb(var(--brass) / 0.4); pointer-events: none; }
+.sewn { position: relative; }
+.sewn::after { content: ''; position: absolute; inset: 6px; border-radius: inherit; border: 1px dashed rgb(var(--brass) / 0.4); pointer-events: none; }
+@keyframes floaty { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-10px) rotate(6deg); } }
+.floaty { animation: floaty 7s ease-in-out infinite; }

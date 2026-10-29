@@ -23,9 +23,26 @@ export function AuthLayout({ children }: { children: ReactNode }) {
     { icon: KeySquare, text: t.auth.trust3 },
   ];
   return (
-    <div className="grid min-h-dvh bg-bg lg:grid-cols-[1fr_1.05fr]">
-      <div className="flex flex-col">
-        <div className="safe-top flex items-center justify-between px-5 py-4">
+    <div className="app-ground grid min-h-dvh lg:grid-cols-[1fr_1.05fr]">
+      <div className="flex min-h-dvh flex-col">
+        {/* Phones: a banknote header the form card rises over */}
+        <div className="note note-vault safe-top relative overflow-hidden px-4 pb-16 pt-2 lg:hidden">
+          <div className="pointer-events-none absolute -end-20 -top-16 h-64 w-64 opacity-80">
+            <Guilloche className="h-full w-full" color="#E2C27A" />
+          </div>
+          <div className="relative flex items-center justify-between [&_button]:text-[#FBF6EA]/85">
+            <AuthBack />
+            <TopControls />
+          </div>
+          <div className="relative mt-3 flex items-center gap-3 px-2">
+            <Emblem className="h-12 w-12" />
+            <div>
+              <p className="font-display text-3xl leading-none text-[#FBF6EA]">TalerBank</p>
+              <p className="mt-1.5 text-sm text-[#FBF6EA]/70">{t.brand.tagline}</p>
+            </div>
+          </div>
+        </div>
+        <div className="safe-top hidden items-center justify-between px-6 py-4 lg:flex">
           <div className="flex items-center gap-1">
             <AuthBack />
             <Link to="/" className="flex items-center gap-2.5">
@@ -35,8 +52,13 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           </div>
           <TopControls />
         </div>
-        <div className="flex flex-1 items-center justify-center px-5 pb-12">
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full max-w-md">
+        <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center">
+          <motion.div
+            initial={{ opacity: 0, y: 28 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', bounce: 0.25, duration: 0.7 }}
+            className="framed relative w-full max-w-md rounded-[28px] border border-line/70 bg-surface p-6 shadow-card sm:p-8"
+          >
             {children}
           </motion.div>
         </div>
@@ -49,7 +71,9 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           <ul className="mt-10 space-y-4">
             {trust.map((x, i) => (
               <motion.li key={x.text} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 + i * 0.15 }} className="flex items-center gap-3 text-[#C8D3CC]">
-                <x.icon className="h-5 w-5 text-gold" strokeWidth={1.6} />
+                <span className="grid h-10 w-10 place-items-center rounded-full border border-dashed border-gold/60">
+                  <x.icon className="h-5 w-5 text-gold" strokeWidth={1.6} />
+                </span>
                 {x.text}
               </motion.li>
             ))}
