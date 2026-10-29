@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 /**
  * Palestinian tatreez, drawn the way it is embroidered: every filled cell is
@@ -143,5 +143,71 @@ export function Logo({ className = 'h-9 w-9', animate = false }: { className?: s
       <motion.circle cx="45.5" cy="37" r="3.2" fill="#E9C060" initial={play ? { scale: 0 } : false} animate={{ scale: 1 }} transition={{ delay: 1.1, type: 'spring' }} />
       <circle cx="45.5" cy="37" r="1.2" fill="#141B3D" />
     </svg>
+  );
+}
+
+/** A one-shot burst of cross-stitches flying out from the centre — used when money lands. */
+export function StitchBurst({ count = 14, className }: { count?: number; className?: string }) {
+  const reduce = useReducedMotion();
+  const bits = useMemo(
+    () =>
+      Array.from({ length: count }, (_, i) => {
+        const a = (i / count) * Math.PI * 2 + (i % 2 ? 0.2 : -0.1);
+        const r = 70 + (i % 3) * 26;
+        return { x: Math.cos(a) * r, y: Math.sin(a) * r, c: ['#E2506A', '#E9C060', '#9DBB5F', '#4070D6'][i % 4]!, d: (i % 5) * 0.03, s: 0.7 + (i % 3) * 0.25 };
+      }),
+    [count],
+  );
+  if (reduce) return null;
+  return (
+    <div className={`pointer-events-none absolute left-1/2 top-1/2 ${className ?? ''}`} aria-hidden="true">
+      {bits.map((b, i) => (
+        <motion.svg
+          key={i}
+          viewBox="0 0 10 10"
+          className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2"
+          initial={{ x: 0, y: 0, opacity: 0, scale: 0.2, rotate: 0 }}
+          animate={{ x: b.x, y: b.y, opacity: [0, 1, 1, 0], scale: b.s, rotate: 180 }}
+          transition={{ duration: 1.3, delay: 0.15 + b.d, ease: 'easeOut' }}
+        >
+          <path d="M2 2L8 8M8 2L2 8" stroke={b.c} strokeWidth="2.2" strokeLinecap="round" />
+        </motion.svg>
+      ))}
+    </div>
+  );
+}
+
+/** Two people joined by a thread being stitched between them, a banknote travelling along it. */
+export function MoneyThread({ from, to }: { from: ReactNode; to: ReactNode }) {
+  const reduce = useReducedMotion();
+  return (
+    <div className="relative flex items-center justify-between gap-2 py-2" dir="ltr">
+      <div className="relative z-10">{from}</div>
+      <div className="relative h-10 flex-1">
+        <svg viewBox="0 0 200 40" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
+          <motion.path
+            d="M0 20 C 50 0, 150 40, 200 20"
+            fill="none"
+            stroke="rgb(var(--stitch))"
+            strokeWidth="2"
+            strokeDasharray="6 5"
+            initial={reduce ? false : { pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.9, ease: 'easeInOut' }}
+          />
+        </svg>
+        {!reduce && (
+          <motion.div
+            className="absolute top-1/2 h-5 w-8 -translate-y-1/2 rounded-[5px] border border-white/60 bg-olive shadow-md"
+            initial={{ left: '0%', opacity: 0 }}
+            animate={{ left: ['0%', '85%'], opacity: [0, 1, 1, 0] }}
+            transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 0.6, ease: 'easeInOut' }}
+          >
+            <span className="absolute inset-[3px] rounded-[3px] border border-dashed border-white/50" />
+          </motion.div>
+        )}
+      </div>
+      <div className="relative z-10">{to}</div>
+    </div>
   );
 }

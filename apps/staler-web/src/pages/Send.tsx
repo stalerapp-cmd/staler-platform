@@ -7,11 +7,14 @@ import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { AMOUNT_RE, money } from '../lib/format';
 import { useSecureAction } from '../components/SecureAction';
-import { AmountInput, Avatar, Button, ErrorNote, Field, PageHeader, SuccessMark } from '../components/ui';
+import { AmountInput, Avatar, Button, ErrorNote, Field, PageHeader, SuccessMark, cx } from '../components/ui';
+import { MoneyThread, StitchBurst } from '../components/Tatreez';
+import { useData } from '../lib/hooks';
 
 export default function Send() {
   const { t, lang, err } = useI18n();
-  const { reload } = useAuth();
+  const { reload, user } = useAuth();
+  const contacts = useData<{ contacts: any[] }>('/api/contacts');
   const [params] = useSearchParams();
   const isPayment = params.get('kind') === 'payment';
   const [to, setTo] = useState(params.get('to') ?? '');
@@ -71,7 +74,33 @@ export default function Send() {
         {step === 'form' && (
           <motion.div key="form" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             <PageHeader title={isPayment ? t.scan.payTitle : t.send.title} />
-            <form onSubmit={review} className="space-y-5">
+            {!isPayment && !!contacts.data?.contacts.length && (
+              <div className="-mx-1 mb-5 flex gap-3 overflow-x-auto px-1 pb-2">
+                {[...contacts.data.contacts]
+                  .sort((a, b) => Number(!!b.favourite) - Number(!!a.favourite))
+                  .slice(0, 12)
+                  .map((c, i) => (
+                    <motion.button
+                      type="button"
+                      key={c.id}
+                      initial={{ opacity: 0, y: 12, scale: 0.8 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ delay: 0.05 * i, type: 'spring', bounce: 0.45 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setTo(c.wallet_id)}
+                      className="flex w-[68px] shrink-0 flex-col items-center gap-1.5 text-center"
+                    >
+                      <span className={cx('rounded-full p-[3px] transition', to === c.wallet_id ? 'bg-stitch' : 'bg-transparent')}>
+                        <span className="block rounded-full ring-2 ring-surface">
+                          <Avatar name={c.nickname || c.full_name} src={c.profile_image} size={52} />
+                        </span>
+                      </span>
+                      <span className="w-full truncate text-xs">{c.nickname || c.full_name?.split(' ')[0]}</span>
+                    </motion.button>
+                  ))}
+              </div>
+            )}
+            <form onSubmit={review} className="sewn card space-y-5 p-5 sm:p-6">
               <Field
                 label={t.send.to}
                 placeholder={t.send.toPh}
@@ -95,7 +124,22 @@ export default function Send() {
                   <p className="num font-display text-4xl">{money(amount, lang)}</p>
                 </div>
               ) : (
-                <AmountInput label={t.common.amount} value={amount} onChange={setAmount} autoFocus={!!to} />
+                <div>
+                  <AmountInput label={t.common.amount} value={amount} onChange={setAmount} autoFocus={!!to} />
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {['10', '20', '50', '100', '200'].map((v) => (
+                      <motion.button
+                        key={v}
+                        type="button"
+                        whileTap={{ scale: 0.88 }}
+                        onClick={() => setAmount(v)}
+                        className={cx('num rounded-full border px-3.5 py-1.5 text-sm transition', amount === v ? 'border-night bg-night text-white dark:border-white/30 dark:bg-white/15' : 'border-line hover:border-ink/40')}
+                      >
+                        {v}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
               )}
               <Field label={`${t.send.note} (${t.common.optional})`} value={note} onChange={(e) => setNote(e.target.value)} maxLength={140} />
               <ErrorNote>{error}</ErrorNote>
@@ -107,16 +151,17 @@ export default function Send() {
         )}
 
         {step === 'review' && recipient && (
-          <motion.div key="review" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="card p-6">
-            <p className="text-sm text-muted">{t.send.found}</p>
-            <div className="mt-3 flex items-center gap-3">
-              <Avatar name={recipient.name} size={52} />
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 font-display text-xl">
-                  {recipient.name} <UserCheck className="h-5 w-5 text-olive" />
-                </p>
-                <p className="num truncate text-sm text-muted">{recipient.walletId}</p>
-              </div>
+          <motion.div key="review" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="sewn card p-6">
+            <MoneyThread
+              from={<Avatar name={user?.full_name} src={user?.profile_image} size={52} />}
+              to={<Avatar name={recipient.name} size={52} />}
+            />
+            <p className="mt-4 text-sm text-muted">{t.send.found}</p>
+            <div className="mt-1 min-w-0">
+              <p className="flex items-center gap-2 font-display text-xl">
+                {recipient.name} <UserCheck className="h-5 w-5 text-olive" />
+              </p>
+              <p className="num truncate text-sm text-muted">{recipient.walletId}</p>
             </div>
             <div className="my-6 border-t border-dashed border-line" />
             <p className="text-sm text-muted">{t.common.amount}</p>
@@ -135,8 +180,11 @@ export default function Send() {
         )}
 
         {step === 'done' && (
-          <motion.div key="done" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="card p-8 text-center">
-            <SuccessMark />
+          <motion.div key="done" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="sewn card relative overflow-hidden p-8 text-center">
+            <div className="relative">
+              <StitchBurst />
+              <SuccessMark />
+            </div>
             <h2 className="mt-6 text-2xl">{isPayment ? t.scan.paid : t.send.sent}</h2>
             <p className="mt-2 text-muted">
               <span className="num font-medium text-ink">{money(result?.amount ?? amount, lang)}</span> {t.send.sentLead} {recipient?.name}

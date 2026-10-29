@@ -13,6 +13,9 @@ const BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$
 const RT_KEY = 'st.rt';
 
 export const apiUrl = (path: string) => `${BASE}${path}`;
+/** The public web address for links people share — never the app's internal https://localhost. */
+export const PUBLIC_ORIGIN = isNative ? BASE || 'https://s-taler.onrender.com' : typeof location !== 'undefined' ? location.origin : '';
+export const publicUrl = (path: string) => `${PUBLIC_ORIGIN}${path}`;
 /** Image URLs coming from the API may be relative (/files/…) — make them absolute for the native app. */
 export const assetUrl = (u?: string | null) => (u ? (u.startsWith('/') ? `${BASE}${u}` : u) : null);
 

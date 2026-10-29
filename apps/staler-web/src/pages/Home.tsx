@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowDownToLine, ArrowUpFromLine, Landmark, QrCode, ScanLine, Send, Sparkles } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, HandCoins, Landmark, MapPin, QrCode, ScanLine, Send, Sparkles } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
@@ -29,7 +29,7 @@ export default function Home() {
   const series = wallet.data?.series ?? [];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       <div className="space-y-6">
         {w ? (
           <BalanceCard balance={w.balance} walletId={w.walletId} currency={w.currency} name={user?.full_name ?? ''} frozen={w.frozen} />
@@ -49,6 +49,28 @@ export default function Home() {
             </motion.div>
           ))}
         </div>
+
+        {user?.role === 'exchange' ? (
+          <Link to="/app/agent" className="cloth cloth-gold flex items-center gap-4 overflow-hidden rounded-3xl p-4 shadow-lift">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/20">
+              <HandCoins className="h-6 w-6" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-display text-lg">{t.agent.desk}</span>
+              <span className="lead block truncate text-sm">{t.agent.deskLead}</span>
+            </span>
+          </Link>
+        ) : (
+          <Link to="/app/agents" className="group flex items-center gap-3 rounded-2xl bg-gold/10 p-3.5 ring-1 ring-gold/30 transition hover:bg-gold/15">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gold text-night transition group-hover:rotate-6">
+              <MapPin className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">{t.agent.find}</span>
+              <span className="block truncate text-xs text-muted">{t.agent.findLead}</span>
+            </span>
+          </Link>
+        )}
 
         {link.data && !link.data.linked && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-olive/50 bg-olive/5 p-4">

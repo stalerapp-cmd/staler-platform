@@ -2,7 +2,7 @@ import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Bike, ClipboardList, Map as MapIcon, MapPin, Package, Phone, Search, Share2, ShoppingBag, Store as StoreIcon } from 'lucide-react';
-import { assetUrl, get } from '../lib/api';
+import { assetUrl, get, PUBLIC_ORIGIN } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { CartSheet, ProductCard, ProductSheet, useCart, type Product } from '../components/Commerce';
@@ -127,7 +127,7 @@ export default function StorePage() {
   );
   const accent = s ? accentOf(s.main ?? s) : '#141B3D';
   const CatIcon = CATEGORY_ICONS[s?.main?.category ?? s?.category ?? 'other'] ?? StoreIcon;
-  const shareUrl = `${location.origin}/s/${slug}`;
+  const shareUrl = `${PUBLIC_ORIGIN}/s/${slug}`;
   const waPhone = s?.phone ? s.phone.replace(/[^\d]/g, '').replace(/^0/, '970') : null;
 
   if (missing)
@@ -219,6 +219,20 @@ export default function StorePage() {
                   <Button variant="secondary">{t.shop.whatsapp}</Button>
                 </a>
               )}
+              {(['instagram', 'tiktok', 'facebook'] as const)
+                .filter((k) => s[k])
+                .map((k) => (
+                  <a
+                    key={k}
+                    href={k === 'tiktok' ? `https://www.tiktok.com/@${s[k]}` : `https://www.${k}.com/${s[k]}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-11 items-center gap-2 rounded-xl px-3.5 text-sm font-medium text-white transition hover:-translate-y-0.5"
+                    style={{ background: k === 'instagram' ? 'linear-gradient(45deg,#F58529,#DD2A7B 55%,#8134AF)' : k === 'tiktok' ? '#111' : '#1877F2' }}
+                  >
+                    {t.social[k]}
+                  </a>
+                ))}
               {pins.length > 0 && (
                 <Button variant="ghost" icon={<MapIcon className="h-4 w-4" />} onClick={() => setShowMap((v) => !v)}>
                   {t.ord.map}

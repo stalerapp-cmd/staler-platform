@@ -1,8 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, FileDown, LocateFixed, MapPin, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Store as StoreIcon, Trash2, Truck } from 'lucide-react';
-import { ApiError, assetUrl, newIdempotencyKey, post } from '../lib/api';
+import { BookOpen, CheckCircle2, FileDown, LocateFixed, MapPin, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Store as StoreIcon, Trash2, Truck } from 'lucide-react';
+import { ApiError, assetUrl, newIdempotencyKey, post, PUBLIC_ORIGIN } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { fill, money } from '../lib/format';
@@ -186,21 +186,91 @@ export function ProductCard({ p, onOpen, index, showStore = true }: { p: Product
 
 export function ProductSheet({ product, onClose, onAdded, storeUrl }: { product: Product | null; onClose: () => void; onAdded: () => void; storeUrl?: string }) {
   const { t, lang } = useI18n();
-  const { add } = useCart();
+  const { add, setQty, lines, count } = useCart();
   const [share, setShare] = useState(false);
+  const [qty, setQ] = useState(1);
+  const [added, setAdded] = useState(false);
   const p = product;
+  useEffect(() => {
+    setQ(1);
+    setAdded(false);
+  }, [p?.id]);
   const soldOut = p ? !p.is_digital && p.stock <= 0 : false;
   const dep = p && !p.is_digital && (p.deposit_percent ?? 0) > 0;
-  const shareUrl = p ? `${location.origin}/s/${p.store_slug ?? ''}?p=${p.id}` : '';
+  const shareUrl = p ? `${PUBLIC_ORIGIN}/s/${p.store_slug ?? ''}?p=${p.id}` : '';
+  const max = p ? (p.is_digital ? 1 : Math.max(1, Math.min(99, p.stock))) : 1;
+  const footer = p && (
+    <div className="flex items-center gap-2.5">
+      <button
+        onClick={() => setShare(true)}
+        className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sunk text-ink transition active:scale-90"
+        aria-label={t.shop.share}
+      >
+        <Share2 className="h-5 w-5" />
+      </button>
+      {!p.is_digital && !soldOut && !added && (
+        <div className="flex h-12 shrink-0 items-center rounded-2xl bg-sunk" aria-label={t.shop.qty}>
+          <button onClick={() => setQ(Math.max(1, qty - 1))} disabled={qty <= 1} className="grid h-12 w-10 place-items-center disabled:opacity-30" aria-label="−">
+            <Minus className="h-4 w-4" />
+          </button>
+          <span className="num w-6 text-center font-semibold">{qty}</span>
+          <button onClick={() => setQ(Math.min(max, qty + 1))} disabled={qty >= max} className="grid h-12 w-10 place-items-center disabled:opacity-30" aria-label="+">
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      <AnimatePresence mode="wait" initial={false}>
+        {added ? (
+          <motion.div key="view" className="flex-1" initial={{ y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+            <Button
+              block
+              size="lg"
+              variant="primary"
+              icon={<CheckCircle2 className="h-5 w-5 text-[#9DE07B]" />}
+              onClick={() => {
+                onClose();
+                onAdded();
+              }}
+            >
+              {fill(t.shop.viewCart, { n: count })}
+            </Button>
+          </motion.div>
+        ) : (
+          <motion.div key="add" className="flex-1" exit={{ y: -14, opacity: 0 }}>
+            <Button
+              block
+              size="lg"
+              variant="stitch"
+              disabled={soldOut}
+              icon={<ShoppingCart className="h-5 w-5" />}
+              onClick={() => {
+                const had = lines.find((l) => l.product.id === p.id)?.qty ?? 0;
+                add(p);
+                if (!p.is_digital) setQty(p.id, Math.min(max, had + qty));
+                setAdded(true);
+              }}
+            >
+              {soldOut ? t.store.soldOut : t.store.add}
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
   return (
     <>
-      <Sheet open={!!p} onClose={onClose} title={p?.name ?? ''} wide>
+      <Sheet open={!!p} onClose={onClose} title={p?.name ?? ''} wide footer={footer}>
         {p && (
-          <div className="grid gap-6 sm:grid-cols-2">
-            <motion.div layoutId={`img-${p.id}`} className="aspect-square overflow-hidden rounded-3xl">
+          <div className="grid gap-5 sm:grid-cols-2 sm:gap-6">
+            <motion.div layoutId={`img-${p.id}`} className="relative aspect-[4/3] overflow-hidden rounded-3xl sm:aspect-square">
               <ProductImage p={p} />
+              {soldOut && (
+                <div className="absolute inset-0 grid place-items-center bg-night/45">
+                  <span className="-rotate-12 rounded-xl border-2 border-white/90 px-4 py-1.5 font-display text-xl text-white">{t.store.soldOut}</span>
+                </div>
+              )}
             </motion.div>
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               {p.store_slug ? (
                 <Link to={storeUrl ?? `/s/${p.store_slug}`} onClick={onClose} className="flex items-center gap-2 text-sm text-muted hover:text-ink">
                   <StoreIcon className="h-4 w-4" /> {p.store_name}
@@ -225,7 +295,7 @@ export function ProductSheet({ product, onClose, onAdded, storeUrl }: { product:
                   </Badge>
                 )}
               </div>
-              {p.description && <p className="mt-4 whitespace-pre-line text-muted">{p.description}</p>}
+              {p.description && <p className="mt-4 whitespace-pre-line break-words text-muted">{p.description}</p>}
               {dep && (
                 <div className="mt-4 rounded-2xl border border-gold/40 bg-gold/10 p-3.5 text-sm">
                   <p className="font-medium">{fill(t.shop.deposit, { p: p.deposit_percent ?? 0 })}</p>
@@ -239,25 +309,6 @@ export function ProductSheet({ product, onClose, onAdded, storeUrl }: { product:
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
                 {p.is_digital ? t.shop.digitalProtected : t.ord.protect}
               </p>
-              <div className="mt-auto flex gap-2 pt-5">
-                <Button variant="secondary" icon={<Share2 className="h-4 w-4" />} onClick={() => setShare(true)} aria-label={t.shop.share}>
-                  <span className="hidden sm:inline">{t.shop.share}</span>
-                </Button>
-                <Button
-                  className="flex-1"
-                  size="lg"
-                  variant="stitch"
-                  disabled={soldOut}
-                  icon={<ShoppingCart className="h-5 w-5" />}
-                  onClick={() => {
-                    add(p);
-                    onClose();
-                    onAdded();
-                  }}
-                >
-                  {soldOut ? t.store.soldOut : t.store.add}
-                </Button>
-              </div>
             </div>
           </div>
         )}
@@ -347,8 +398,32 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
     if (await confirm({ title: t.shop.removeQ, body: fill(t.shop.removeB, { name: l.product.name }), confirmLabel: t.shop.removeOk, tone: 'danger' })) remove(l.product.id);
   };
 
+  const footer =
+    !done && lines.length ? (
+      <div>
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            {now !== full && (
+              <p className="text-xs text-muted">
+                {t.shop.totalLater} <span className="num">{money((full - now) / 100, lang)}</span>
+              </p>
+            )}
+            <p className="text-sm text-muted">{now !== full ? t.shop.payNow : t.common.total}</p>
+          </div>
+          <motion.p key={now} initial={{ scale: 1.15 }} animate={{ scale: 1 }} className="num font-display text-2xl">
+            {money(now / 100, lang)}
+          </motion.p>
+        </div>
+        <ErrorNote>{error}</ErrorNote>
+        <Button block size="lg" variant="stitch" className="mt-3" loading={busy} onClick={checkout} icon={<ShieldCheck className="h-5 w-5" />}>
+          {user ? t.store.checkout : t.store.loginToBuy}
+        </Button>
+      </div>
+    ) : undefined;
+
   return (
     <Sheet
+      footer={footer}
       open={open}
       onClose={() => {
         setDone(null);
@@ -438,24 +513,7 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
               <Field label={t.shop.note} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
             </div>
           )}
-
-          <div className="mt-4 space-y-1 border-t border-dashed border-line pt-4">
-            {now !== full && (
-              <div className="flex items-center justify-between text-sm text-muted">
-                <span>{t.shop.totalLater}</span>
-                <span className="num">{money((full - now) / 100, lang)}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <span className="text-muted">{now !== full ? t.shop.payNow : t.common.total}</span>
-              <span className="num font-display text-2xl">{money(now / 100, lang)}</span>
-            </div>
-          </div>
-          <ErrorNote>{error}</ErrorNote>
-          <Button block size="lg" variant="stitch" className="mt-5" loading={busy} onClick={checkout}>
-            {user ? t.store.checkout : t.store.loginToBuy}
-          </Button>
-          <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-muted">
+          <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-muted">
             <ShieldCheck className="h-3.5 w-3.5" /> {t.ord.protect}
           </p>
         </div>

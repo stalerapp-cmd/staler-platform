@@ -1,7 +1,7 @@
-import { motion } from 'framer-motion';
-import { useState, type ReactNode } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Briefcase, Eye, EyeOff, User as UserIcon } from 'lucide-react';
+import { Briefcase, Check, Eye, EyeOff, HandCoins, User as UserIcon } from 'lucide-react';
 import { post, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -17,35 +17,81 @@ import { fill } from '../lib/format';
 
 export function AuthLayout({ children }: { children: ReactNode }) {
   const { t } = useI18n();
+  const reduce = useReducedMotion();
+  const lines = [t.landing.f1t, t.landing.f2t, t.landing.f3t, t.landing.f4t];
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (reduce) return;
+    const h = setInterval(() => setN((x) => (x + 1) % lines.length), 3200);
+    return () => clearInterval(h);
+  }, [reduce, lines.length]);
   return (
-    <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
-      <div className="relative hidden overflow-hidden bg-night p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <Link to="/" className="flex items-center gap-3">
-          <Logo className="h-10 w-10" />
+    <div className="app-ground grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
+      {/* Desktop: the embroidered side panel */}
+      <div className="cloth cloth-night relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between">
+        <Link to="/" className="relative flex items-center gap-3">
+          <Logo className="h-11 w-11" animate />
           <span className="font-display text-2xl">S-Taler</span>
         </Link>
-        <div className="absolute -end-24 top-1/2 h-[560px] w-[560px] -translate-y-1/2 opacity-90">
-          <StarMotif size={25} cell={22} className="h-full w-full" colors={['#E2506A', '#E9C060']} strokeWidth={2.4} />
+        <div className="absolute -end-28 top-1/2 h-[600px] w-[600px] -translate-y-1/2 opacity-90">
+          <div className="spin-slow h-full w-full">
+            <StarMotif size={25} cell={22} className="h-full w-full" colors={['#E2506A', '#E9C060']} strokeWidth={2.4} />
+          </div>
+        </div>
+        <div className="floaty absolute start-16 top-40 h-20 w-20 opacity-60">
+          <StarMotif size={9} cell={10} className="h-full w-full" colors={['#9DBB5F', '#E9C060']} strokeWidth={2.2} delay={0.6} />
         </div>
         <div className="relative max-w-sm">
-          <p className="font-display text-4xl leading-tight">{t.landing.title}</p>
-          <p className="mt-4 text-white/70">{t.brand.tagline}</p>
+          <p className="font-display text-[2.6rem] leading-[1.15]">{t.landing.title}</p>
+          <div className="mt-6 h-8 overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={n}
+                initial={{ y: 24, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -24, opacity: 0 }}
+                transition={{ duration: 0.35 }}
+                className="flex items-center gap-2 text-lg text-white/80"
+              >
+                <span className="h-2 w-2 rotate-45 bg-gold" /> {lines[n]}
+              </motion.p>
+            </AnimatePresence>
+          </div>
         </div>
         <StitchBand width={80} className="relative h-10 w-full opacity-80" colors={['#E2506A', '#9DBB5F']} />
       </div>
-      <div className="flex flex-col">
-        <div className="safe-top flex items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-1">
-            <AuthBack />
-            <Link to="/" className="flex items-center gap-2 lg:invisible">
-              <Logo className="h-8 w-8" />
-              <span className="font-display text-lg">S-Taler</span>
-            </Link>
+
+      <div className="flex min-h-dvh flex-col">
+        {/* Phones: a cloth header the form card rises over */}
+        <div className="cloth cloth-night safe-top relative overflow-hidden px-4 pb-16 pt-2 lg:hidden">
+          <div className="pointer-events-none absolute -end-12 -top-10 h-52 w-52 opacity-50">
+            <div className="spin-slow h-full w-full">
+              <StarMotif size={17} cell={10} className="h-full w-full" colors={['#E2506A', '#E9C060']} strokeWidth={2.2} />
+            </div>
           </div>
+          <div className="relative flex items-center justify-between [&_button]:text-white/85">
+            <AuthBack />
+            <TopControls />
+          </div>
+          <div className="relative mt-3 flex items-center gap-3 px-2">
+            <Logo className="h-12 w-12" animate />
+            <div>
+              <p className="font-display text-2xl leading-none">S-Taler</p>
+              <p className="mt-1 text-sm text-white/70">{t.brand.tagline}</p>
+            </div>
+          </div>
+        </div>
+        <div className="safe-top hidden items-center justify-between px-6 py-4 lg:flex">
+          <AuthBack />
           <TopControls />
         </div>
-        <div className="flex flex-1 items-center justify-center px-5 pb-12">
-          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="w-full max-w-md">
+        <div className="relative -mt-10 flex flex-1 justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center">
+          <motion.div
+            initial={{ opacity: 0, y: 28 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', bounce: 0.25, duration: 0.7 }}
+            className="sewn relative w-full max-w-md rounded-[30px] border border-line/70 bg-surface p-6 shadow-card sm:p-8"
+          >
             {children}
           </motion.div>
         </div>
@@ -77,7 +123,7 @@ function PasswordField({ label, value, onChange, autoComplete, error }: { label:
 
 export function Login() {
   const { t, err, lang } = useI18n();
-  const { login, completeMfa, signedOutForIdle, google } = useAuth();
+  const { login, completeMfa, signedOutForIdle, google, googleRedeem } = useAuth();
   const nav = useNavigate();
   const loc = useLocation() as { state?: { from?: string } };
   const [email, setEmail] = useState('');
@@ -87,6 +133,19 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const go = () => nav(loc.state?.from ?? '/app', { replace: true });
+  const onNativeGoogle = async (p: { code: string; verifier: string }) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await googleRedeem(p);
+      if (r.mfaToken) setMfa(r.mfaToken);
+      else go();
+    } catch (e2) {
+      setError(err(e2));
+    } finally {
+      setBusy(false);
+    }
+  };
   const onGoogle = async (credential: string) => {
     setBusy(true);
     setError(null);
@@ -150,7 +209,7 @@ export function Login() {
           {mfa ? t.common.confirm : t.auth.login}
         </Button>
       </form>
-      {!mfa && <GoogleButton onCredential={onGoogle} />}
+      {!mfa && <GoogleButton onCredential={onGoogle} onNativeCode={onNativeGoogle} />}
       {!mfa && (
         <p className="mt-8 text-center text-muted">
           {t.auth.noAccount}{' '}
@@ -168,10 +227,10 @@ export function Register() {
   const nav = useNavigate();
   const confirm = useConfirm();
   const cfg = usePublicConfig();
-  const { google } = useAuth();
+  const { google, googleRedeem } = useAuth();
   const [method, setMethod] = useState<'email' | 'sms'>('email');
   const prefill = (useLocation() as { state?: { email?: string } }).state?.email ?? '';
-  const [f, setF] = useState({ fullName: '', email: prefill, password: '', phoneNumber: '', accountType: 'user' as 'user' | 'merchant' });
+  const [f, setF] = useState({ fullName: '', email: prefill, password: '', phoneNumber: '', accountType: 'user' as 'user' | 'merchant' | 'exchange' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
@@ -208,30 +267,49 @@ export function Register() {
   };
 
   const types = [
-    { v: 'user' as const, icon: UserIcon, title: t.auth.personal, d: t.auth.personalD },
-    { v: 'merchant' as const, icon: Briefcase, title: t.auth.business, d: t.auth.businessD },
+    { v: 'user' as const, icon: UserIcon, title: t.auth.personal, d: t.auth.personalD, c: 'bg-night text-white' },
+    { v: 'merchant' as const, icon: Briefcase, title: t.auth.business, d: t.auth.businessD, c: 'bg-stitch text-white' },
+    { v: 'exchange' as const, icon: HandCoins, title: t.auth.exchange, d: t.auth.exchangeD, c: 'bg-gold text-night' },
   ];
   return (
     <AuthLayout>
       <h1 className="text-3xl">{t.auth.registerTitle}</h1>
       <p className="mt-2 text-muted">{t.auth.registerLead}</p>
-      <form onSubmit={submit} className="mt-8 space-y-4">
+      <form onSubmit={submit} className="mt-7 space-y-4">
         <fieldset>
           <legend className="mb-2 text-sm font-medium text-ink/80">{t.auth.accountType}</legend>
-          <div className="grid grid-cols-2 gap-3">
-            {types.map((o) => (
-              <button
-                type="button"
-                key={o.v}
-                aria-pressed={f.accountType === o.v}
-                onClick={() => setF({ ...f, accountType: o.v })}
-                className={cx('rounded-2xl border p-4 text-start transition', f.accountType === o.v ? 'border-stitch bg-stitch/5 ring-2 ring-stitch/20' : 'border-line hover:border-ink/30')}
-              >
-                <o.icon className={cx('mb-2 h-5 w-5', f.accountType === o.v ? 'text-stitch' : 'text-muted')} />
-                <span className="block font-medium">{o.title}</span>
-                <span className="block text-xs text-muted">{o.d}</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-3 gap-2.5">
+            {types.map((o) => {
+              const on = f.accountType === o.v;
+              return (
+                <motion.button
+                  type="button"
+                  key={o.v}
+                  whileTap={{ scale: 0.95 }}
+                  aria-pressed={on}
+                  onClick={() => setF({ ...f, accountType: o.v })}
+                  className={cx(
+                    'relative flex flex-col items-center rounded-2xl border px-2 py-3.5 text-center transition',
+                    on ? 'border-transparent bg-sunk ring-2 ring-stitch' : 'border-line hover:border-ink/30',
+                  )}
+                >
+                  {on && (
+                    <motion.span layoutId="acct-check" className="absolute -end-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-stitch text-white shadow">
+                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                    </motion.span>
+                  )}
+                  <motion.span
+                    animate={on ? { rotate: [0, -10, 8, 0], scale: [1, 1.15, 1] } : { rotate: 0, scale: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className={cx('mb-2 grid h-11 w-11 place-items-center rounded-2xl', on ? o.c : 'bg-sunk text-muted')}
+                  >
+                    <o.icon className="h-5 w-5" />
+                  </motion.span>
+                  <span className="block text-sm font-semibold leading-tight">{o.title}</span>
+                  <span className="mt-1 block text-[11px] leading-snug text-muted">{o.d}</span>
+                </motion.button>
+              );
+            })}
           </div>
         </fieldset>
         <Field label={t.auth.fullName} value={f.fullName} onChange={set('fullName')} autoComplete="name" required error={fieldErr.fullName} />
@@ -262,6 +340,18 @@ export function Register() {
       </form>
       <GoogleButton
         text="signup_with"
+        accountType={f.accountType}
+        onNativeCode={async (p) => {
+          setBusy(true);
+          try {
+            const r = await googleRedeem(p);
+            nav(r.mfaToken ? '/login' : '/app', { replace: true });
+          } catch (e2) {
+            setError(err(e2));
+          } finally {
+            setBusy(false);
+          }
+        }}
         onCredential={async (cred) => {
           setBusy(true);
           try {

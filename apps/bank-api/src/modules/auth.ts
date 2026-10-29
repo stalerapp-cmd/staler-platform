@@ -1,9 +1,10 @@
-import { Router, type Request } from 'express';
+import crypto from 'node:crypto';
+import { Router, type Request, type Response } from 'express';
 import QRCode from 'qrcode';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
-import { codeHash, decrypt, encrypt, numericCode } from '../lib/crypto.js';
+import { codeHash, decrypt, encrypt, numericCode, randomToken } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, forbidden, notFound, tooMany, unauthorized } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { signToken, verifyToken } from '../lib/jwt.js';
@@ -189,11 +190,8 @@ authRouter.post(
 );
 
 // ------------------------------------------------------- Continue with Google
-authRouter.post(
-  '/google',
-  authLimiter,
-  validate({ body: z.object({ credential: z.string().min(100).max(4096), language: lang.optional() }).strict() }),
-  ah(async (req, res) => {
+/** Finds (or creates, on first use) the account behind a verified Google sign-in. */
+async function googleAccount(req: Request) {
     const g = await verifyGoogleCredential(req.body.credential);
     let u = await one<any>(`SELECT id, role, status, totp_enabled, token_version FROM ${S}.users WHERE lower(email) = $1`, [g.email]);
     if (!u) {
@@ -212,12 +210,66 @@ authRouter.post(
       u = { ...created, status: 'active', totp_enabled: false };
     }
     if (u.status !== 'active') throw forbidden('This account is suspended', 'ACCOUNT_SUSPENDED');
+    return u;
+}
+
+/** Second factor if the account has one, otherwise a session. */
+async function googleFinish(req: Request, res: Response, u: any) {
     if (u.totp_enabled) {
       const mfaToken = await signToken({ sub: u.id, role: u.role, tv: u.token_version, sid: 'mfa', typ: 'mfa' }, 300);
-      return res.json({ success: true, data: { mfaRequired: true, mfaToken } });
+      return { mfaRequired: true, mfaToken };
     }
     await audit({ userId: u.id, action: 'auth.login_google' }, req);
-    res.json({ success: true, data: await completeLogin(req, res, u.id) });
+    return completeLogin(req, res, u.id);
+}
+
+authRouter.post(
+  '/google',
+  authLimiter,
+  validate({ body: z.object({ credential: z.string().min(100).max(4096), language: lang.optional() }).strict() }),
+  ah(async (req, res) => {
+    res.json({ success: true, data: await googleFinish(req, res, await googleAccount(req)) });
+  }),
+);
+
+/*
+ * Google inside the Android app: Google does not allow its sign-in inside an app's
+ * web view, so the app opens the real browser on /google-app. That page signs in
+ * with Google and gets a one-time code (bound to the app's PKCE challenge), then
+ * hands it back through the app's own link. Only the app that holds the matching
+ * verifier can turn the code into a session.
+ */
+const handoffs = new Map<string, { userId: string; challenge: string; exp: number }>();
+const pkce = z.string().regex(/^[A-Za-z0-9_-]{43,128}$/);
+
+authRouter.post(
+  '/google/handoff',
+  authLimiter,
+  validate({ body: z.object({ credential: z.string().min(100).max(4096), language: lang.optional() }).extend({ challenge: pkce }).strict() }),
+  ah(async (req, res) => {
+    const u = await googleAccount(req);
+    const now = Date.now();
+    for (const [k, v] of handoffs) if (v.exp < now) handoffs.delete(k);
+    if (handoffs.size > 5000) throw tooMany('Too many sign-ins in progress, try again in a minute');
+    const code = randomToken(32);
+    handoffs.set(crypto.createHash('sha256').update(code).digest('hex'), { userId: u.id, challenge: req.body.challenge, exp: now + 180_000 });
+    res.json({ success: true, data: { code } });
+  }),
+);
+
+authRouter.post(
+  '/google/redeem',
+  authLimiter,
+  validate({ body: z.object({ code: z.string().min(20).max(120), verifier: pkce }).strict() }),
+  ah(async (req, res) => {
+    const key = crypto.createHash('sha256').update(req.body.code).digest('hex');
+    const h = handoffs.get(key);
+    handoffs.delete(key);
+    const expected = crypto.createHash('sha256').update(req.body.verifier).digest('base64url');
+    if (!h || h.exp < Date.now() || h.challenge !== expected) throw unauthorized('This Google sign-in expired — try again', 'GOOGLE_HANDOFF');
+    const u = await one<any>(`SELECT id, role, status, totp_enabled, token_version FROM ${S}.users WHERE id = $1`, [h.userId]);
+    if (!u || u.status !== 'active') throw forbidden('This account is suspended', 'ACCOUNT_SUSPENDED');
+    res.json({ success: true, data: await googleFinish(req, res, u) });
   }),
 );
 

@@ -83,7 +83,7 @@ function Secret({ label, value, onChange, autoComplete, error }: { label: string
 
 export function Login() {
   const { t, err, lang } = useI18n();
-  const { login, completeMfa, signedOutForIdle, google } = useAuth();
+  const { login, completeMfa, signedOutForIdle, google, googleRedeem } = useAuth();
   const nav = useNavigate();
   const loc = useLocation() as { state?: { from?: string } };
   const [id, setId] = useState('');
@@ -93,6 +93,19 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const go = () => nav(loc.state?.from ?? '/app', { replace: true });
+  const onNativeGoogle = async (p: { code: string; verifier: string }) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await googleRedeem(p);
+      if (r.mfaToken) setMfa(r.mfaToken);
+      else go();
+    } catch (e2) {
+      setError(err(e2));
+    } finally {
+      setBusy(false);
+    }
+  };
   const onGoogle = async (credential: string) => {
     setBusy(true);
     setError(null);
@@ -152,7 +165,7 @@ export function Login() {
           {mfa ? t.common.confirm : t.auth.signIn}
         </Button>
       </form>
-      {!mfa && <GoogleButton onCredential={onGoogle} />}
+      {!mfa && <GoogleButton onCredential={onGoogle} onNativeCode={onNativeGoogle} />}
       {!mfa && (
         <p className="mt-8 text-center text-muted">
           {t.auth.noAccount}{' '}
@@ -170,7 +183,7 @@ export function Register() {
   const nav = useNavigate();
   const confirm = useConfirm();
   const cfg = usePublicConfig();
-  const { google } = useAuth();
+  const { google, googleRedeem } = useAuth();
   const [method, setMethod] = useState<'email' | 'sms'>('email');
   const prefill = (useLocation() as { state?: { email?: string } }).state?.email ?? '';
   const [f, setF] = useState({ fullName: '', email: prefill, username: '', password: '', phone: '' });
@@ -240,6 +253,17 @@ export function Register() {
       </form>
       <GoogleButton
         text="signup_with"
+        onNativeCode={async (p) => {
+          setBusy(true);
+          try {
+            const r = await googleRedeem(p);
+            nav(r.mfaToken ? '/login' : '/app', { replace: true });
+          } catch (e2) {
+            setError(err(e2));
+          } finally {
+            setBusy(false);
+          }
+        }}
         onCredential={async (cred) => {
           setBusy(true);
           try {

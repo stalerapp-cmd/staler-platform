@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { BellRing, Crown, KeyRound, LogOut, Megaphone, Search, ShieldCheck, ShieldOff, Snowflake, Trash2, UserCog, UserPlus, Users } from 'lucide-react';
-import { ApiError, del, get, patch, post } from '../lib/api';
+import { BellRing, Crown, Eye, EyeOff, HandCoins, KeyRound, LogOut, Megaphone, Package, Search, ShieldCheck, ShieldOff, Snowflake, Store as StoreIcon, Trash2, UserCog, UserPlus, Users, XCircle } from 'lucide-react';
+import { ProductImage } from '../components/Commerce';
+import { StoreLogo } from './Stores';
+import { ApiError, del, get, patch, post, put } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
 import { usePerm } from '../lib/perm';
@@ -332,6 +334,8 @@ export function AdminUserDetail() {
             </form>
           </section>
         )}
+        {!protectedAcc && can('stores.manage') && data.stores?.length > 0 && <AdminStoresPanel stores={data.stores} onChanged={() => void reload()} />}
+        {!protectedAcc && can('users.edit') && u.role === 'exchange' && <AdminAgentPanel key={JSON.stringify(data.agent?.profile ?? null)} userId={u.id} agent={data.agent} onChanged={() => void reload()} />}
       </div>
 
       <div className="space-y-6">
@@ -629,5 +633,249 @@ export function AdminAdmins() {
         )}
       </Sheet>
     </div>
+  );
+}
+
+// ------------------------------------------- inside a merchant's account
+export function AdminStoresPanel({ stores, onChanged }: { stores: any[]; onChanged: () => void }) {
+  const { t, lang, err } = useI18n();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [open, setOpen] = useState<string | null>(null);
+  const [products, setProducts] = useState<any[] | null>(null);
+  const load = async (id: string) => {
+    setProducts(null);
+    try {
+      setProducts((await get(`/api/admin/stores/${id}/products`)).products);
+    } catch (e) {
+      toast(err(e), 'error');
+      setProducts([]);
+    }
+  };
+  const setProduct = async (p: any, body: any, ask?: { t: string; danger?: boolean }) => {
+    if (ask && !(await confirm({ title: ask.t, confirmLabel: body.status === 'deleted' ? t.adm2.remove : t.common.confirm, tone: ask.danger ? 'danger' : 'primary' }))) return;
+    try {
+      await patch(`/api/admin/products/${p.id}`, body);
+      toast(t.common.done);
+      if (open) void load(open);
+    } catch (e) {
+      toast(err(e), 'error');
+    }
+  };
+  return (
+    <section className="card overflow-hidden">
+      <h2 className="flex items-center gap-2 border-b border-line px-5 py-4 text-lg">
+        <StoreIcon className="h-5 w-5 text-stitch" /> {t.adm2.stores}
+      </h2>
+      <ul className="divide-y divide-line">
+        {stores.map((s) => (
+          <li key={s.id} className="p-4">
+            <div className="flex items-center gap-3">
+              <StoreLogo s={s} size={48} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">
+                  {s.store_name}
+                  {s.branch_name ? ` · ${s.branch_name}` : ''}
+                </p>
+                <p className="text-xs text-muted">
+                  {s.products} {t.adm2.products} · {s.orders} {t.adm2.orders}
+                  {s.city ? ` · ${s.city}` : ''}
+                </p>
+              </div>
+              <Badge tone={s.status === 'active' ? 'good' : 'bad'}>{s.status === 'active' ? t.admin.active : t.admin.suspended}</Badge>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={open === s.id ? 'primary' : 'secondary'}
+                icon={<Package className="h-4 w-4" />}
+                onClick={() => {
+                  const next = open === s.id ? null : s.id;
+                  setOpen(next);
+                  if (next) void load(next);
+                }}
+              >
+                {t.adm2.products}
+              </Button>
+              <Link to={`/s/${s.slug}`}>
+                <Button size="sm" variant="ghost" icon={<Eye className="h-4 w-4" />}>
+                  {t.adm2.open}
+                </Button>
+              </Link>
+              <Button
+                size="sm"
+                variant={s.status === 'active' ? 'danger' : 'secondary'}
+                onClick={async () => {
+                  if (!(await confirm({ title: t.adm2.storeQ, body: s.store_name, confirmLabel: s.status === 'active' ? t.adm2.suspendStore : t.adm2.activateStore, tone: s.status === 'active' ? 'danger' : 'primary' }))) return;
+                  try {
+                    await patch(`/api/admin/stores/${s.id}`, { status: s.status === 'active' ? 'suspended' : 'active' });
+                    toast(t.common.done);
+                    onChanged();
+                  } catch (e) {
+                    toast(err(e), 'error');
+                  }
+                }}
+              >
+                {s.status === 'active' ? t.adm2.suspendStore : t.adm2.activateStore}
+              </Button>
+            </div>
+            {open === s.id && (
+              <div className="mt-3 rounded-2xl bg-sunk/60 p-2">
+                {!products ? (
+                  <Skeleton className="h-16" />
+                ) : !products.length ? (
+                  <p className="p-3 text-center text-sm text-muted">{t.adm2.noProducts}</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {products.map((p) => (
+                      <li key={p.id} className="flex items-center gap-3 rounded-xl bg-surface p-2">
+                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg">
+                          <ProductImage p={p} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{p.name}</p>
+                          <p className="num text-xs text-muted">
+                            {money(p.price, lang)} · {p.is_digital ? '∞' : p.stock}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setProduct(p, { status: p.status === 'active' ? 'hidden' : 'active' })}
+                          className="rounded-lg p-2 text-muted hover:bg-sunk hover:text-ink"
+                          title={p.status === 'active' ? t.adm2.hide : t.adm2.show}
+                          aria-label={p.status === 'active' ? t.adm2.hide : t.adm2.show}
+                        >
+                          {p.status === 'active' ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                        <button
+                          onClick={() => setProduct(p, { status: 'deleted' }, { t: fill(t.adm2.removeQ, { name: p.name }), danger: true })}
+                          className="rounded-lg p-2 text-muted hover:bg-stitch/10 hover:text-stitch"
+                          aria-label={t.adm2.remove}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// ---------------------------------------------- inside an agent's account
+export function AdminAgentPanel({ userId, agent, onChanged }: { userId: string; agent: any; onChanged: () => void }) {
+  const { t, lang, err } = useI18n();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const p = agent?.profile;
+  const [f, setF] = useState({
+    displayName: p?.display_name ?? '',
+    city: p?.city ?? '',
+    address: p?.address ?? '',
+    phone: p?.phone ?? '',
+    hours: p?.hours ?? '',
+    status: (p?.status ?? 'pending') as string,
+  });
+  const [busy, setBusy] = useState(false);
+  return (
+    <section className="card overflow-hidden">
+      <h2 className="flex items-center gap-2 border-b border-line px-5 py-4 text-lg">
+        <HandCoins className="h-5 w-5 text-gold" /> {t.adm2.agent}
+      </h2>
+      <form
+        className="grid gap-3 p-5 sm:grid-cols-2"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          try {
+            await put(`/api/admin/users/${userId}/agent`, {
+              displayName: f.displayName.trim(),
+              city: f.city.trim() || null,
+              address: f.address.trim() || null,
+              phone: f.phone.trim() || null,
+              hours: f.hours.trim() || null,
+              lat: p?.lat ?? null,
+              lng: p?.lng ?? null,
+              status: f.status,
+            });
+            toast(t.common.saved);
+            onChanged();
+          } catch (e2) {
+            toast(err(e2), 'error');
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {!p && <p className="rounded-xl bg-gold/15 px-3 py-2 text-sm sm:col-span-2">{t.adm2.noProfile}</p>}
+        <Field label={t.agent.displayName} value={f.displayName} onChange={(e) => setF({ ...f, displayName: e.target.value })} required minLength={2} />
+        <Select block label={t.adm2.agentStatus} value={f.status as any} onChange={(v: string) => setF({ ...f, status: v })} options={(['active', 'pending', 'suspended'] as const).map((k) => ({ value: k, label: t.adm2.st[k] }))} />
+        <Field label={t.mstore.city} value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} />
+        <Field label={t.auth.phone} dir="ltr" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+        <Field label={t.mstore.address} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
+        <Field label={t.agent.hours} value={f.hours} onChange={(e) => setF({ ...f, hours: e.target.value })} />
+        <div className="sm:col-span-2">
+          <Button loading={busy}>{t.adm2.saveAgent}</Button>
+        </div>
+      </form>
+      <div className="grid gap-4 border-t border-line p-5 lg:grid-cols-2">
+        <div>
+          <p className="mb-2 text-sm font-medium">{t.adm2.vouchers}</p>
+          {!agent?.vouchers?.length ? (
+            <p className="text-sm text-muted">{t.common.empty}</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {agent.vouchers.map((v: any) => (
+                <li key={v.id} className="flex items-center justify-between gap-2 rounded-xl bg-sunk/60 px-3 py-2 text-sm">
+                  <span className="num">{money(v.amount, lang)}</span>
+                  <span className="flex items-center gap-2">
+                    <Badge tone={v.status === 'claimed' ? 'good' : v.status === 'active' ? 'info' : 'neutral'}>{t.vouchers.st[v.status] ?? v.status}</Badge>
+                    {v.status === 'active' && (
+                      <button
+                        className="rounded-lg p-1 text-muted hover:text-stitch"
+                        aria-label={t.adm2.cancelVoucher}
+                        title={t.adm2.cancelVoucher}
+                        onClick={async () => {
+                          if (!(await confirm({ title: t.adm2.cancelQ, body: t.adm2.cancelB, confirmLabel: t.adm2.cancelVoucher, tone: 'danger' }))) return;
+                          try {
+                            await del(`/api/admin/vouchers/${v.id}`);
+                            toast(t.common.done);
+                            onChanged();
+                          } catch (e) {
+                            toast(err(e), 'error');
+                          }
+                        }}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <p className="mb-2 text-sm font-medium">{t.adm2.cashouts}</p>
+          {!agent?.cashouts?.length ? (
+            <p className="text-sm text-muted">{t.common.empty}</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {agent.cashouts.map((c: any) => (
+                <li key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-sunk/60 px-3 py-2 text-sm">
+                  <span className="num">{money(c.amount, lang)}</span>
+                  <span className="truncate text-xs text-muted">{c.paid_by_name ?? ''}</span>
+                  <Badge tone={c.status === 'paid' ? 'good' : c.status === 'open' ? 'info' : 'neutral'}>{t.agent.st[c.status] ?? c.status}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

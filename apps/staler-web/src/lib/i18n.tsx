@@ -3,6 +3,22 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 const en = {
   brand: { name: 'S-Taler', tagline: 'Your Palestinian wallet' },
+  agent: {
+    desk: 'Agent desk', deskLead: 'Cash in, cash out — every hand-over recorded in your wallet.', balance: 'Float in your wallet', inToday: 'Cash in today', outToday: 'Cash out today', escrow: 'Held in vouchers',
+    cashIn: 'Cash in', cashInD: 'Customer gives you cash, you give them a voucher QR. The amount moves from your wallet to theirs.',
+    cashOut: 'Cash out', cashOutD: 'Customer pays you from their wallet by scanning your QR, then you hand them the cash.',
+    newCashOut: 'Create cash-out QR', waitingPay: 'Waiting for the customer to scan and pay…', paidHand: 'Paid — hand over {amount} in cash', cashouts: 'Cash-out requests',
+    st: { open: 'Waiting', paid: 'Paid', cancelled: 'Cancelled', expired: 'Expired' } as Record<string, string>,
+    profile: 'Your agent profile', profileLead: 'This is what customers see on the cash agents map.', displayName: 'Shop or agent name', hours: 'Opening hours', hoursPh: 'Sat–Thu 9:00–20:00',
+    services: 'Services', pending: 'Waiting for admin approval — you’ll appear on the map once approved.', listed: 'Listed on the map', suspended: 'Hidden from the map by support',
+    pin: 'Your location', pinHint: 'Tap the map where customers can find you.', saveProfile: 'Save profile', setupFirst: 'Set up your profile so customers can find you.',
+    find: 'Cash agents', findLead: 'Turn cash into wallet money — or wallet money into cash — at a trusted agent near you.', none: 'No agents listed yet in this area.', searchPh: 'Search by name or city',
+    directions: 'Directions', payTitle: 'Withdraw cash', payFrom: 'Cash from agent', payLead: 'Pay this amount from your wallet. The agent hands you the same amount in cash.', pay: 'Pay and take cash', paid: 'Paid — collect your cash', cancelQ: 'Cancel this request?', vouchersLink: 'Cash vouchers',
+  },
+  market: { cats: 'Browse by category', everything: 'Everything', deals: 'Deals', byStore: 'Shop by store', results: '{n} products', newest: 'Newest', cheap: 'Lowest price', pricey: 'Highest price', az: 'A–Z', clear: 'Clear filters' },
+  adm2: { stores: 'Stores of this account', products: 'Products', noProducts: 'No products in this store.', hide: 'Hide', show: 'Show', remove: 'Remove', removeQ: 'Remove “{name}” from the store?', open: 'Open page', suspendStore: 'Suspend store', activateStore: 'Reactivate store', storeQ: 'Change this store’s status?', agent: 'Cash agent', agentStatus: 'Map listing', st: { active: 'Listed', pending: 'Waiting for approval', suspended: 'Hidden' } as Record<string, string>, saveAgent: 'Save agent profile', vouchers: 'Vouchers', cashouts: 'Cash-outs', cancelVoucher: 'Cancel and refund the agent', cancelQ: 'Cancel this voucher?', cancelB: 'The amount goes back to the agent’s wallet.', orders: 'orders', noProfile: 'This agent hasn’t set up a profile yet — you can fill it in for them.' },
+  social: { instagram: 'Instagram', tiktok: 'TikTok', facebook: 'Facebook', handlePh: '@yourstore', title: 'Social accounts', follow: 'Follow', shareIg: 'Instagram', shareTt: 'TikTok', copiedFor: 'Link copied — paste it in {app}' },
+  navg: { money: 'Money', shop: 'Shopping', people: 'People', work: 'My work', admin: 'Administration', more: 'More', collapse: 'Collapse menu', expand: 'Expand menu', support: 'Support', quick: 'Quick' },
   mailtest: { title: 'E-mail check', lead: 'Send a test code to your own e-mail and see exactly what happened.', send: 'Send test e-mail', ok: 'Sent to {to}. If it isn’t in your inbox within a minute, look in Spam or Promotions and mark it “Not spam” — that teaches Gmail to deliver the next ones.', fail: 'Sending failed: {error}', approve: 'Approve sign-up', approveT: 'Approve without a code?', approveB: 'Only if you’re sure this e-mail belongs to them. The account is created and they’re told by e-mail.' },
   disp: { title: 'Disputes', none: 'No disputes. Everyone’s happy.', buyer: 'Buyer', store: 'Store', reason: 'Reason', release: 'Pay the store', refund: 'Refund the buyer', note: 'Decision note (both sides see it)', releaseQ: 'Pay the store?', refundQ: 'Refund the buyer?', decideB: 'This settles the order for good.', resolved: 'Resolved', open: 'Open' },
   shop: {
@@ -20,7 +36,7 @@ const en = {
     howGet: 'How do you want it?', delivery: 'Delivery', pickup: 'Pick up from store', address: 'Delivery address', addressPh: 'City, street, building — a landmark helps',
     phone: 'Phone for the courier', note: 'Note for the store (optional)', useLocation: 'Use my location', located: 'Location added', locating: 'Locating…',
     payNow: 'Pay now', laterBalance: 'Pay later', totalLater: 'Rest on delivery',
-    ads: 'Offers',
+    ads: 'Offers', added: 'In your cart', viewCart: 'View cart ({n})', qty: 'Quantity',
   },
   ord: {
     timeline: 'Tracking', handover: 'Handover code', handoverLead: 'Give this code to the courier (or at the store) only when you have your order in hand. It releases the payment.',
@@ -36,7 +52,7 @@ const en = {
   },
   mstore: {
     stores: 'Stores & branches', newStore: 'New store', newBranch: 'New branch', branchName: 'Branch name', branchOf: 'Branch of', current: 'Working in',
-    switch: 'Switch store', editStore: 'Store details', logo: 'Logo', cover: 'Cover', city: 'City', address: 'Address', storePhone: 'Store phone', showPhone: 'Show phone on the store page',
+    switch: 'Switch store', editStore: 'Store details', logo: 'Logo', logoAdd: 'Add your store logo', logoAddD: 'Your logo shows on the store page, the market and every product — instead of a letter.', cover: 'Cover', city: 'City', address: 'Address', storePhone: 'Store phone', showPhone: 'Show phone on the store page',
     accent: 'Store colour', pickupOn: 'Customers can pick up', deliveryOn: 'We deliver', deliveryNote: 'Delivery note', category: 'Category', pin: 'Store location', pinHint: 'Tap the map to place your store.',
     closeStore: 'Close store', closeQ: 'Close {name}?', closeB: 'It disappears from the directory with its branches. Open orders must be finished first.', closeOk: 'Close store',
     ads: 'Ads', newAd: 'New ad', adMedia: 'Image or video', adTitle: 'Headline', adBody: 'Short text', adProduct: 'Link to a product (optional)', adActive: 'Showing', adDeleteQ: 'Delete this ad?', adDeleteOk: 'Delete ad',
@@ -58,7 +74,7 @@ const en = {
     android: 'First install? Android will ask you to allow installs from your browser — that’s expected.',
     iphone: 'On iPhone? Open the site in Safari, tap Share, then “Add to Home Screen”. It works just like an app.',
   },
-  foot: { store: 'Store', open: 'Open a wallet', bank: 'TalerBank', wallet: 'S-Taler', about: 'A Palestinian wallet and bank that work as one.', aboutBank: 'Digital banking that works hand in hand with the S-Taler wallet.', privacy: 'Your data stays encrypted, always.' },
+  foot: { store: 'Market', open: 'Open a wallet', bank: 'TalerBank', wallet: 'S-Taler', about: 'A Palestinian wallet and bank that work as one.', aboutBank: 'Digital banking that works hand in hand with the S-Taler wallet.', privacy: 'Your data stays encrypted, always.' },
   common: {
     continue: 'Continue', cancel: 'Cancel', areYouSure: 'Are you sure you want to continue?', back: 'Back', save: 'Save changes', saved: 'Saved', close: 'Close', confirm: 'Confirm',
     copy: 'Copy', copied: 'Copied', retry: 'Try again', loading: 'Loading…', search: 'Search', all: 'All', in: 'Received', out: 'Sent',
@@ -68,7 +84,7 @@ const en = {
   },
   nav: {
     help: 'How it works', contacts: 'Contacts', disputes: 'Disputes', myStores: 'Stores & branches', ads: 'Ads', cash: 'Cash vouchers',
-    home: 'Home', activity: 'Activity', scan: 'Scan', store: 'Store', more: 'More', send: 'Send', receive: 'Receive', bank: 'Bank',
+    home: 'Home', activity: 'Activity', scan: 'Scan', store: 'Market', more: 'More', agents: 'Cash agents', agentDesk: 'Agent desk', send: 'Send', receive: 'Receive', bank: 'Bank',
     messages: 'Messages', settings: 'Settings', orders: 'My orders', merchant: 'My store', products: 'Products', storeOrders: 'Store orders',
     vouchers: 'Cash vouchers', admin: 'Admin', users: 'Users', stores: 'Stores', pending: 'Pending sign-ups', bankOps: 'Bank operations',
     audit: 'Audit log', system: 'System settings', notifications: 'Notifications', overview: 'Overview',
@@ -76,7 +92,7 @@ const en = {
   landing: {
     title: 'Money that moves like a message.',
     lead: 'Send, receive and pay by QR in seconds. Top up from TalerBank, shop local stores, and keep every shekel protected by bank-grade security.',
-    start: 'Open a free wallet', signIn: 'Sign in', browse: 'Browse the store',
+    start: 'Open a free wallet', signIn: 'Sign in', browse: 'Browse the market',
     f1t: 'Pay with a glance', f1d: 'Scan a code and the payment is done. No card numbers, no waiting.',
     f2t: 'Linked to TalerBank', f2d: 'Move money between your bank and wallet without ever sharing your bank password.',
     f3t: 'Protected by design', f3d: 'Two-factor sign-in, encrypted messages and instant alerts on every movement.',
@@ -90,7 +106,7 @@ const en = {
     welcome: 'Welcome back', loginLead: 'Sign in to your wallet.', email: 'E-mail', password: 'Password', newPassword: 'New password',
     login: 'Sign in', noAccount: 'New here?', createOne: 'Create a wallet', haveAccount: 'Already have a wallet?', forgot: 'Forgot password?',
     registerTitle: 'Create your wallet', registerLead: 'It takes less than a minute.', fullName: 'Full name', phone: 'Phone',
-    accountType: 'Account type', personal: 'Personal', personalD: 'Send, receive and shop', business: 'Business', businessD: 'Sell in the S-Taler store',
+    accountType: 'Account type', personal: 'Personal', personalD: 'Send, receive and shop', business: 'Business', businessD: 'Open stores and sell', exchange: 'Cash agent', exchangeD: 'Cash in and out for people',
     register: 'Create wallet', verifyTitle: 'Check your e-mail', verifyLead: 'We sent a 6-digit code to', verify: 'Verify e-mail', resend: 'Send a new code',
     resent: 'A new code is on its way', mfaTitle: 'Two-step verification', mfaLead: 'Enter the 6-digit code from your authenticator app, or a recovery code.',
     mfaCode: 'Authenticator code', resetTitle: 'Reset your password', resetLead: 'We will e-mail you a code to set a new password.', sendCode: 'Send code',
@@ -109,7 +125,7 @@ const en = {
     types: {
       transfer_in: 'Received', transfer_out: 'Sent', payment: 'QR payment', payment_received: 'QR payment received', withdraw: 'Top-up from bank',
       deposit: 'Sent to bank', deposit_refund: 'Bank transfer refund', purchase: 'Store purchase', sale: 'Store sale', refund: 'Refund',
-      exchange_deposit: 'Cash voucher', exchange_payout: 'Cash payout', voucher_issued: 'Voucher issued', voucher_refund: 'Voucher returned',
+      exchange_deposit: 'Cash voucher', exchange_payout: 'Cash payout', voucher_issued: 'Voucher issued', voucher_refund: 'Voucher returned', cash_out: 'Cash withdrawal', cash_out_received: 'Cash-out paid to you',
     } as Record<string, string>,
     statuses: { completed: 'Completed', pending: 'Processing', failed: 'Failed' } as Record<string, string>,
     filter: 'Filter', searchPh: 'Search name, wallet or note', reference: 'Reference', balanceAfter: 'Balance after', from: 'From', to: 'To',
@@ -145,7 +161,7 @@ const en = {
     expires: 'Link valid until',
   },
   store: {
-    title: 'Store', lead: 'Local shops, paid from your wallet.', search: 'Search products or stores', digital: 'Digital', physical: 'Delivered', sortBy: 'Sort by',
+    title: 'Market', lead: 'Every product from every store in one place — pick, compare, pay from your wallet.', search: 'Search products or stores', digital: 'Digital', physical: 'Delivered', sortBy: 'Sort by',
     inStock: 'in stock', soldOut: 'Sold out', add: 'Add to cart', cart: 'Cart', checkout: 'Pay now', emptyCart: 'Your cart is empty.',
     by: 'by', sort: { new: 'Newest', price_asc: 'Price: low to high', price_desc: 'Price: high to low', name: 'Name' } as Record<string, string>,
     paid: 'Order paid', paidLead: 'Physical items: the store is paid when you confirm delivery.', loginToBuy: 'Sign in to buy',
@@ -190,6 +206,7 @@ const en = {
     recoveryLead: 'Save these somewhere safe. Each works once if you lose your phone.', sessions: 'Signed-in devices', thisDevice: 'This device',
     revoke: 'Sign out', signOutAll: 'Sign out everywhere', danger: 'Delete account', dangerLead: 'Your wallet must be empty and have no open orders.',
     deleteSend: 'Send confirmation code', deleteConfirm: 'Delete my account', lastUsed: 'Last active',
+    tabs: { profile: 'Profile', security: 'Security', devices: 'Devices', account: 'Account' } as Record<string, string>, prefs: 'Look & language', protection: 'Protection', protectionLead: '{n} of 3 shields on', shield2fa: 'Two-step verification', shieldPhone: 'Phone number added', shieldMail: 'E-mail verified', walletId: 'Wallet ID',
   },
   admin: {
     overview: 'Overview', users: 'Users', wallets: 'Money in wallets', tx24: 'Transactions · 24h', vol: 'Volume · 14 days', newUsers: 'New · 7 days',
@@ -261,6 +278,22 @@ type Dict = typeof en;
 
 const ar: Dict = {
   brand: { name: 'S-Taler', tagline: 'محفظتك الفلسطينية' },
+  agent: {
+    desk: 'مكتب الصرف', deskLead: 'إيداع نقدي وسحب نقدي — كل تسليم مسجّل بمحفظتك.', balance: 'الرصيد بمحفظتك', inToday: 'إيداع نقدي اليوم', outToday: 'سحب نقدي اليوم', escrow: 'محجوز بالقسائم',
+    cashIn: 'إيداع نقدي', cashInD: 'الزبون بيعطيك كاش وإنت بتعطيه QR قسيمة. المبلغ بينتقل من محفظتك لمحفظته.',
+    cashOut: 'سحب نقدي', cashOutD: 'الزبون بيدفعلك من محفظته بمسح الـ QR تبعك، وبعدها بتعطيه الكاش.',
+    newCashOut: 'اعمل QR سحب', waitingPay: 'بنستنى الزبون يمسح ويدفع…', paidHand: 'انْدفع — سلّمه {amount} كاش', cashouts: 'طلبات السحب',
+    st: { open: 'بانتظار الدفع', paid: 'مدفوع', cancelled: 'ملغي', expired: 'منتهي' },
+    profile: 'ملف الوكيل', profileLead: 'هيك بيشوفك الزبائن على خريطة وكلاء الصرف.', displayName: 'اسم المحل أو الوكيل', hours: 'ساعات الدوام', hoursPh: 'السبت–الخميس 9:00–20:00',
+    services: 'الخدمات', pending: 'بانتظار موافقة الإدارة — بتظهر على الخريطة أول ما توافق.', listed: 'ظاهر على الخريطة', suspended: 'مخفي عن الخريطة من الدعم',
+    pin: 'موقعك', pinHint: 'اكبس على الخريطة وين بيلاقوك الزبائن.', saveProfile: 'احفظ الملف', setupFirst: 'جهّز ملفك ليلاقوك الزبائن.',
+    find: 'وكلاء الصرف', findLead: 'حوّل الكاش لرصيد بالمحفظة — أو الرصيد لكاش — عند وكيل موثوق قريب منك.', none: 'ما في وكلاء بهالمنطقة لسا.', searchPh: 'دوّر بالاسم أو المدينة',
+    directions: 'الاتجاهات', payTitle: 'سحب نقدي', payFrom: 'كاش من الوكيل', payLead: 'ادفع هالمبلغ من محفظتك، والوكيل بيعطيك نفس المبلغ كاش.', pay: 'ادفع واستلم الكاش', paid: 'انْدفع — استلم الكاش', cancelQ: 'تلغي هالطلب؟', vouchersLink: 'القسائم النقدية',
+  },
+  market: { cats: 'تصفّح حسب الفئة', everything: 'كل شي', deals: 'عروض', byStore: 'تسوّق من متجر', results: '{n} منتج', newest: 'الأحدث', cheap: 'الأرخص', pricey: 'الأغلى', az: 'أ–ي', clear: 'امسح الفلاتر' },
+  adm2: { stores: 'متاجر هالحساب', products: 'المنتجات', noProducts: 'ما في منتجات بهالمتجر.', hide: 'إخفاء', show: 'إظهار', remove: 'حذف', removeQ: 'تحذف «{name}» من المتجر؟', open: 'افتح الصفحة', suspendStore: 'أوقف المتجر', activateStore: 'رجّع المتجر', storeQ: 'تغيّر حالة هالمتجر؟', agent: 'وكيل صرف', agentStatus: 'الظهور على الخريطة', st: { active: 'ظاهر', pending: 'بانتظار الموافقة', suspended: 'مخفي' }, saveAgent: 'احفظ ملف الوكيل', vouchers: 'القسائم', cashouts: 'طلبات السحب', cancelVoucher: 'ألغِ ورجّع المبلغ للوكيل', cancelQ: 'تلغي هالقسيمة؟', cancelB: 'المبلغ بيرجع لمحفظة الوكيل.', orders: 'طلب', noProfile: 'هالوكيل ما جهّز ملفه لسا — بتقدر تعبّيه عنه.' },
+  social: { instagram: 'إنستغرام', tiktok: 'تيك توك', facebook: 'فيسبوك', handlePh: '@اسم_متجرك', title: 'حسابات السوشال ميديا', follow: 'تابعنا', shareIg: 'إنستغرام', shareTt: 'تيك توك', copiedFor: 'انْسخ الرابط — الصقه في {app}' },
+  navg: { money: 'المال', shop: 'التسوّق', people: 'التواصل', work: 'شغلي', admin: 'الإدارة', more: 'المزيد', collapse: 'صغّر القائمة', expand: 'كبّر القائمة', support: 'الدعم', quick: 'سريع' },
   mailtest: { title: 'فحص الإيميل', lead: 'ابعت رمز تجريبي لإيميلك وشوف شو صار بالزبط.', send: 'ابعت إيميل تجريبي', ok: 'انبعت على {to}. إذا ما وصل الوارد خلال دقيقة، افحص البريد المزعج (Spam) أو العروض (Promotions) واكبس «ليس رسالة مزعجة» — هيك جيميل بيتعلّم يوصّل الجاية للوارد.', fail: 'ما زبط الإرسال: {error}', approve: 'فعّل التسجيل', approveT: 'تفعّل بدون رمز؟', approveB: 'بس إذا متأكد إنه الإيميل إله. الحساب بينعمل وبيوصله إيميل.' },
   disp: { title: 'النزاعات', none: 'ما في نزاعات. الكل مبسوط.', buyer: 'المشتري', store: 'المتجر', reason: 'السبب', release: 'ادفع للمتجر', refund: 'رجّع للمشتري', note: 'ملاحظة القرار (بشوفها الطرفين)', releaseQ: 'تدفع للمتجر؟', refundQ: 'ترجّع المبلغ للمشتري؟', decideB: 'هيك الطلب بتسكّر نهائيًا.', resolved: 'محلول', open: 'مفتوح' },
   shop: {
@@ -278,7 +311,7 @@ const ar: Dict = {
     howGet: 'كيف بدك تستلمه؟', delivery: 'توصيل', pickup: 'استلام من المتجر', address: 'عنوان التوصيل', addressPh: 'المدينة، الشارع، البناية — وعلامة مميزة بتساعد',
     phone: 'رقم للمندوب', note: 'ملاحظة للمتجر (اختياري)', useLocation: 'استخدم موقعي', located: 'انضاف الموقع', locating: 'عم نحدد موقعك…',
     payNow: 'تدفع هلّأ', laterBalance: 'بتدفع بعدين', totalLater: 'الباقي عند الاستلام',
-    ads: 'عروض',
+    ads: 'عروض', added: 'صار بسلّتك', viewCart: 'افتح السلة ({n})', qty: 'الكمية',
   },
   ord: {
     timeline: 'تتبّع الطلب', handover: 'رمز الاستلام', handoverLead: 'أعطِ هالرمز للمندوب (أو بالمتجر) بس لما يكون الطلب بإيدك. هو اللي بيحرّر الدفعة للمتجر.',
@@ -294,7 +327,7 @@ const ar: Dict = {
   },
   mstore: {
     stores: 'المتاجر والفروع', newStore: 'متجر جديد', newBranch: 'فرع جديد', branchName: 'اسم الفرع', branchOf: 'فرع من', current: 'شغّال على',
-    switch: 'بدّل المتجر', editStore: 'تفاصيل المتجر', logo: 'الشعار', cover: 'صورة الغلاف', city: 'المدينة', address: 'العنوان', storePhone: 'رقم المتجر', showPhone: 'اعرض الرقم بصفحة المتجر',
+    switch: 'بدّل المتجر', editStore: 'تفاصيل المتجر', logo: 'الشعار', logoAdd: 'أضف شعار متجرك', logoAddD: 'شعارك بيظهر بصفحة المتجر وبالسوق وعلى كل منتج — بدل الحرف.', cover: 'صورة الغلاف', city: 'المدينة', address: 'العنوان', storePhone: 'رقم المتجر', showPhone: 'اعرض الرقم بصفحة المتجر',
     accent: 'لون المتجر', pickupOn: 'الزبون بيقدر يستلم من المتجر', deliveryOn: 'منوصّل', deliveryNote: 'ملاحظة التوصيل', category: 'التصنيف', pin: 'موقع المتجر', pinHint: 'اكبس على الخريطة لتحدد مكان متجرك.',
     closeStore: 'سكّر المتجر', closeQ: 'تسكّر {name}؟', closeB: 'بيختفي من دليل المتاجر مع فروعه. لازم تخلّص الطلبات المفتوحة أول.', closeOk: 'سكّر المتجر',
     ads: 'الإعلانات', newAd: 'إعلان جديد', adMedia: 'صورة أو فيديو', adTitle: 'العنوان', adBody: 'نص قصير', adProduct: 'اربطه بمنتج (اختياري)', adActive: 'ظاهر', adDeleteQ: 'تحذف هالإعلان؟', adDeleteOk: 'احذف الإعلان',
@@ -316,7 +349,7 @@ const ar: Dict = {
     android: 'أول مرة بتنزّل؟ أندرويد رح يطلب تسمح بالتثبيت من المتصفح — هاد طبيعي.',
     iphone: 'عندك آيفون؟ افتح الموقع من Safari، اكبس مشاركة ثم «إضافة إلى الشاشة الرئيسية» — بيشتغل متل التطبيق تمامًا.',
   },
-  foot: { store: 'المتجر', open: 'افتح محفظة', bank: 'TalerBank', wallet: 'S-Taler', about: 'محفظة وبنك فلسطينيين بيشتغلوا مع بعض كأنهم واحد.', aboutBank: 'بنك رقمي بيشتغل إيد بإيد مع محفظة S-Taler.', privacy: 'بياناتك مشفّرة، دايمًا.' },
+  foot: { store: 'السوق', open: 'افتح محفظة', bank: 'TalerBank', wallet: 'S-Taler', about: 'محفظة وبنك فلسطينيين بيشتغلوا مع بعض كأنهم واحد.', aboutBank: 'بنك رقمي بيشتغل إيد بإيد مع محفظة S-Taler.', privacy: 'بياناتك مشفّرة، دايمًا.' },
   common: {
     continue: 'متابعة', cancel: 'إلغاء', areYouSure: 'متأكد إنك بدك تكمل؟', back: 'رجوع', save: 'حفظ التغييرات', saved: 'تم الحفظ', close: 'إغلاق', confirm: 'تأكيد', copy: 'نسخ', copied: 'تم النسخ',
     retry: 'حاول مجددًا', loading: 'جارٍ التحميل…', search: 'بحث', all: 'الكل', in: 'وارد', out: 'صادر', empty: 'لا شيء هنا بعد', optional: 'اختياري', amount: 'المبلغ',
@@ -325,7 +358,7 @@ const ar: Dict = {
   },
   nav: {
     help: 'كيف بتشتغل', contacts: 'جهات الاتصال', disputes: 'النزاعات', myStores: 'المتاجر والفروع', ads: 'الإعلانات', cash: 'قسائم نقدية',
-    home: 'الرئيسية', activity: 'الحركات', scan: 'مسح', store: 'المتجر', more: 'المزيد', send: 'تحويل', receive: 'استلام', bank: 'البنك', messages: 'الرسائل',
+    home: 'الرئيسية', activity: 'الحركات', scan: 'مسح', store: 'السوق', more: 'المزيد', agents: 'وكلاء الصرف', agentDesk: 'مكتب الصرف', send: 'تحويل', receive: 'استلام', bank: 'البنك', messages: 'الرسائل',
     settings: 'الإعدادات', orders: 'طلباتي', merchant: 'متجري', products: 'المنتجات', storeOrders: 'طلبات المتجر', vouchers: 'قسائم نقدية', admin: 'الإدارة',
     users: 'المستخدمون', stores: 'المتاجر', pending: 'تسجيلات معلّقة', bankOps: 'عمليات البنك', audit: 'سجل التدقيق', system: 'إعدادات النظام',
     notifications: 'الإشعارات', overview: 'نظرة عامة',
@@ -333,7 +366,7 @@ const ar: Dict = {
   landing: {
     title: 'مصاري بتتحرك متل الرسالة.',
     lead: 'حوّل واستلم وادفع بالـ QR بثواني. اشحن محفظتك من TalerBank، تسوّق من متاجر محلية، وكل شيكل محمي بأمان بمستوى البنوك.',
-    start: 'افتح محفظة مجانًا', signIn: 'تسجيل الدخول', browse: 'تصفّح المتجر',
+    start: 'افتح محفظة مجانًا', signIn: 'تسجيل الدخول', browse: 'تصفّح السوق',
     f1t: 'ادفع بنظرة', f1d: 'امسح الكود وخلصت الدفعة. لا أرقام بطاقات ولا انتظار.',
     f2t: 'مربوطة بـ TalerBank', f2d: 'انقل المصاري بين بنكك ومحفظتك بدون ما تشارك كلمة سر البنك أبدًا.',
     f3t: 'محمية من الأساس', f3d: 'تحقق بخطوتين، رسائل مشفّرة، وتنبيه فوري مع كل حركة.',
@@ -346,7 +379,7 @@ const ar: Dict = {
     confirmPassword: 'تأكيد كلمة المرور', mismatch: 'كلمتا المرور مش متطابقتين.',
     welcome: 'أهلًا من جديد', loginLead: 'سجّل دخولك لمحفظتك.', email: 'البريد الإلكتروني', password: 'كلمة المرور', newPassword: 'كلمة مرور جديدة', login: 'دخول',
     noAccount: 'جديد هون؟', createOne: 'افتح محفظة', haveAccount: 'عندك محفظة؟', forgot: 'نسيت كلمة المرور؟', registerTitle: 'افتح محفظتك', registerLead: 'بتاخد أقل من دقيقة.',
-    fullName: 'الاسم الكامل', phone: 'رقم الهاتف', accountType: 'نوع الحساب', personal: 'شخصي', personalD: 'حوّل واستلم وتسوّق', business: 'تجاري', businessD: 'بيع في متجر S-Taler',
+    fullName: 'الاسم الكامل', phone: 'رقم الهاتف', accountType: 'نوع الحساب', personal: 'شخصي', personalD: 'حوّل واستلم وتسوّق', business: 'تاجر', businessD: 'افتح متاجر وبيع', exchange: 'وكيل صرف', exchangeD: 'إيداع وسحب نقدي للناس',
     register: 'إنشاء المحفظة', verifyTitle: 'افحص بريدك', verifyLead: 'بعتنا رمز من 6 أرقام إلى', verify: 'تأكيد البريد', resend: 'أرسل رمزًا جديدًا', resent: 'الرمز الجديد بالطريق',
     mfaTitle: 'التحقق بخطوتين', mfaLead: 'أدخل الرمز من تطبيق المصادقة، أو أحد رموز الاسترداد.', mfaCode: 'رمز المصادقة', resetTitle: 'إعادة تعيين كلمة المرور',
     resetLead: 'رح نبعتلك رمز لتعيين كلمة مرور جديدة.', sendCode: 'أرسل الرمز', resetDone: 'تم تحديث كلمة المرور. سجّل دخولك بالكلمة الجديدة.', setPassword: 'تعيين كلمة المرور', code: 'الرمز',
@@ -362,7 +395,7 @@ const ar: Dict = {
     types: {
       transfer_in: 'وارد', transfer_out: 'تحويل صادر', payment: 'دفع QR', payment_received: 'دفعة QR واردة', withdraw: 'شحن من البنك', deposit: 'تحويل للبنك',
       deposit_refund: 'استرجاع تحويل بنكي', purchase: 'شراء من المتجر', sale: 'مبيعات المتجر', refund: 'استرجاع', exchange_deposit: 'قسيمة نقدية', exchange_payout: 'صرف نقدي',
-      voucher_issued: 'إصدار قسيمة', voucher_refund: 'إرجاع قسيمة',
+      voucher_issued: 'إصدار قسيمة', voucher_refund: 'إرجاع قسيمة', cash_out: 'سحب نقدي', cash_out_received: 'سحب نقدي مدفوع لك',
     },
     statuses: { completed: 'مكتملة', pending: 'قيد المعالجة', failed: 'فشلت' },
     filter: 'تصفية', searchPh: 'ابحث بالاسم أو المحفظة أو الملاحظة', reference: 'المرجع', balanceAfter: 'الرصيد بعدها', from: 'من', to: 'إلى',
@@ -393,7 +426,7 @@ const ar: Dict = {
     opStatus: { pending: 'قيد المعالجة', completed: 'مكتملة', failed: 'فشلت', aborted: 'ملغاة' }, expires: 'الربط صالح حتى',
   },
   store: {
-    title: 'المتجر', lead: 'متاجر محلية، والدفع من محفظتك.', search: 'ابحث عن منتج أو متجر', digital: 'رقمي', physical: 'توصيل', sortBy: 'الترتيب', inStock: 'متوفر', soldOut: 'نفدت الكمية',
+    title: 'السوق', lead: 'كل منتجات كل المتاجر بمكان واحد — اختار، قارن، وادفع من محفظتك.', search: 'ابحث عن منتج أو متجر', digital: 'رقمي', physical: 'توصيل', sortBy: 'الترتيب', inStock: 'متوفر', soldOut: 'نفدت الكمية',
     add: 'أضف للسلة', cart: 'السلة', checkout: 'ادفع الآن', emptyCart: 'سلتك فاضية.', by: 'من',
     sort: { new: 'الأحدث', price_asc: 'السعر: من الأقل', price_desc: 'السعر: من الأعلى', name: 'الاسم' }, paid: 'تم دفع الطلب',
     paidLead: 'المنتجات المادية: المتجر بيستلم المبلغ لما تأكد وصول طلبك.', loginToBuy: 'سجّل دخولك لتشتري', escrow: 'دفعتك محفوظة بأمان لحتى تأكد إنه طلبك وصل.',
@@ -436,6 +469,7 @@ const ar: Dict = {
     recoveryLead: 'احفظها بمكان آمن. كل رمز بيشتغل مرة وحدة إذا ضاع جوالك.', sessions: 'الأجهزة المسجّلة', thisDevice: 'هذا الجهاز', revoke: 'تسجيل خروج',
     signOutAll: 'تسجيل الخروج من كل الأجهزة', danger: 'حذف الحساب', dangerLead: 'لازم تكون محفظتك فاضية وما في طلبات مفتوحة.', deleteSend: 'أرسل رمز التأكيد',
     deleteConfirm: 'احذف حسابي', lastUsed: 'آخر نشاط',
+    tabs: { profile: 'الملف الشخصي', security: 'الأمان', devices: 'الأجهزة', account: 'الحساب' }, prefs: 'الشكل واللغة', protection: 'الحماية', protectionLead: '{n} من 3 دروع شغّالة', shield2fa: 'التحقق بخطوتين', shieldPhone: 'رقم الجوال مضاف', shieldMail: 'الإيميل مؤكد', walletId: 'رقم المحفظة',
   },
   admin: {
     overview: 'نظرة عامة', users: 'المستخدمون', wallets: 'المال في المحافظ', tx24: 'الحركات · 24 ساعة', vol: 'الحجم · 14 يوم', newUsers: 'جدد · 7 أيام', with2fa: 'مع التحقق بخطوتين',

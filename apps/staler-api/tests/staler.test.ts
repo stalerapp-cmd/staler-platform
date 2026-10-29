@@ -203,11 +203,11 @@ describe('wallet transfers', () => {
 });
 
 // ============================================================ exchange vouchers
-describe('cash vouchers (any personal or business account; replaces the unauthenticated /exchange/claim)', () => {
+describe('cash agents: vouchers (cash-in) and cash-out requests', () => {
   it('escrows, claims once, blocks self-claim and refunds on cancel', async () => {
     const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
     const email = `${uniq('ex')}@x.com`;
-    await request(app).post('/api/admin/users').set(auth(sup)).send({ fullName: 'Cash Agent', email, password: STRONG, role: 'user' });
+    await request(app).post('/api/admin/users').set(auth(sup)).send({ fullName: 'Cash Agent', email, password: STRONG, role: 'exchange' });
     const agent = await login(app, email, STRONG);
     const legacy = funder.token;
     const me = await request(app).get('/api/auth/me').set(auth(agent));
@@ -219,9 +219,9 @@ describe('cash vouchers (any personal or business account; replaces the unauthen
     expect(uri).toMatch(/^taler:\/\/exchange-claim\?v=/);
     expect((await request(app).get('/api/wallet').set(auth(agent))).body.data.wallet.balance).toBe('70.00');
 
-    // any account can hand out cash value, but never more than it holds; admins can't mint money
+    // only cash agents hand out vouchers; admins can't mint money
     const u = await walletUser(app, 'Voucher Taker');
-    expect((await request(app).post('/api/exchange/vouchers').set(auth(u.token)).send({ amount: '1' })).status).toBe(409);
+    expect((await request(app).post('/api/exchange/vouchers').set(auth(u.token)).send({ amount: '1' })).status).toBe(403);
     expect((await request(app).post('/api/exchange/vouchers').set(auth(sup)).send({ amount: '1' })).status).toBe(403);
     // wrong secret
     const forged = uri.replace(/\.[A-Za-z0-9_-]{32}$/, '.' + 'A'.repeat(32));
@@ -238,6 +238,33 @@ describe('cash vouchers (any personal or business account; replaces the unauthen
     await request(app).delete(`/api/exchange/vouchers/${v2.body.data.voucher.id}`).set(auth(agent));
     expect((await request(app).get('/api/wallet').set(auth(agent))).body.data.wallet.balance).toBe('70.00');
     expect((await request(app).post('/api/exchange/claim').set(auth(u.token)).send({ voucher: v2.body.data.voucher.uri })).status).toBe(409);
+
+    // cash-out: the agent shows a request, the customer pays it exactly once
+    const co = await request(app).post('/api/exchange/cashouts').set(auth(agent)).send({ amount: '12.5' });
+    expect(co.status).toBe(201);
+    const code: string = co.body.data.cashout.uri;
+    expect(code).toMatch(/^taler:\/\/agent-cashout\?c=/);
+    expect((await request(app).post('/api/exchange/cashouts/preview').set(auth(u.token)).send({ code })).body.data.amount).toBe('12.50');
+    expect((await request(app).post('/api/exchange/cashouts/pay').set(auth(agent)).send({ code })).status).toBe(403);
+    const [p1, p2] = await Promise.all([
+      request(app).post('/api/exchange/cashouts/pay').set(auth(u.token)).send({ code }),
+      request(app).post('/api/exchange/cashouts/pay').set(auth(u.token)).send({ code }),
+    ]);
+    expect([p1!.status, p2!.status].sort()).toEqual([200, 409]);
+    expect(await walletBalance(app, u)).toBe('17.50');
+    expect((await request(app).get('/api/wallet').set(auth(agent))).body.data.wallet.balance).toBe('82.50');
+    const stats = await request(app).get('/api/exchange/stats').set(auth(agent));
+    expect(stats.body.data.cash_out_today).toBe('12.50');
+
+    // the agent's public profile shows on the map only after an admin approves it
+    await request(app).put('/api/exchange/profile').set(auth(agent)).send({ displayName: 'Nablus Cash Point', city: 'Nablus', lat: 32.22, lng: 35.26 });
+    const listed = () => request(app).get('/api/exchange/agents').set(auth(u.token)).then((r) => r.body.data.agents.map((a: any) => a.display_name));
+    expect(await listed()).not.toContain('Nablus Cash Point');
+    const agentId = me.body.data.user.id;
+    expect((await request(app).put(`/api/admin/users/${agentId}/agent`).set(auth(sup)).send({ displayName: 'Nablus Cash Point', city: 'Nablus', status: 'active' })).status).toBe(200);
+    expect(await listed()).toContain('Nablus Cash Point');
+    const detail = await request(app).get(`/api/admin/users/${agentId}`).set(auth(sup));
+    expect(detail.body.data.agent.cashouts[0].status).toBe('paid');
   });
 });
 

@@ -39,6 +39,7 @@ const ALERTS: Record<string, (d: Record<string, any>, dev: string) => { en: [str
   'bank.deposit': (d) => ({ en: ['Transfer to bank started', `${d.amount} is on its way to your bank.`], ar: ['بلّش التحويل للبنك', `${d.amount} بالطريق لبنكك.`] }),
   'exchange.voucher_created': (d) => ({ en: ['Voucher created', `Cash voucher for ${d.amount} is ready to hand out.`], ar: ['انعملت قسيمة', `قسيمة نقدية بقيمة ${d.amount} جاهزة للتسليم.`] }),
   'exchange.voucher_claimed': () => ({ en: ['Voucher redeemed', 'The cash voucher value is now in your wallet.'], ar: ['تم صرف القسيمة', 'قيمة القسيمة صارت بمحفظتك.'] }),
+  'exchange.cashout_paid': () => ({ en: ['Cash withdrawn', 'You paid the agent from your wallet — collect your cash.'], ar: ['تم السحب النقدي', 'دفعت للوكيل من محفظتك — استلم مبلغك نقدًا.'] }),
   'merchant.store_created': () => ({ en: ['Store created', 'Add products and share your store link.'], ar: ['انعمل متجرك', 'أضف منتجات وشارك رابط متجرك.'] }),
   'store.file_download': () => ({ en: ['File downloaded', 'A personalised copy of your purchase was downloaded.'], ar: ['تم تنزيل ملف', 'انْنزّلت نسخة مخصّصة من مشترياتك.'] }),
 };

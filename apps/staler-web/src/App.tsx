@@ -7,7 +7,9 @@ import { Spinner } from './components/ui';
 import { ErrorBoundary, lazyRetry } from './components/Boundary';
 import { AppLock } from './components/AppLock';
 import Landing from './pages/Landing';
+import { isNative } from './lib/api';
 import { Forgot, Login, Register, Verify } from './pages/Auth';
+const GoogleApp = lazyRetry(() => import('./pages/GoogleApp'));
 
 const Home = lazyRetry(() => import('./pages/Home'));
 const Send = lazyRetry(() => import('./pages/Send'));
@@ -38,6 +40,9 @@ const AdminDisputes = lazyRetry(() => import('./pages/Admin').then((m) => ({ def
 const StoresPage = lazyRetry(() => import('./pages/Stores'));
 const StoresDirectory = lazyRetry(() => import('./pages/Stores').then((m) => ({ default: m.StoresDirectory })));
 const StorePage = lazyRetry(() => import('./pages/StorePage'));
+const AgentDesk = lazyRetry(() => import('./pages/Agent'));
+const AgentsMap = lazyRetry(() => import('./pages/Agent').then((m) => ({ default: m.AgentsMap })));
+const CashOutPay = lazyRetry(() => import('./pages/Agent').then((m) => ({ default: m.CashOutPay })));
 const Contacts = lazyRetry(() => import('./pages/Contacts'));
 const Help = lazyRetry(() => import('./pages/Help'));
 const MerchantStores = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantStores })));
@@ -85,11 +90,12 @@ export default function App() {
     <AppLock />
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<GuestOnly><Landing /></GuestOnly>} />
+        <Route path="/" element={isNative ? <Navigate to="/login" replace /> : <GuestOnly><Landing /></GuestOnly>} />
         <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
         <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
         <Route path="/verify" element={<GuestOnly><Verify /></GuestOnly>} />
         <Route path="/forgot" element={<GuestOnly><Forgot /></GuestOnly>} />
+        <Route path="/google-app" element={page(<GoogleApp />)} />
         <Route path="/store" element={page(<Store publicMode />)} />
         <Route path="/stores" element={page(<StoresPage />)} />
         <Route path="/s/:slug" element={page(<StorePage />)} />
@@ -110,7 +116,10 @@ export default function App() {
           <Route path="messages" element={page(<Messages />)} />
           <Route path="messages/:id" element={page(<Messages />)} />
           <Route path="settings" element={page(<Settings />)} />
-          <Route path="vouchers" element={<Private roles={['user', 'merchant', 'exchange']}>{page(<Vouchers />)}</Private>} />
+          <Route path="vouchers" element={<Private roles={['exchange']}>{page(<Vouchers />)}</Private>} />
+          <Route path="agent" element={<Private roles={['exchange']}>{page(<AgentDesk />)}</Private>} />
+          <Route path="agents" element={page(<AgentsMap />)} />
+          <Route path="cashout" element={page(<CashOutPay />)} />
           <Route path="merchant" element={<Private roles={['merchant']}>{page(<MerchantDashboard />)}</Private>} />
           <Route path="merchant/products" element={<Private roles={['merchant']}>{page(<MerchantProducts />)}</Private>} />
           <Route path="merchant/orders" element={<Private roles={['merchant']}>{page(<MerchantOrders />)}</Private>} />

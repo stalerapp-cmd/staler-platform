@@ -184,7 +184,7 @@ export async function assertDailyLimit(c: pg.PoolClient, walletPublicId: string,
   const r = await one<{ total: string }>(
     `SELECT COALESCE(-SUM(amount), 0)::text AS total FROM ${S}.transactions
       WHERE wallet_id = $1 AND amount < 0 AND status IN ('completed','pending')
-        AND transaction_type IN ('transfer_out','deposit','purchase','payment')
+        AND transaction_type IN ('transfer_out','deposit','purchase','payment','cash_out')
         AND created_at >= date_trunc('day', now())`,
     [walletPublicId],
     c,

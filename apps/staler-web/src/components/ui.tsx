@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from 'framer-motion';
+import { AnimatePresence, animate, motion, useDragControls, useMotionValue, useReducedMotion, useTransform } from 'framer-motion';
 import {
   forwardRef,
   useEffect,
@@ -14,6 +14,8 @@ import { Check, ChevronDown, Copy, Loader2, X } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { assetUrl } from '../lib/api';
 import { initials, normalizeAmountInput, passwordScore } from '../lib/format';
+import { usePageLook } from '../lib/pageLook';
+import { StarMotif } from './Tatreez';
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 
@@ -313,15 +315,76 @@ export function ErrorNote({ children }: { children: ReactNode }) {
   );
 }
 
-export function PageHeader({ title, lead, actions }: { title: string; lead?: string; actions?: ReactNode }) {
-  return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-2xl text-ink sm:text-3xl">{title}</h1>
-        {lead && <p className="mt-1 max-w-xl text-muted">{lead}</p>}
+export type ClothTone = 'night' | 'stitch' | 'olive' | 'gold' | 'sky';
+
+/**
+ * Page title. By default it opens the page with a coloured "cloth" banner
+ * (texture + a tatreez star stitching itself in); `plain` keeps the old quiet title.
+ */
+export function PageHeader({
+  title,
+  lead,
+  actions,
+  plain,
+  tone,
+  icon,
+}: {
+  title: string;
+  lead?: string;
+  actions?: ReactNode;
+  plain?: boolean;
+  tone?: ClothTone;
+  icon?: ReactNode;
+}) {
+  const look = usePageLook();
+  if (plain) {
+    return (
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl text-ink sm:text-3xl">{title}</h1>
+          {lead && <p className="mt-1 max-w-xl text-muted">{lead}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
-    </div>
+    );
+  }
+  const t = tone ?? look.tone;
+  const Icon = look.icon;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10, scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', bounce: 0.25, duration: 0.6 }}
+      className={cx('cloth mb-6 overflow-hidden rounded-[28px] px-5 py-6 shadow-card sm:px-7 sm:py-7', `cloth-${t}`)}
+    >
+      <div className="pointer-events-none absolute -end-14 top-1/2 h-40 w-40 -translate-y-1/2 opacity-30 sm:-end-10 sm:h-52 sm:w-52" aria-hidden="true">
+        <div className="spin-slow h-full w-full">
+          <StarMotif size={17} cell={10} className="h-full w-full" colors={['#FFFFFF', '#FFE3A1']} strokeWidth={2.2} delay={0.15} />
+        </div>
+      </div>
+      <div className="pointer-events-none absolute -bottom-6 end-24 hidden h-16 w-16 opacity-25 sm:block" aria-hidden="true">
+        <div className="floaty h-full w-full">
+          <StarMotif size={9} cell={10} className="h-full w-full" colors={['#FFFFFF', '#FFFFFF']} strokeWidth={2.4} delay={0.4} />
+        </div>
+      </div>
+      <div className="relative flex flex-wrap items-end justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <motion.span
+            initial={{ rotate: -18, scale: 0.6, opacity: 0 }}
+            animate={{ rotate: 0, scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', bounce: 0.5, delay: 0.1 }}
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-dashed border-white/40 bg-white/15 backdrop-blur-sm sm:h-14 sm:w-14"
+          >
+            {icon ?? <Icon className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.9} />}
+          </motion.span>
+          <div className="min-w-0">
+            <h1 className="text-2xl text-white sm:text-[2rem]">{title}</h1>
+            {lead && <p className="lead mt-1 max-w-xl text-[15px]">{lead}</p>}
+          </div>
+        </div>
+        {actions && <div className="relative flex flex-wrap gap-2">{actions}</div>}
+      </div>
+    </motion.div>
   );
 }
 
@@ -367,21 +430,23 @@ export function Toggle({ checked, onChange, label, description }: { checked: boo
 
 // ----------------------------------------------------------------- Sheet
 /** Bottom sheet on phones, centred dialog on larger screens. Escape and backdrop close it. */
-export function Sheet({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
+export function Sheet({ open, onClose, title, children, wide, footer }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const drag = useDragControls();
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current();
     window.addEventListener('keydown', onKey);
-    const tm = setTimeout(() => ref.current?.querySelector<HTMLElement>('input,button,textarea,select')?.focus(), 60);
+    // Focus the first field only with a keyboard; on phones it would pop the keyboard over the sheet.
+    const tm = window.matchMedia('(hover: hover)').matches ? setTimeout(() => ref.current?.querySelector<HTMLElement>('input,textarea,select')?.focus(), 60) : undefined;
     document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      clearTimeout(tm);
+      if (tm) clearTimeout(tm);
       document.body.style.overflow = '';
       prev?.focus?.();
     };
@@ -404,23 +469,40 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
           <motion.div className="absolute inset-0 bg-night/55 backdrop-blur-[2px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }} onClick={onClose} />
           <motion.div
             ref={ref}
-            initial={{ y: 40, opacity: 0, scale: 0.98 }}
+            drag="y"
+            dragControls={drag}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 110 || info.velocity.y > 700) onClose();
+            }}
+            initial={{ y: 60, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 40, opacity: 0, scale: 0.98, transition: { duration: 0.18 } }}
+            exit={{ y: 60, opacity: 0, scale: 0.98, transition: { duration: 0.18 } }}
             transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
             className={cx(
-              'safe-bottom relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-surface p-5 shadow-card sm:rounded-3xl sm:p-6',
+              'relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[28px] bg-surface shadow-card sm:max-h-[88dvh] sm:rounded-[28px]',
               wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
             )}
           >
-            <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-line sm:hidden" />
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <h2 className="text-xl">{title}</h2>
-              <button onClick={onClose} className="rounded-lg p-1.5 text-muted hover:bg-sunk hover:text-ink" aria-label={t.common.close}>
-                <X className="h-5 w-5" />
-              </button>
+            {/* Handle + title stay put while the content scrolls; drag the top down to close on phones. */}
+            <div className="shrink-0 touch-none px-5 pt-2.5 sm:px-6 sm:pt-5" onPointerDown={(e) => drag.start(e)}>
+              <div className="mx-auto mb-3 h-1.5 w-11 rounded-full bg-line sm:hidden" />
+              <div className="flex items-center justify-between gap-4 pb-3">
+                <h2 className="line-clamp-2 min-w-0 text-xl">{title}</h2>
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={onClose}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sunk text-muted transition hover:text-ink active:scale-90"
+                  aria-label={t.common.close}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
-            {children}
+            <div className={cx('min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6', footer ? 'pb-4' : 'pb-[max(env(safe-area-inset-bottom),1.25rem)] sm:pb-6')}>{children}</div>
+            {footer && <div className="shrink-0 border-t border-line/80 bg-surface/95 px-5 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 backdrop-blur sm:px-6 sm:pb-5">{footer}</div>}
           </motion.div>
         </motion.div>
       )}

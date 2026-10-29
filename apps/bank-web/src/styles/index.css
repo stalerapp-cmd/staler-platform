@@ -109,3 +109,7 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   direction: rtl;
   text-align: right;
 }
+
+/* Grid and flex children may shrink below their content (long names, IBANs, truncated text)
+   instead of widening the page on phones. */
+.grid > * { min-width: 0; }

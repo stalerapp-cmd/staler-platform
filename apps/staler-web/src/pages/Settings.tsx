@@ -1,6 +1,7 @@
+import { motion } from 'framer-motion';
 import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Laptop, LogOut, ShieldAlert, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
+import { AtSign, Camera, Check, KeyRound, Languages, Laptop, LockKeyhole, LogOut, MonitorSmartphone, Moon, Palette, ShieldAlert, ShieldCheck, Smartphone, Sun, Trash2, UserRound, type LucideIcon } from 'lucide-react';
 import { applySession, del, patch, post, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
@@ -10,20 +11,32 @@ import { useTheme } from '../lib/theme';
 import { useData } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
-import { Avatar, Badge, Button, CodeInput, CopyButton, ErrorNote, Field, PageHeader, PasswordStrength, Segmented, Sheet } from '../components/ui';
+import { Avatar, Badge, Button, CodeInput, CopyButton, ErrorNote, Field, PasswordStrength, Sheet, cx } from '../components/ui';
+import { StarMotif } from '../components/Tatreez';
+import { fill } from '../lib/format';
 import { useConfirm } from '../components/Confirm';
 
-function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+function Section({ title, children, aside, icon: Icon, tone = 'bg-night text-white' }: { title: string; children: ReactNode; aside?: ReactNode; icon?: LucideIcon; tone?: string }) {
   return (
-    <section className="card p-5 sm:p-6">
+    <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card p-5 sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-lg">{title}</h2>
+        <h2 className="flex items-center gap-3 text-lg">
+          {Icon && (
+            <span className={`grid h-9 w-9 place-items-center rounded-xl ${tone}`}>
+              <Icon className="h-[18px] w-[18px]" />
+            </span>
+          )}
+          {title}
+        </h2>
         {aside}
       </div>
       {children}
-    </section>
+    </motion.section>
   );
 }
+
+type Tab = 'profile' | 'security' | 'devices' | 'account';
+const TAB_ICONS: Record<Tab, LucideIcon> = { profile: UserRound, security: ShieldCheck, devices: MonitorSmartphone, account: KeyRound };
 
 export default function Settings() {
   const { t, lang, setLang, err } = useI18n();
@@ -34,6 +47,7 @@ export default function Settings() {
   const fileRef = useRef<HTMLInputElement>(null);
   const confirm = useConfirm();
   const sessions = useData<{ sessions: any[] }>('/api/auth/me/sessions');
+  const [tab, setTab] = useState<Tab>('profile');
 
   const [name, setName] = useState(user?.full_name ?? '');
   const [phone, setPhone] = useState(user?.phone_number ?? '');
@@ -73,14 +87,24 @@ export default function Settings() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader title={t.settings.title} />
-
-      <Section title={t.settings.profile}>
-        <div className="flex flex-wrap items-center gap-5">
+    <div className="mx-auto max-w-5xl">
+      {/* Profile cloth: photo, name, account type and how protected the account is */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="cloth cloth-sky mb-6 overflow-hidden rounded-[30px] p-5 shadow-card sm:p-7"
+      >
+        <div className="pointer-events-none absolute -end-12 top-1/2 h-56 w-56 -translate-y-1/2 opacity-25">
+          <div className="spin-slow h-full w-full">
+            <StarMotif size={17} cell={10} className="h-full w-full" colors={['#FFFFFF', '#FFE3A1']} strokeWidth={2.2} />
+          </div>
+        </div>
+        <div className="relative flex flex-wrap items-center gap-5">
           <div className="relative">
-            <Avatar name={user?.full_name} src={user?.profile_image} size={84} />
-            <button onClick={() => fileRef.current?.click()} className="absolute -bottom-1 -end-1 grid h-9 w-9 place-items-center rounded-full bg-stitch text-white shadow-lift" aria-label={t.settings.changePhoto}>
+            <span className="block rounded-full ring-4 ring-white/30">
+              <Avatar name={user?.full_name} src={user?.profile_image} size={92} />
+            </span>
+            <button onClick={() => fileRef.current?.click()} className="absolute -bottom-1 -end-1 grid h-10 w-10 place-items-center rounded-full bg-stitch text-white shadow-lift transition hover:scale-110" aria-label={t.settings.changePhoto}>
               <Camera className="h-4 w-4" />
             </button>
             <input
@@ -99,23 +123,89 @@ export default function Settings() {
               }
             />
           </div>
-          <div className="min-w-0">
-            <p className="font-display text-xl">{user?.full_name}</p>
-            <p className="text-sm text-muted">{user?.email}</p>
-            <RoleBadge className="mt-2" />
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-2xl text-white">{user?.full_name}</p>
+            <p className="truncate text-sm text-white/75">{user?.email}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <RoleBadge onDark />
+              {user?.wallet_id && (
+                <span className="num inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs text-white/90">
+                  {user.wallet_id}
+                  <CopyButton text={user.wallet_id} />
+                </span>
+              )}
+            </div>
             {user?.profile_image && (
-              <button className="mt-1 text-sm text-stitch" onClick={async () => {
+              <button
+                className="mt-2 text-sm text-white/80 underline-offset-4 hover:underline"
+                onClick={async () => {
                   if (!(await confirm({ title: t.ask.photoTitle, body: t.ask.photoBody, confirmLabel: t.ask.photoOk, tone: 'danger' }))) return;
                   await act('avatar', async () => (await del('/api/auth/me/avatar'), await reload()));
-                }}>
+                }}
+              >
                 {t.settings.removePhoto}
               </button>
             )}
           </div>
+          <div className="w-full rounded-2xl bg-white/12 p-3.5 backdrop-blur-sm sm:w-64">
+            {(() => {
+              const shields: [boolean, string][] = [[!!user?.totp_enabled, t.settings.shield2fa], [!!user?.phone_number, t.settings.shieldPhone], [true, t.settings.shieldMail]];
+              const on = shields.filter((x) => x[0]).length;
+              return (
+                <>
+                  <p className="flex items-center justify-between text-sm font-medium text-white">
+                    {t.settings.protection}
+                    <span className="text-xs text-white/75">{fill(t.settings.protectionLead, { n: on })}</span>
+                  </p>
+                  <div className="mt-2 flex gap-1.5">
+                    {shields.map((x, i) => (
+                      <motion.span key={i} initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 0.3 + i * 0.15 }} className={cx('h-2 flex-1 origin-left rounded-full', x[0] ? 'bg-[#9DE07B]' : 'bg-white/25')} />
+                    ))}
+                  </div>
+                  <ul className="mt-2.5 space-y-1 text-xs text-white/85">
+                    {shields.map((x, i) => (
+                      <li key={i} className="flex items-center gap-1.5">
+                        {x[0] ? <Check className="h-3.5 w-3.5 text-[#9DE07B]" /> : <ShieldAlert className="h-3.5 w-3.5 text-[#FFD27A]" />}
+                        {x[1]}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              );
+            })()}
+          </div>
         </div>
         <ErrorNote>{error.avatar}</ErrorNote>
+      </motion.div>
+
+      <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-6">
+        {/* Tabs: a scrolling pill row on phones, a sticky list on desktop */}
+        <div role="tablist" className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 lg:sticky lg:top-24 lg:mx-0 lg:mb-0 lg:h-fit lg:flex-col lg:overflow-visible lg:px-0">
+          {(['profile', 'security', 'devices', 'account'] as Tab[]).map((k) => {
+            const Icon = TAB_ICONS[k];
+            const on = tab === k;
+            return (
+              <button
+                key={k}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setTab(k)}
+                className={cx('relative flex shrink-0 items-center gap-2.5 rounded-2xl px-4 py-2.5 text-[15px] transition', on ? 'text-white' : 'bg-surface text-muted hover:text-ink lg:bg-transparent')}
+              >
+                {on && <motion.span layoutId="settings-tab" className="absolute inset-0 rounded-2xl bg-night shadow-lift dark:bg-white/15" transition={{ type: 'spring', bounce: 0.2, duration: 0.45 }} />}
+                <Icon className="relative h-[18px] w-[18px]" />
+                <span className="relative whitespace-nowrap">{t.settings.tabs[k]}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="min-w-0 space-y-5">
+      {tab === 'profile' && (
+        <>
+      <Section title={t.settings.profile} icon={UserRound}>
         <form
-          className="mt-6 grid gap-4 sm:grid-cols-2"
+          className="grid gap-4 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
             void act('profile', async () => {
@@ -127,22 +217,49 @@ export default function Settings() {
         >
           <Field label={t.settings.fullName} value={name} onChange={(e) => setName(e.target.value)} required />
           <Field label={t.settings.phone} value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" type="tel" />
-          <div>
-            <p className="mb-1.5 text-sm font-medium text-ink/80">{t.settings.language}</p>
-            <Segmented value={lang} onChange={setLang} options={[{ value: 'ar', label: 'العربية' }, { value: 'en', label: 'English' }]} />
-          </div>
-          <div>
-            <p className="mb-1.5 text-sm font-medium text-ink/80">{t.settings.appearance}</p>
-            <Segmented value={theme} onChange={setTheme} options={[{ value: 'light', label: t.settings.light }, { value: 'dark', label: t.settings.dark }]} />
-          </div>
           <div className="sm:col-span-2">
             <ErrorNote>{error.profile}</ErrorNote>
             <Button loading={busy === 'profile'}>{t.common.save}</Button>
           </div>
         </form>
       </Section>
+      <Section title={t.settings.prefs} icon={Palette} tone="bg-gold text-night">
+        <p className="mb-2 flex items-center gap-2 text-sm font-medium text-ink/80">
+          <Languages className="h-4 w-4" /> {t.settings.language}
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {([['ar', 'العربية', 'ع'], ['en', 'English', 'A']] as const).map(([v, label, glyph]) => (
+            <button key={v} onClick={() => setLang(v)} className={cx('flex items-center gap-3 rounded-2xl border p-3 text-start transition', lang === v ? 'border-stitch ring-2 ring-stitch/20' : 'border-line hover:border-ink/30')}>
+              <span className={cx('grid h-10 w-10 place-items-center rounded-xl font-display text-lg', lang === v ? 'bg-stitch text-white' : 'bg-sunk')}>{glyph}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mb-2 mt-5 text-sm font-medium text-ink/80">{t.settings.appearance}</p>
+        <div className="grid grid-cols-2 gap-3">
+          {(['light', 'dark'] as const).map((v) => (
+            <button key={v} onClick={() => setTheme(v)} className={cx('overflow-hidden rounded-2xl border text-start transition', theme === v ? 'border-stitch ring-2 ring-stitch/20' : 'border-line hover:border-ink/30')}>
+              <div className={cx('flex h-20 items-end gap-1.5 p-2.5', v === 'light' ? 'bg-[#F4F5F9]' : 'bg-[#0D1230]')}>
+                <span className={cx('h-10 w-6 rounded-md', v === 'light' ? 'bg-white' : 'bg-[#161D45]')} />
+                <span className="flex-1 space-y-1.5">
+                  <span className="block h-4 rounded-md bg-[#C8344A]" />
+                  <span className={cx('block h-3 w-2/3 rounded-md', v === 'light' ? 'bg-white' : 'bg-[#161D45]')} />
+                </span>
+              </div>
+              <span className="flex items-center gap-2 px-3 py-2.5 text-sm">
+                {v === 'light' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {v === 'light' ? t.settings.light : t.settings.dark}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Section>
+        </>
+      )}
 
-      <Section title={t.settings.email} aside={emailStep === 'idle' && <Button size="sm" variant="secondary" onClick={() => setEmailStep('form')}>{t.settings.changeEmail}</Button>}>
+      {tab === 'account' && (
+        <>
+      <Section title={t.settings.email} icon={AtSign} tone="bg-olive text-white" aside={emailStep === 'idle' && <Button size="sm" variant="secondary" onClick={() => setEmailStep('form')}>{t.settings.changeEmail}</Button>}>
         <p className="num">{user?.email}</p>
         {emailStep === 'form' && (
           <form
@@ -188,7 +305,12 @@ export default function Settings() {
         )}
       </Section>
 
-      <Section title={t.settings.password}>
+        </>
+      )}
+
+      {tab === 'security' && (
+        <>
+      <Section title={t.settings.password} icon={LockKeyhole}>
         <form
           className="grid gap-4 sm:grid-cols-2"
           onSubmit={(e) => {
@@ -231,6 +353,8 @@ export default function Settings() {
 
       <Section
         title={t.settings.twofa}
+        icon={ShieldCheck}
+        tone="bg-stitch text-white"
         aside={user?.totp_enabled ? <Badge tone="good"><ShieldCheck className="h-3.5 w-3.5" />{t.settings.twofaOn}</Badge> : <Badge tone="warn"><ShieldAlert className="h-3.5 w-3.5" />{t.settings.twofaOff}</Badge>}
       >
         <p className="text-muted">{t.settings.twofaLead}</p>
@@ -276,8 +400,13 @@ export default function Settings() {
         )}
       </Section>
 
+        </>
+      )}
+
+      {tab === 'devices' && (
       <Section
         title={t.settings.sessions}
+        icon={MonitorSmartphone}
         aside={
           <Button
             size="sm"
@@ -319,8 +448,10 @@ export default function Settings() {
           ))}
         </ul>
       </Section>
+      )}
 
-      <section className="rounded-2xl border border-stitch/30 p-5 sm:p-6">
+      {tab === 'account' && (
+      <section className="rounded-2xl border border-dashed border-stitch/40 bg-stitch/[0.03] p-5 sm:p-6">
         <h2 className="text-lg text-stitch">{t.settings.danger}</h2>
         <p className="mt-1 text-sm text-muted">{t.settings.dangerLead}</p>
         {delStep === 'idle' ? (
@@ -349,6 +480,9 @@ export default function Settings() {
         )}
         <ErrorNote>{error.delete}</ErrorNote>
       </section>
+      )}
+        </div>
+      </div>
 
       <Sheet open={!!recovery} onClose={() => setRecovery(null)} title={t.settings.recovery}>
         <p className="text-sm text-muted">{t.settings.recoveryLead}</p>

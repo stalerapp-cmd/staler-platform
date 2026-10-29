@@ -1,6 +1,13 @@
 /** Arabic for the most common server-side messages (validation and everyday errors). */
 const AR: Record<string, string> = {
   'Code must be 6 digits': 'الرمز لازم يكون 6 أرقام',
+  'This Google sign-in expired — try again': 'انتهت صلاحية الدخول بـ Google — جرّب مرة ثانية',
+  'Google sign-in is not enabled': 'الدخول بـ Google مش مفعّل لسا',
+  'Google sign-in failed, try again': 'ما زبط الدخول بـ Google، جرّب مرة ثانية',
+  'This request was already paid or cancelled': 'هالطلب انْدفع أو انلغى',
+  'This request has expired': 'انتهت صلاحية هالطلب',
+  'You cannot pay your own request': 'ما بتقدر تدفع طلبك إنت',
+  'Use the account name only, e.g. @mystore': 'اكتب اسم الحساب بس، مثل @mystore',
   'Invalid authenticator code': 'رمز المصادقة غير صحيح',
   'Invalid e-mail address': 'الإيميل مش صحيح',
   'Name is too long': 'الاسم طويل كثير',

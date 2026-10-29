@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Copy, CornerUpLeft, ExternalLink, LifeBuoy, MessageCirclePlus, MessagesSquare, Pencil, SendHorizontal, Smile, Trash2, UserPlus, X } from 'lucide-react';
-import { del, get, patch, post } from '../lib/api';
+import { del, get, patch, post, PUBLIC_ORIGIN } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useData, usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
@@ -34,7 +34,7 @@ function Rich({ text, mine }: { text: string; mine: boolean }) {
   const parts = text.split(/(https?:\/\/[^\s]+)/g);
   const own = (u: string) => {
     try {
-      return new URL(u).origin === location.origin;
+      return [location.origin, PUBLIC_ORIGIN].includes(new URL(u).origin);
     } catch {
       return false;
     }
@@ -146,7 +146,7 @@ function Chat({ id, conv }: { id: string; conv: any }) {
 
   const closed = conv?.status === 'closed';
   return (
-    <div className="flex h-[calc(100dvh-15rem)] min-h-[420px] flex-col lg:h-[calc(100dvh-11rem)]" onClick={() => setMenu(null)}>
+    <div className="flex min-h-0 flex-1 flex-col lg:h-[calc(100dvh-11rem)] lg:min-h-[420px] lg:flex-none" onClick={() => setMenu(null)}>
       <div ref={scroller} className="chat-ground flex-1 space-y-1 overflow-y-auto p-3 sm:p-4">
         {!msgs ? (
           <Skeleton className="h-16 w-2/3" />
@@ -307,7 +307,7 @@ function Chat({ id, conv }: { id: string; conv: any }) {
         <div ref={end} />
       </div>
       {!closed && (
-        <form onSubmit={send} className="border-t border-line bg-surface/80 p-2.5 backdrop-blur">
+        <form onSubmit={send} className="border-t border-line bg-surface/95 p-2.5 pb-[max(env(safe-area-inset-bottom),0.625rem)] backdrop-blur lg:pb-2.5">
           <AnimatePresence>
             {(reply || editing) && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -511,12 +511,13 @@ export default function Messages() {
             </ul>
           )}
         </aside>
-        <section className={cx(!id && 'hidden lg:block')}>
+        {/* Phones: an open chat takes the whole screen like a messaging app (above the tab bar, composer above the keyboard). */}
+        <section className={cx(id ? 'fixed inset-0 z-[60] flex flex-col bg-bg lg:static lg:z-auto lg:block lg:bg-transparent' : 'hidden lg:block')}>
           {id ? (
             <>
-              <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2.5 sm:px-4">
+              <div className="safe-top flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface/95 px-2 py-2 backdrop-blur sm:px-4 lg:bg-transparent lg:py-2.5">
                 <div className="flex min-w-0 items-center gap-3">
-                  <Link to="/app/messages" className="rounded-lg p-1.5 text-muted lg:hidden" aria-label={t.common.back}>
+                  <Link to="/app/messages" replace className="grid h-10 w-10 place-items-center rounded-xl text-ink lg:hidden" aria-label={t.common.back}>
                     <ArrowLeft className="h-5 w-5 flip-rtl" />
                   </Link>
                   {current && (current.type === 'support' ? <LifeBuoy className="h-6 w-6 text-olive" /> : <Avatar name={title(current, t)} src={other?.profile_image} size={36} />)}

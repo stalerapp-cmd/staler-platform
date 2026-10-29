@@ -1,10 +1,16 @@
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   ArrowLeft,
   Bell,
+  ChevronDown,
+  HandCoins,
+  LifeBuoy,
+  MapPin,
+  PanelLeftClose,
+  PanelLeftOpen,
   ClipboardList,
   Cog,
   Contact,
@@ -56,37 +62,91 @@ interface NavItem {
   icon: typeof Home;
   end?: boolean;
 }
+interface NavGroup {
+  id: string;
+  label: string;
+  items: NavItem[];
+}
+
+const readLS = (k: string) => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+const writeLS = (k: string, v: string) => {
+  try {
+    localStorage.setItem(k, v);
+  } catch {
+    /* private mode */
+  }
+};
 
 function useNav() {
   const { t } = useI18n();
   const { user } = useAuth();
   const { can } = usePerm();
-  const main: NavItem[] = [
-    { to: '/app', label: t.nav.home, icon: Home, end: true },
+  const role = user?.role;
+  const quick: NavItem[] = [
     { to: '/app/send', label: t.nav.send, icon: Send },
     { to: '/app/receive', label: t.nav.receive, icon: QrCode },
     { to: '/app/scan', label: t.nav.scan, icon: ScanLine },
-    { to: '/app/bank', label: t.nav.bank, icon: Landmark },
-    { to: '/app/activity', label: t.nav.activity, icon: Activity },
-    { to: '/app/store', label: t.nav.store, icon: ShoppingBag },
-    { to: '/app/stores', label: t.nav.stores, icon: Store },
-    { to: '/app/orders', label: t.nav.orders, icon: ClipboardList },
-    { to: '/app/messages', label: t.nav.messages, icon: MessageCircle },
-    { to: '/app/contacts', label: t.nav.contacts, icon: Contact },
-    ...(user?.role !== 'admin' ? [{ to: '/app/vouchers', label: t.nav.cash, icon: Ticket }] : []),
-    { to: '/app/help', label: t.nav.help, icon: HelpCircle },
   ];
-  const role: NavItem[] = [];
-  if (user?.role === 'merchant') {
-    role.push(
-      { to: '/app/merchant', label: t.nav.merchant, icon: Store, end: true },
-      { to: '/app/merchant/products', label: t.nav.products, icon: Package },
-      { to: '/app/merchant/orders', label: t.nav.storeOrders, icon: ClipboardList },
-      { to: '/app/merchant/stores', label: t.nav.myStores, icon: GitBranch },
-      { to: '/app/merchant/ads', label: t.nav.ads, icon: Megaphone },
-    );
+  const groups: NavGroup[] = [
+    {
+      id: 'money',
+      label: t.navg.money,
+      items: [
+        { to: '/app', label: t.nav.home, icon: Home, end: true },
+        { to: '/app/activity', label: t.nav.activity, icon: Activity },
+        { to: '/app/bank', label: t.nav.bank, icon: Landmark },
+        ...(role === 'user' || role === 'merchant' ? [{ to: '/app/agents', label: t.nav.agents, icon: MapPin }] : []),
+      ],
+    },
+    {
+      id: 'shop',
+      label: t.navg.shop,
+      items: [
+        { to: '/app/store', label: t.nav.store, icon: ShoppingBag },
+        { to: '/app/stores', label: t.nav.stores, icon: Store },
+        { to: '/app/orders', label: t.nav.orders, icon: ClipboardList },
+      ],
+    },
+    {
+      id: 'people',
+      label: t.navg.people,
+      items: [
+        { to: '/app/messages', label: t.nav.messages, icon: MessageCircle },
+        { to: '/app/contacts', label: t.nav.contacts, icon: Contact },
+      ],
+    },
+  ];
+  if (role === 'merchant') {
+    groups.unshift({
+      id: 'work',
+      label: t.navg.work,
+      items: [
+        { to: '/app/merchant', label: t.nav.merchant, icon: LayoutDashboard, end: true },
+        { to: '/app/merchant/products', label: t.nav.products, icon: Package },
+        { to: '/app/merchant/orders', label: t.nav.storeOrders, icon: ClipboardList },
+        { to: '/app/merchant/stores', label: t.nav.myStores, icon: GitBranch },
+        { to: '/app/merchant/ads', label: t.nav.ads, icon: Megaphone },
+      ],
+    });
   }
-  if (user?.role === 'admin') {
+  if (role === 'exchange') {
+    groups.unshift({
+      id: 'work',
+      label: t.navg.work,
+      items: [
+        { to: '/app/agent', label: t.nav.agentDesk, icon: HandCoins },
+        { to: '/app/vouchers', label: t.nav.vouchers, icon: Ticket },
+        { to: '/app/agents', label: t.nav.agents, icon: MapPin },
+      ],
+    });
+  }
+  if (role === 'admin') {
     // Each admin sees only the sections their permissions open.
     const items: (NavItem & { perm?: string })[] = [
       { to: '/app/admin', label: t.nav.overview, icon: LayoutDashboard, end: true },
@@ -99,19 +159,29 @@ function useNav() {
       { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
       { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },
     ];
-    role.push(...items.filter((i) => !i.perm || can(i.perm)));
+    groups.unshift({ id: 'admin', label: t.navg.admin, items: items.filter((i) => !i.perm || can(i.perm)) });
   }
-  return { main, role, settings: { to: '/app/settings', label: t.nav.settings, icon: Cog } as NavItem };
+  const footer: NavItem[] = [
+    { to: '/app/help', label: t.nav.help, icon: HelpCircle },
+    { to: '/app/settings', label: t.nav.settings, icon: Cog },
+  ];
+  return { quick, groups, footer };
 }
 
-function SideLink({ item, onClick, animated = true }: { item: NavItem; onClick?: () => void; animated?: boolean }) {
+function SideLink({ item, onClick, animated = true, rail = false }: { item: NavItem; onClick?: () => void; animated?: boolean; rail?: boolean }) {
   return (
     <NavLink
       to={item.to}
       end={item.end}
       onClick={onClick}
+      title={rail ? item.label : undefined}
+      aria-label={rail ? item.label : undefined}
       className={({ isActive }) =>
-        cx('group relative flex items-center gap-3 rounded-xl px-2 py-1.5 text-[15px] transition', isActive ? (animated ? 'text-ink' : 'bg-sunk font-medium text-ink') : 'text-muted hover:bg-sunk hover:text-ink')
+        cx(
+          'group relative flex items-center gap-3 rounded-xl py-1.5 text-[15px] transition',
+          rail ? 'justify-center px-0' : 'px-2',
+          isActive ? (animated ? 'text-ink' : 'bg-sunk font-medium text-ink') : 'text-muted hover:bg-sunk hover:text-ink',
+        )
       }
     >
       {({ isActive }) => (
@@ -125,11 +195,101 @@ function SideLink({ item, onClick, animated = true }: { item: NavItem; onClick?:
           >
             <item.icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.2 : 1.8} />
           </span>
-          <span className="relative">{item.label}</span>
+          {!rail && <span className="relative truncate">{item.label}</span>}
         </>
       )}
     </NavLink>
   );
+}
+
+/** Send / Receive / Scan as three stitched tiles at the top of the menu. */
+function QuickTiles({ items, onClick, rail }: { items: NavItem[]; onClick?: () => void; rail?: boolean }) {
+  return (
+    <div className={cx('mb-3 grid gap-2', rail ? 'grid-cols-1' : 'grid-cols-3')}>
+      {items.map((i, n) => (
+        <NavLink
+          key={i.to}
+          to={i.to}
+          onClick={onClick}
+          title={rail ? i.label : undefined}
+          aria-label={i.label}
+          className={({ isActive }) =>
+            cx(
+              'group relative flex flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl text-xs font-medium transition active:scale-95',
+              rail ? 'h-12' : 'h-[70px]',
+              isActive ? 'bg-stitch text-white shadow-md shadow-stitch/30' : n === 0 ? 'bg-night text-white dark:bg-white/10' : 'bg-sunk text-ink hover:bg-line/70',
+            )
+          }
+        >
+          <span className="pointer-events-none absolute inset-[4px] rounded-[13px] border border-dashed border-current opacity-20" />
+          <i.icon className="h-5 w-5 transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-110" strokeWidth={1.9} />
+          {!rail && <span>{i.label}</span>}
+        </NavLink>
+      ))}
+    </div>
+  );
+}
+
+/** A titled, collapsible section. The section holding the current page always stays open. */
+function Group({ g, onClick, animated, rail }: { g: NavGroup; onClick?: () => void; animated: boolean; rail: boolean }) {
+  const loc = useLocation();
+  const holdsActive = g.items.some((i) => (i.end ? loc.pathname === i.to : loc.pathname.startsWith(i.to)));
+  const [open, setOpen] = useState(() => readLS(`st.nav.${g.id}`) !== '0');
+  const shown = rail || open || holdsActive;
+  if (!g.items.length) return null;
+  return (
+    <div className="mb-1.5">
+      {rail ? (
+        <div className="mx-3 my-2 border-t border-dashed border-line" />
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            writeLS(`st.nav.${g.id}`, open ? '0' : '1');
+            setOpen(!open);
+          }}
+          aria-expanded={shown}
+          className="group flex w-full items-center justify-between rounded-lg px-2 pb-1 pt-2.5 text-[12px] font-semibold text-muted/90 transition hover:text-ink"
+        >
+          <span className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rotate-45 bg-stitch/70" />
+            {g.label}
+          </span>
+          <ChevronDown className={cx('h-4 w-4 transition-transform duration-300', shown ? 'rotate-0' : 'ltr:-rotate-90 rtl:rotate-90')} />
+        </button>
+      )}
+      <AnimatePresence initial={false}>
+        {shown && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="flex flex-col gap-0.5 overflow-hidden"
+          >
+            {g.items.map((i) => (
+              <SideLink key={i.to} item={i} onClick={onClick} animated={animated} rail={rail} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** Opens (or reopens) the support chat in one tap. */
+export function useOpenSupport() {
+  const nav = useNavigate();
+  const toast = useToast();
+  const { err } = useI18n();
+  return async () => {
+    try {
+      const r = await post('/api/messages/conversations', { type: 'support' });
+      nav(`/app/messages/${r.conversationId}`);
+    } catch (e) {
+      toast(err(e), 'error');
+    }
+  };
 }
 
 /** Messages shortcut with unread badge, always visible in the top bar. */
@@ -266,11 +426,18 @@ export function Announcement() {
 export default function AppShell({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth();
   const { t, lang } = useI18n();
-  const { main, role, settings } = useNav();
+  const { quick, groups, footer } = useNav();
   const loc = useLocation();
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
+  // Desktop: the side menu can fold into a slim icon rail; the choice is remembered.
+  const [rail, setRail] = useState(() => readLS('st.rail') === '1');
+  const toggleRail = () => {
+    writeLS('st.rail', rail ? '0' : '1');
+    setRail(!rail);
+  };
   const confirm = useConfirm();
+  const openSupport = useOpenSupport();
   const signOut = async () => {
     if (!(await confirm({ title: t.ask.signOutTitle, body: t.ask.signOutBody, confirmLabel: t.ask.signOutOk }))) return;
     await logout();
@@ -295,82 +462,112 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     { to: '/app', label: t.nav.home, icon: Home, end: true },
     { to: '/app/activity', label: t.nav.activity, icon: Activity },
     { to: '/app/scan', label: t.nav.scan, icon: ScanLine },
-    { to: '/app/store', label: t.nav.store, icon: ShoppingBag },
+    user?.role === 'exchange' ? { to: '/app/agent', label: t.nav.agentDesk, icon: HandCoins } : { to: '/app/store', label: t.nav.store, icon: ShoppingBag },
   ];
 
-  const sidebar = (onClick?: () => void, animated = true) => (
-    <nav className="flex h-full flex-col gap-1" aria-label="Main">
-      {main.map((i) => (
-        <SideLink key={i.to} item={i} onClick={onClick} animated={animated} />
+  const sidebar = (onClick?: () => void, animated = true, isRail = false) => (
+    <nav className="flex h-full flex-col" aria-label="Main">
+      {user?.role !== 'admin' && <QuickTiles items={quick} onClick={onClick} rail={isRail} />}
+      {groups.map((g) => (
+        <Group key={g.id} g={g} onClick={onClick} animated={animated} rail={isRail} />
       ))}
-      {role.length > 0 && <div className="mx-3 my-3 border-t border-dashed border-line" />}
-      {role.map((i) => (
-        <SideLink key={i.to} item={i} onClick={onClick} animated={animated} />
-      ))}
-      <div className="mt-auto pt-4">
-        <SideLink item={settings} onClick={onClick} animated={animated} />
+      <div className="mt-auto flex flex-col gap-0.5 border-t border-dashed border-line pt-3">
+        <button
+          onClick={() => {
+            onClick?.();
+            void openSupport();
+          }}
+          title={isRail ? t.navg.support : undefined}
+          className={cx('group flex items-center gap-3 rounded-xl py-1.5 text-[15px] text-olive transition hover:bg-olive/10', isRail ? 'justify-center' : 'px-2')}
+        >
+          <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-olive/12 transition group-hover:rotate-12">
+            <LifeBuoy className="h-[18px] w-[18px]" />
+          </span>
+          {!isRail && t.navg.support}
+        </button>
+        {footer.map((i) => (
+          <SideLink key={i.to} item={i} onClick={onClick} animated={animated} rail={isRail} />
+        ))}
         <button
           onClick={signOut}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] text-muted transition hover:bg-stitch/10 hover:text-stitch"
+          title={isRail ? t.common.signOut : undefined}
+          className={cx('flex items-center gap-3 rounded-xl py-1.5 text-[15px] text-muted transition hover:bg-stitch/10 hover:text-stitch', isRail ? 'justify-center' : 'px-2')}
         >
-          <LogOut className="h-5 w-5 flip-rtl" />
-          {t.common.signOut}
+          <span className="grid h-8 w-8 place-items-center">
+            <LogOut className="h-[18px] w-[18px] flip-rtl" />
+          </span>
+          {!isRail && t.common.signOut}
         </button>
       </div>
     </nav>
   );
 
   return (
-    <div className="safe-x min-h-dvh lg:grid lg:grid-cols-[260px_1fr]">
-      <aside className="sticky top-0 hidden h-dvh flex-col border-e border-line bg-surface/60 px-4 py-6 backdrop-blur lg:flex">
-        <NavLink to="/app" className="mb-8 flex items-center gap-3 px-2">
-          <Logo animate />
-          <span className="font-display text-xl">S-Taler</span>
-        </NavLink>
-        <div className="min-h-0 flex-1 overflow-y-auto">{sidebar()}</div>
+    <div
+      className={cx('app-ground safe-x min-h-dvh lg:grid lg:transition-[grid-template-columns] lg:duration-300', rail ? 'lg:grid-cols-[84px_1fr]' : 'lg:grid-cols-[272px_1fr]')}
+    >
+      <aside className="sticky top-0 hidden h-dvh flex-col border-e border-line bg-surface/80 py-5 backdrop-blur lg:flex">
+        <div className={cx('mb-5 flex items-center', rail ? 'flex-col gap-3 px-2' : 'justify-between px-5')}>
+          <NavLink to="/app" className="flex items-center gap-3">
+            <Logo animate />
+            {!rail && <span className="font-display text-xl">S-Taler</span>}
+          </NavLink>
+          <button
+            onClick={toggleRail}
+            className="grid h-9 w-9 place-items-center rounded-xl text-muted transition hover:bg-sunk hover:text-ink"
+            aria-label={rail ? t.navg.expand : t.navg.collapse}
+            title={rail ? t.navg.expand : t.navg.collapse}
+          >
+            {rail ? <PanelLeftOpen className="h-5 w-5 flip-rtl" /> : <PanelLeftClose className="h-5 w-5 flip-rtl" />}
+          </button>
+        </div>
+        <div className={cx('min-h-0 flex-1 overflow-y-auto overflow-x-hidden', rail ? 'px-3' : 'px-4')}>{sidebar(undefined, true, rail)}</div>
       </aside>
 
       <div className="min-w-0">
         <Announcement />
         <BioOffer />
-        <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-bg/80 backdrop-blur-md">
+        <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-bg/85 backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
-            <div className="flex min-w-0 items-center gap-1">
+            <div className="flex min-w-0 items-center gap-1.5">
               {loc.pathname !== '/app' && <BackButton />}
-              <div className="flex items-center gap-2 lg:hidden">
-                <button onClick={() => setMenu(true)} className="rounded-xl p-2.5 text-muted hover:bg-sunk" aria-label={t.common.menu}>
-                  <Menu className="h-5 w-5" />
-                </button>
-                <Logo className="h-8 w-8" />
-              </div>
-              <div className="hidden text-sm text-muted lg:block">
-                {t.home.hello}
-                {lang === 'ar' ? '، ' : ', '}
-                <span className="font-medium text-ink">{user?.full_name?.split(' ')[0]}</span>
-              </div>
+              <NavLink to="/app/settings" className="flex min-w-0 items-center gap-2.5 rounded-2xl py-1 pe-2 transition hover:bg-sunk" aria-label={t.nav.settings}>
+                <span className="relative shrink-0">
+                  <Avatar name={user?.full_name} src={user?.profile_image} size={38} />
+                  <span className="absolute -bottom-0.5 -end-0.5 h-3 w-3 rounded-full bg-olive ring-2 ring-bg" />
+                </span>
+                <span className="min-w-0 leading-tight">
+                  <span className="block truncate text-[11px] text-muted">
+                    {t.home.hello}
+                    {lang === 'ar' ? '' : ','}
+                  </span>
+                  <span className="block max-w-[34vw] truncate text-sm font-semibold sm:max-w-[220px]">{user?.full_name?.split(' ')[0]}</span>
+                </span>
+                <RoleBadge className="hidden md:inline-flex" />
+              </NavLink>
             </div>
             <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-              {/* Small phones: language and theme live in the side menu to keep the bar uncluttered. */}
               <div className="hidden sm:block">
                 <TopControls />
               </div>
+              <button
+                onClick={() => void openSupport()}
+                className="hidden rounded-xl p-2.5 text-olive transition hover:bg-olive/10 sm:block"
+                aria-label={t.navg.support}
+                title={t.navg.support}
+              >
+                <LifeBuoy className="h-5 w-5" />
+              </button>
               <MessagesButton />
               <Notifications />
               <button
                 onClick={signOut}
-                className="rounded-xl p-2.5 text-muted transition hover:bg-stitch/10 hover:text-stitch active:scale-95"
+                className="hidden rounded-xl p-2.5 text-muted transition hover:bg-stitch/10 hover:text-stitch active:scale-95 sm:block"
                 aria-label={t.common.signOut}
                 title={t.common.signOut}
               >
                 <LogOut className="h-5 w-5 flip-rtl" />
               </button>
-              <NavLink to="/app/settings" className="ms-1 flex items-center gap-2 rounded-full" aria-label={t.nav.settings}>
-                <RoleBadge className="hidden sm:inline-flex" />
-                <span className="relative">
-                  <Avatar name={user?.full_name} src={user?.profile_image} size={36} />
-                  <RoleBadge compact className="absolute -bottom-1 -end-1 !px-1 !py-0.5 ring-2 ring-bg sm:hidden" />
-                </span>
-              </NavLink>
             </div>
           </div>
         </header>
@@ -412,43 +609,40 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         </div>
       </nav>
 
-      {/* Side menu: always mounted and driven by CSS, so it can always be opened again
+      {/* Side menu (phones/tablets): always mounted and driven by CSS, so it can always be opened again
           and never leaves an invisible layer over the app. */}
-      <div
-        className={cx('fixed inset-0 z-50 lg:hidden', !menu && 'pointer-events-none')}
-        aria-hidden={!menu}
-        {...((!menu ? { inert: '' } : {}) as any)}
-      >
-        <div
-          className={cx('absolute inset-0 bg-night/50 transition-opacity duration-300', menu ? 'opacity-100' : 'opacity-0')}
-          onClick={() => setMenu(false)}
-        />
+      <div className={cx('fixed inset-0 z-50 lg:hidden', !menu && 'pointer-events-none')} aria-hidden={!menu} {...((!menu ? { inert: '' } : {}) as any)}>
+        <div className={cx('absolute inset-0 bg-night/50 backdrop-blur-[2px] transition-opacity duration-300', menu ? 'opacity-100' : 'opacity-0')} onClick={() => setMenu(false)} />
         <aside
           role="dialog"
           aria-modal="true"
           aria-label={t.common.menu}
           className={cx(
-            'safe-top safe-bottom absolute inset-y-0 start-0 flex w-[84%] max-w-xs flex-col bg-surface px-4 py-5 shadow-card transition-transform duration-300 ease-out will-change-transform',
+            'safe-bottom absolute inset-y-0 start-0 flex w-[86%] max-w-[340px] flex-col overflow-hidden bg-surface shadow-card transition-transform duration-300 ease-out will-change-transform ltr:rounded-r-[28px] rtl:rounded-l-[28px]',
             menu ? 'translate-x-0' : 'ltr:-translate-x-full rtl:translate-x-full',
           )}
         >
-              <div className="mb-6 flex items-center justify-between px-2">
-                <div className="flex items-center gap-3">
-                  <Avatar name={user?.full_name} src={user?.profile_image} />
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{user?.full_name}</p>
-                    <p className="truncate text-xs text-muted">{user?.email}</p>
-                    <RoleBadge className="mt-1.5" />
-                  </div>
+          <div className="cloth cloth-night safe-top px-5 pb-5 pt-4">
+            <div className="flex items-start justify-between">
+              <NavLink to="/app/settings" onClick={() => setMenu(false)} className="flex min-w-0 items-center gap-3">
+                <span className="rounded-full ring-2 ring-white/40">
+                  <Avatar name={user?.full_name} src={user?.profile_image} size={48} />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-white">{user?.full_name}</p>
+                  <p className="truncate text-xs text-white/70">{user?.email}</p>
+                  <RoleBadge onDark className="mt-1.5" />
                 </div>
-                <button onClick={() => setMenu(false)} className="rounded-lg p-1.5 text-muted" aria-label={t.common.close}>
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="mb-3 flex justify-end border-b border-line pb-3 sm:hidden">
-                <TopControls />
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto pb-6">{sidebar(() => setMenu(false), false)}</div>
+              </NavLink>
+              <button onClick={() => setMenu(false)} className="rounded-xl p-2 text-white/80 hover:bg-white/10" aria-label={t.common.close}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-3 flex justify-end text-white sm:hidden [&_button]:text-white/85">
+              <TopControls />
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4">{sidebar(() => setMenu(false), false)}</div>
         </aside>
       </div>
     </div>

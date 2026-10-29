@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Camera,
+  ImagePlus,
   CheckCircle2,
   ClipboardCheck,
   Eye,
@@ -28,7 +29,7 @@ import {
   Video,
   XCircle,
 } from 'lucide-react';
-import { assetUrl, currentStore, del, get, patch, post, put, upload } from '../lib/api';
+import { assetUrl, currentStore, del, get, patch, post, put, upload, PUBLIC_ORIGIN } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
 import { AMOUNT_RE, date, fill, money, relative } from '../lib/format';
@@ -61,6 +62,9 @@ interface MStore {
   delivery_note: string | null;
   offers_pickup: boolean;
   offers_delivery: boolean;
+  instagram?: string | null;
+  tiktok?: string | null;
+  facebook?: string | null;
 }
 
 /** All stores of this merchant + the one being worked on (sent as X-Store-Id). */
@@ -139,6 +143,9 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
             coverUrl: store.cover_url,
             lat: store.lat,
             lng: store.lng,
+            instagram: store.instagram ?? '',
+            tiktok: store.tiktok ?? '',
+            facebook: store.facebook ?? '',
           }
         : {
             storeName: parent?.store_name ?? '',
@@ -157,6 +164,9 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
             coverUrl: parent?.cover_url ?? null,
             lat: null,
             lng: null,
+            instagram: parent?.instagram ?? '',
+            tiktok: parent?.tiktok ?? '',
+            facebook: parent?.facebook ?? '',
           },
     );
   }, [open, store, parent]);
@@ -193,6 +203,9 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
       coverUrl: f.coverUrl,
       lat: f.lat,
       lng: f.lng,
+      instagram: f.instagram.trim() || null,
+      tiktok: f.tiktok.trim() || null,
+      facebook: f.facebook.trim() || null,
       ...(isBranch && f.branchName.trim() ? { branchName: f.branchName.trim() } : {}),
     };
     try {
@@ -217,12 +230,32 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
               <Camera className="h-3.5 w-3.5" /> {busy === 'cover' ? '…' : t.mstore.cover}
             </span>
           </button>
-          <button type="button" onClick={() => logoRef.current?.click()} className="absolute bottom-3 start-3" aria-label={t.mstore.logo}>
-            <StoreLogo s={{ logo_url: f.logoUrl, store_name: f.storeName || 'S', accent: f.accent }} size={72} />
+          <button type="button" onClick={() => logoRef.current?.click()} className="group absolute bottom-3 start-3" aria-label={t.mstore.logo}>
+            <span className="block rounded-[1.3rem] ring-4 ring-surface transition group-hover:scale-105">
+              <StoreLogo s={{ logo_url: f.logoUrl, store_name: f.storeName || 'S', accent: f.accent }} size={80} />
+            </span>
+            <span className="absolute -bottom-1 -end-1 grid h-8 w-8 place-items-center rounded-full bg-stitch text-white shadow-lift">
+              {busy === 'logo' ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Camera className="h-4 w-4" />}
+            </span>
           </button>
           <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => e.target.files?.[0] && up('cover', e.target.files[0])} />
           <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => e.target.files?.[0] && up('logo', e.target.files[0])} />
         </div>
+        {!f.logoUrl && (
+          <button
+            type="button"
+            onClick={() => logoRef.current?.click()}
+            className="flex w-full items-center gap-3 rounded-2xl border-2 border-dashed border-stitch/40 bg-stitch/5 p-3.5 text-start transition hover:border-stitch"
+          >
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stitch text-white">
+              <ImagePlus className="h-5 w-5" />
+            </span>
+            <span>
+              <span className="block font-medium">{t.mstore.logoAdd}</span>
+              <span className="block text-sm text-muted">{t.mstore.logoAddD}</span>
+            </span>
+          </button>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t.merchant.storeName} value={f.storeName} onChange={(e) => setF({ ...f, storeName: e.target.value })} required minLength={2} maxLength={60} />
           {isBranch ? (
@@ -256,6 +289,14 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
         <div className="grid gap-3 sm:grid-cols-2">
           <Toggle checked={f.offersDelivery} onChange={(v) => setF({ ...f, offersDelivery: v })} label={t.mstore.deliveryOn} />
           <Toggle checked={f.offersPickup} onChange={(v) => setF({ ...f, offersPickup: v })} label={t.mstore.pickupOn} />
+        </div>
+        <div>
+          <p className="mb-2 text-sm font-medium text-ink/80">{t.social.title}</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {(['instagram', 'tiktok', 'facebook'] as const).map((k) => (
+              <Field key={k} label={t.social[k]} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} dir="ltr" placeholder="@" maxLength={80} />
+            ))}
+          </div>
         </div>
         {f.offersDelivery && <Field label={t.mstore.deliveryNote} value={f.deliveryNote} onChange={(e) => setF({ ...f, deliveryNote: e.target.value })} maxLength={200} />}
         <div>
@@ -309,6 +350,7 @@ export function MerchantDashboard() {
   const st = useStores();
   const stats = useData<any>(st.current ? '/api/merchant/stats' : null, [st.current?.id]);
   const [share, setShare] = useState(false);
+  const [edit, setEdit] = useState(false);
   if (st.loading && !st.data) return <Skeleton className="h-64 rounded-3xl" />;
   if (!st.current) return <StoreSetup onDone={() => st.reload()} />;
   const s = stats.data?.stats;
@@ -362,6 +404,23 @@ export function MerchantDashboard() {
           </Link>
         </div>
       </div>
+      {!st.current.logo_url && (
+        <motion.button
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => setEdit(true)}
+          className="sewn mb-5 flex w-full items-center gap-4 rounded-3xl bg-surface p-4 text-start shadow-lift ring-1 ring-line transition hover:-translate-y-0.5"
+        >
+          <motion.span animate={{ rotate: [0, -8, 8, 0] }} transition={{ repeat: Infinity, duration: 2.4, repeatDelay: 1.5 }} className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-stitch text-white">
+            <ImagePlus className="h-6 w-6" />
+          </motion.span>
+          <span>
+            <span className="block font-semibold">{t.mstore.logoAdd}</span>
+            <span className="block text-sm text-muted">{t.mstore.logoAddD}</span>
+          </span>
+        </motion.button>
+      )}
+      <StoreEditor open={edit} onClose={() => setEdit(false)} store={st.current} onSaved={() => st.reload()} />
       {s?.disputes > 0 && <p className="mb-4 rounded-2xl bg-stitch/10 px-4 py-3 text-sm text-stitch">{t.mstore.disputeOpen}</p>}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {tiles.map((x, i) => (
@@ -394,7 +453,7 @@ export function MerchantDashboard() {
         </section>
       </div>
       <LicenceLookup />
-      <ShareSheet open={share} onClose={() => setShare(false)} url={`${location.origin}/s/${st.current.slug}`} title={st.current.store_name} />
+      <ShareSheet open={share} onClose={() => setShare(false)} url={`${PUBLIC_ORIGIN}/s/${st.current.slug}`} title={st.current.store_name} />
     </div>
   );
 }

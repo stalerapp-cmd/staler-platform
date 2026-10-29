@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
 import { codeHash, numericCode } from '../lib/crypto.js';
-import { conflict, forbidden, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { hashPassword, passwordSchema } from '../lib/passwords.js';
 import { codeMail, sendMail, sendMailNow } from '../lib/mailer.js';
@@ -13,7 +13,8 @@ import { bank } from '../lib/bankClient.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { PERMISSIONS, assertCanManage, isSuper, requirePerm } from '../lib/permissions.js';
 import { noticeMail } from '../lib/mailer.js';
-import { notify } from './walletCore.js';
+import { notify, notifyBi } from './walletCore.js';
+import { agentProfileBody, refundVoucher, saveAgentProfile } from './exchange.js';
 import { requireSecondFactor } from './mfa.js';
 import { revokeAllSessions } from './sessions.js';
 import { anonymiseUser } from './auth.js';
@@ -163,7 +164,30 @@ adminRouter.get(
     );
     const merchant = await one(`SELECT id, store_name, status FROM ${S}.merchants WHERE user_id = $1 LIMIT 1`, [req.params.id]);
     const link = await one(`SELECT bank_iban, bank_holder, created_at FROM ${S}.bank_accounts WHERE user_id = $1 AND status = 'active' LIMIT 1`, [req.params.id]);
-    res.json({ success: true, data: { user, wallet, transactions: tr.rows, merchant, bankLink: link } });
+    const stores = await pool.query(
+      `SELECT m.id, m.store_name, m.branch_name, m.parent_id, m.slug, m.logo_url, m.category, m.city, COALESCE(m.status,'active') AS status, m.created_at,
+              (SELECT count(*)::int FROM ${S}.products p WHERE p.merchant_id = m.id AND COALESCE(p.status,'active') <> 'deleted') AS products,
+              (SELECT count(*)::int FROM ${S}.orders o WHERE o.merchant_id = m.id) AS orders
+         FROM ${S}.merchants m WHERE m.user_id = $1 ORDER BY m.parent_id NULLS FIRST, m.created_at`,
+      [req.params.id],
+    );
+    let agent = null;
+    if (user.role === 'exchange') {
+      const profile = await one(`SELECT * FROM ${S}.agent_profiles WHERE user_id = $1`, [req.params.id]);
+      const vouchers = await pool.query(
+        `SELECT v.id, v.amount, v.description, v.created_at, v.claimed_at,
+                CASE WHEN v.status = 'active' AND v.expires_at < now() THEN 'expired' ELSE v.status END AS status, u.full_name AS claimed_by_name
+           FROM ${S}.exchange_vouchers v LEFT JOIN ${S}.users u ON u.id = v.claimed_by WHERE v.exchange_user_id = $1 ORDER BY v.created_at DESC LIMIT 30`,
+        [req.params.id],
+      );
+      const cashouts = await pool.query(
+        `SELECT c.id, c.amount, c.created_at, c.paid_at, CASE WHEN c.status = 'open' AND c.expires_at < now() THEN 'expired' ELSE c.status END AS status, u.full_name AS paid_by_name
+           FROM ${S}.agent_cashouts c LEFT JOIN ${S}.users u ON u.id = c.paid_by WHERE c.agent_id = $1 ORDER BY c.created_at DESC LIMIT 30`,
+        [req.params.id],
+      );
+      agent = { profile, vouchers: vouchers.rows, cashouts: cashouts.rows };
+    }
+    res.json({ success: true, data: { user, wallet, transactions: tr.rows, merchant, bankLink: link, stores: stores.rows, agent } });
   }),
 );
 
@@ -179,7 +203,7 @@ adminRouter.patch(
         phoneNumber: z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, 'Invalid phone number').nullable().optional(),
         language: z.enum(['en', 'ar']).optional(),
         status: z.enum(['active', 'suspended']).optional(),
-        role: z.enum(['user', 'merchant']).optional(),
+        role: z.enum(['user', 'merchant', 'exchange']).optional(),
       })
       .strict(),
   }),
@@ -372,7 +396,7 @@ adminRouter.post(
         fullName,
         email,
         password: passwordSchema,
-        role: z.enum(['user', 'merchant']).default('user'),
+        role: z.enum(['user', 'merchant', 'exchange']).default('user'),
       })
       .strict(),
   }),
@@ -703,5 +727,82 @@ adminRouter.post(
     const lang = me?.language === 'en' ? 'en' : 'ar';
     const r = await sendMailNow(codeMail(me!.email, 'verify', '123456', lang));
     res.json({ success: true, data: { to: me!.email, ...r } });
+  }),
+);
+
+// ------------------------------------------------- inside merchant / agent accounts
+/** Products of one store, for moderation from the user's admin page. */
+adminRouter.get(
+  '/stores/:id/products',
+  requirePerm('stores.manage'),
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const r = await pool.query(
+      `SELECT id, name, price, stock, image_url, is_digital, category, COALESCE(status,'active') AS status, created_at
+         FROM ${S}.products WHERE merchant_id = $1 AND COALESCE(status,'active') <> 'deleted' ORDER BY created_at DESC LIMIT 200`,
+      [req.params.id],
+    );
+    res.json({ success: true, data: { products: r.rows } });
+  }),
+);
+
+adminRouter.patch(
+  '/products/:id',
+  requirePerm('stores.manage'),
+  validate({
+    params: z.object({ id: idParam }).strict(),
+    body: z
+      .object({
+        status: z.enum(['active', 'hidden', 'deleted']).optional(),
+        price: z.string().regex(/^\d{1,9}(\.\d{1,2})?$/).optional(),
+        stock: z.number().int().min(0).max(1_000_000).optional(),
+        name: z.string().trim().min(1).max(120).optional(),
+      })
+      .strict(),
+  }),
+  ah(async (req, res) => {
+    const b = req.body;
+    if (b.price !== undefined && Number(b.price) <= 0) throw badRequest('INVALID_AMOUNT', 'Price must be greater than zero');
+    const r = await pool.query(
+      `UPDATE ${S}.products SET status = COALESCE($2, status), price = COALESCE($3::numeric, price), stock = COALESCE($4, stock), name = COALESCE($5, name), updated_at = now() WHERE id = $1`,
+      [req.params.id, b.status ?? null, b.price ?? null, b.stock ?? null, b.name ?? null],
+    );
+    if (!r.rowCount) throw notFound('Product not found');
+    await audit({ userId: req.auth!.userId, action: 'admin.product_updated', entityType: 'product', entityId: req.params.id, details: b }, req);
+    res.json({ success: true });
+  }),
+);
+
+/** Edit a cash agent's public profile and approve / hide it. */
+adminRouter.put(
+  '/users/:id/agent',
+  requirePerm('users.edit'),
+  validate({ params: z.object({ id: idParam }).strict(), body: agentProfileBody.extend({ status: z.enum(['active', 'pending', 'suspended']).optional() }).strict() }),
+  ah(async (req, res) => {
+    const target = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE id = $1`, [req.params.id]);
+    if (!target) throw notFound('User not found');
+    assertCanManage(req, target);
+    if (target.role !== 'exchange') throw badRequest('NOT_AGENT', 'This account is not a cash agent');
+    const { status, ...profile } = req.body;
+    const before = await one<any>(`SELECT status FROM ${S}.agent_profiles WHERE user_id = $1`, [target.id]);
+    await saveAgentProfile(target.id, profile, status);
+    if (status === 'active' && before?.status !== 'active') {
+      await notifyBi(undefined, target.id, 'agent_approved', ['You are listed', 'Customers can now find you on the cash agents map.'], ['صرت ظاهر للزبائن', 'الزبائن صاروا يشوفوك على خريطة وكلاء الصرف.'], { link: '/app/agent' });
+    }
+    await audit({ userId: req.auth!.userId, action: 'admin.agent_updated', entityType: 'user', entityId: target.id, details: { status } }, req);
+    res.json({ success: true });
+  }),
+);
+
+/** Cancel an agent's open voucher; the escrowed amount goes back to the agent. */
+adminRouter.delete(
+  '/vouchers/:id',
+  requirePerm('users.edit'),
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const v = await refundVoucher(req.params.id!, 'cancelled');
+    if (!v) throw conflict('VOUCHER_CLOSED', 'This voucher was already used or cancelled');
+    await audit({ userId: req.auth!.userId, action: 'admin.voucher_cancelled', entityType: 'voucher', entityId: req.params.id }, req);
+    res.json({ success: true });
   }),
 );

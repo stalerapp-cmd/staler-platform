@@ -161,7 +161,8 @@ storeRouter.get(
         merchant: idParam.optional(),
         store: z.string().trim().max(80).optional(),
         category: z.string().trim().max(40).optional(),
-        type: z.enum(['digital', 'physical', 'deposit']).optional(),
+        storeCategory: z.enum(STORE_CATEGORIES).optional(),
+        type: z.enum(['digital', 'physical', 'deposit', 'deals']).optional(),
         sort: z.enum(['new', 'price_asc', 'price_desc', 'name']).default('new'),
       })
       .strict(),
@@ -186,7 +187,12 @@ storeRouter.get(
       params.push(f.category);
       where.push(`p.category = $${params.length}`);
     }
-    if (f.type === 'deposit') where.push('p.deposit_percent > 0 AND NOT COALESCE(p.is_digital,false)');
+    if (f.storeCategory) {
+      params.push(f.storeCategory);
+      where.push(`COALESCE((SELECT pm.category FROM ${S}.merchants pm WHERE pm.id = m.parent_id), m.category, 'other') = $${params.length}`);
+    }
+    if (f.type === 'deals') where.push('p.compare_at_price IS NOT NULL AND p.compare_at_price > p.price');
+    else if (f.type === 'deposit') where.push('p.deposit_percent > 0 AND NOT COALESCE(p.is_digital,false)');
     else if (f.type) where.push(f.type === 'digital' ? 'p.is_digital' : 'NOT COALESCE(p.is_digital,false)');
     const order = { new: 'p.created_at DESC', price_asc: 'p.price ASC', price_desc: 'p.price DESC', name: 'p.name ASC' }[f.sort as 'new'];
     params.push(f.limit, f.offset);
@@ -284,6 +290,9 @@ storeRouter.get(
       offers_pickup: x.offers_pickup,
       offers_delivery: x.offers_delivery,
       phone: x.show_phone ? x.phone : null,
+      instagram: x.instagram ?? null,
+      tiktok: x.tiktok ?? null,
+      facebook: x.facebook ?? null,
     });
     res.json({
       success: true,
@@ -672,6 +681,16 @@ const optUrl = z
   .string()
   .max(500)
   .refine((u) => u.startsWith('/files/') || /^https:\/\/[a-z0-9.-]+\.supabase\.co\/storage\//i.test(u), 'Upload the image first');
+/** A social handle ("@name") — stored without the @. */
+const social = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/^@/, '').replace(/^https?:\/\/(www\.)?(instagram|tiktok|facebook)\.com\/@?/i, '').replace(/\/+$/, ''))
+  .pipe(z.string().regex(/^[A-Za-z0-9_.]{0,60}$/, 'Use the account name only, e.g. @mystore'))
+  .transform((v) => v || null)
+  .optional()
+  .nullable();
+
 const storeBody = z
   .object({
     storeName: z.string().trim().min(2).max(60),
@@ -691,6 +710,9 @@ const storeBody = z
     offersDelivery: z.boolean().optional(),
     parentId: idParam.optional(),
     branchName: z.string().trim().min(2).max(60).optional(),
+    instagram: social,
+    tiktok: social,
+    facebook: social,
   })
   .strict();
 
@@ -704,7 +726,7 @@ const slugify = (name: string) =>
   }-${crypto.randomBytes(3).toString('hex')}`;
 
 const STORE_COLS = `id, slug, store_name, branch_name, parent_id, description, logo_url, cover_url, category, city, address, lat, lng, phone, show_phone,
-  accent, delivery_note, offers_pickup, offers_delivery, status, created_at`;
+  accent, delivery_note, offers_pickup, offers_delivery, status, created_at, instagram, tiktok, facebook`;
 
 merchantRouter.get(
   '/stores',
@@ -758,7 +780,12 @@ merchantRouter.post(
   '/stores',
   validate({ body: storeBody }),
   ah(async (req, res) => {
-    const m = await createStore(req.auth!.userId, req.body);
+    const m: any = await createStore(req.auth!.userId, req.body);
+    const { instagram, tiktok, facebook } = req.body;
+    if (instagram || tiktok || facebook) {
+      await pool.query(`UPDATE ${S}.merchants SET instagram = $2, tiktok = $3, facebook = $4 WHERE id = $1`, [m.id, instagram ?? null, tiktok ?? null, facebook ?? null]);
+      Object.assign(m, { instagram: instagram ?? null, tiktok: tiktok ?? null, facebook: facebook ?? null });
+    }
     await audit({ userId: req.auth!.userId, action: 'merchant.store_created', entityType: 'merchant', entityId: (m as any).id }, req);
     res.status(201).json({ success: true, data: { store: m } });
   }),
@@ -781,6 +808,9 @@ const COLMAP: Record<string, string> = {
   offersPickup: 'offers_pickup',
   offersDelivery: 'offers_delivery',
   branchName: 'branch_name',
+  instagram: 'instagram',
+  tiktok: 'tiktok',
+  facebook: 'facebook',
 };
 
 merchantRouter.patch(
@@ -835,7 +865,12 @@ merchantRouter.post(
   '/profile',
   validate({ body: storeBody }),
   ah(async (req, res) => {
-    const m = await createStore(req.auth!.userId, req.body);
+    const m: any = await createStore(req.auth!.userId, req.body);
+    const { instagram, tiktok, facebook } = req.body;
+    if (instagram || tiktok || facebook) {
+      await pool.query(`UPDATE ${S}.merchants SET instagram = $2, tiktok = $3, facebook = $4 WHERE id = $1`, [m.id, instagram ?? null, tiktok ?? null, facebook ?? null]);
+      Object.assign(m, { instagram: instagram ?? null, tiktok: tiktok ?? null, facebook: facebook ?? null });
+    }
     res.status(201).json({ success: true, data: { merchant: m } });
   }),
 );

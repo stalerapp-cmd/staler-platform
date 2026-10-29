@@ -12,6 +12,10 @@ export function routeForCode(raw: string): string | null {
     const v = new URL(s.replace(/^taler:\/\//i, 'https://x/')).searchParams.get('v');
     return v ? `/app/claim?v=${encodeURIComponent(v)}` : null;
   }
+  if (/^taler:\/\/agent-cashout\?/i.test(s)) {
+    const c = new URL(s.replace(/^taler:\/\//i, 'https://x/')).searchParams.get('c');
+    return c ? `/app/cashout?c=${encodeURIComponent(c)}` : null;
+  }
   if (/^taler:\/\/pay\?/i.test(s)) {
     const u = new URL(s.replace(/^taler:\/\//i, 'https://x/'));
     const to = u.searchParams.get('to');
