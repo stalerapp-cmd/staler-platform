@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen, CheckCircle2, FileDown, LocateFixed, MapPin, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Store as StoreIcon, Trash2, Truck } from 'lucide-react';
-import { ApiError, assetUrl, newIdempotencyKey, post, PUBLIC_ORIGIN } from '../lib/api';
+import { ApiError, assetUrl, get, newIdempotencyKey, post, PUBLIC_ORIGIN } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { fill, money } from '../lib/format';
@@ -329,6 +329,16 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<any>(null);
   const [how, setHow] = useState<'delivery' | 'pickup'>('delivery');
+  const [points, setPoints] = useState<any[]>([]);
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const physicalStores = Array.from(new Set(lines.filter((l) => !l.product.is_digital).map((l) => String(l.product.merchant_id)))).sort().join(',');
+  useEffect(() => {
+    if (!open || !physicalStores) return setPoints([]);
+    get<{ points: any[] }>(`/api/store/pickup-points?stores=${physicalStores}`)
+      .then((d) => setPoints(d.points))
+      .catch(() => setPoints([]));
+  }, [open, physicalStores]);
+  const pointStores = Array.from(new Set(points.map((x) => String(x.merchant_id))));
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [note, setNote] = useState('');
@@ -357,6 +367,7 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
   const checkout = async () => {
     if (!user) return nav('/login', { state: { from: loc.pathname + loc.search } });
     if (physical && how === 'delivery' && address.trim().length < 5) return setError(t.shop.addressPh);
+    if (physical && how === 'pickup' && pointStores.some((m) => !chosen[m])) return setError(t.pick.required);
     const count = lines.reduce((n, l) => n + l.qty, 0);
     const ok = await confirm({
       title: t.ask.buyTitle,
@@ -374,6 +385,7 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
             items: lines.map((l) => ({ productId: l.product.id, quantity: l.qty })),
             ...(physical ? { fulfillment: how } : {}),
             ...(physical && how === 'delivery' ? { address: address.trim() } : {}),
+            ...(physical && how === 'pickup' && pointStores.length ? { pickupPoints: Object.fromEntries(pointStores.map((m) => [m, chosen[m]!])) } : {}),
             ...(physical && phone.trim() ? { phone: phone.trim() } : {}),
             ...(physical && geo ? geo : {}),
             ...(note.trim() ? { note: note.trim() } : {}),
@@ -498,6 +510,50 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
             <div className="mt-5 space-y-3 rounded-2xl border border-line p-4">
               <p className="text-sm font-medium">{t.shop.howGet}</p>
               <Segmented value={how} onChange={setHow} options={[{ value: 'delivery', label: t.shop.delivery }, { value: 'pickup', label: t.shop.pickup }]} />
+              {how === 'pickup' && points.length > 0 && (
+                <div>
+                  <p className="mb-2 text-sm font-medium">{t.pick.choose}</p>
+                  <div className="space-y-4">
+                    {pointStores.map((m) => {
+                      const name = lines.find((l) => String(l.product.merchant_id) === m)?.product.store_name;
+                      return (
+                        <div key={m}>
+                          {pointStores.length > 1 && <p className="mb-1.5 text-xs font-semibold text-muted">{name}</p>}
+                          <div className="space-y-2">
+                            {points
+                              .filter((x) => String(x.merchant_id) === m)
+                              .map((x) => {
+                                const on = chosen[m] === x.id;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={x.id}
+                                    onClick={() => setChosen((c) => ({ ...c, [m]: x.id }))}
+                                    className={cx('flex w-full items-start gap-3 rounded-2xl border p-3 text-start transition', on ? 'border-stitch bg-stitch/5 ring-2 ring-stitch/20' : 'border-line hover:border-ink/30')}
+                                  >
+                                    <span className={cx('mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2', on ? 'border-stitch bg-stitch' : 'border-line')}>
+                                      {on && <span className="h-2 w-2 rounded-full bg-white" />}
+                                    </span>
+                                    <span className="min-w-0">
+                                      <span className="block font-medium">{x.name}</span>
+                                      {(x.city || x.address) && (
+                                        <span className="flex items-center gap-1 text-xs text-muted">
+                                          <MapPin className="h-3 w-3" /> {[x.city, x.address].filter(Boolean).join(' · ')}
+                                        </span>
+                                      )}
+                                      {x.description && <span className="mt-1 block text-sm text-ink/80">{x.description}</span>}
+                                      {x.hours && <span className="mt-1 block text-xs text-muted">{x.hours}</span>}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {how === 'delivery' && (
                 <>
                   <TextArea label={t.shop.address} placeholder={t.shop.addressPh} value={address} onChange={(e) => setAddress(e.target.value)} rows={2} maxLength={300} />

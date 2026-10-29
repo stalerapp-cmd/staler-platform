@@ -41,6 +41,7 @@ import { ShareSheet } from '../components/Share';
 import { Scanner } from '../components/Scanner';
 import { AmountInput, Badge, Button, Chips, CodeInput, EmptyState, ErrorNote, Field, PageHeader, Select, Sheet, Skeleton, TextArea, Toggle, cx } from '../components/ui';
 import { CATEGORIES, StoreCover, StoreLogo } from './Stores';
+import { ImageCropper } from '../components/ImageCropper';
 
 interface MStore {
   id: string;
@@ -120,6 +121,7 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const logoRef = useRef<HTMLInputElement>(null);
+  const [crop, setCrop] = useState<{ kind: 'logo' | 'cover'; file: File } | null>(null);
   const coverRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -238,8 +240,18 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
               {busy === 'logo' ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Camera className="h-4 w-4" />}
             </span>
           </button>
-          <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => e.target.files?.[0] && up('cover', e.target.files[0])} />
-          <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => e.target.files?.[0] && up('logo', e.target.files[0])} />
+          <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => (e.target.files?.[0] && setCrop({ kind: 'cover', file: e.target.files[0] }), (e.target.value = ''))} />
+          <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => (e.target.files?.[0] && setCrop({ kind: 'logo', file: e.target.files[0] }), (e.target.value = ''))} />
+          <ImageCropper
+            file={crop?.file ?? null}
+            shape={crop?.kind === 'cover' ? 'wide' : 'square'}
+            onCancel={() => setCrop(null)}
+            onConfirm={async (blob) => {
+              const kind = crop!.kind;
+              await up(kind, new File([blob], `${kind}.jpg`, { type: blob.type }));
+              setCrop(null);
+            }}
+          />
         </div>
         {!f.logoUrl && (
           <button
@@ -1167,7 +1179,7 @@ export function MerchantOrders() {
                   <div className="mt-3 grid gap-2 rounded-2xl bg-sunk/60 p-3 text-sm sm:grid-cols-2">
                     <p className="flex items-start gap-2">
                       {o.fulfillment === 'pickup' ? <PackageCheck className="mt-0.5 h-4 w-4 shrink-0" /> : <Truck className="mt-0.5 h-4 w-4 shrink-0" />}
-                      <span>{o.fulfillment === 'pickup' ? t.shop.pickup : o.delivery_address ?? '—'}</span>
+                      <span>{o.fulfillment === 'pickup' ? (o.pickup_info ? `${t.pick.at}: ${o.pickup_info.name}` : t.shop.pickup) : o.delivery_address ?? '—'}</span>
                     </p>
                     {o.delivery_phone && (
                       <a href={`tel:${o.delivery_phone}`} className="num text-sky" dir="ltr">
@@ -1218,6 +1230,128 @@ export function MerchantOrders() {
       )}
       <DeliverSheet order={deliver} onClose={() => setDeliver(null)} onDone={() => void reload()} />
       <TrackSheet order={track} onClose={() => setTrack(null)} onDone={() => void reload()} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------- pickup points
+export function MerchantPickup() {
+  const { t, err } = useI18n();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const st = useStores();
+  const list = useData<{ points: any[] }>(st.current ? '/api/merchant/pickup-points' : null, [st.current?.id]);
+  const [form, setForm] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const blank = { name: '', description: '', city: '', address: '', hours: '', lat: null, lng: null, active: true };
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const body = {
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      city: form.city.trim() || null,
+      address: form.address.trim() || null,
+      hours: form.hours.trim() || null,
+      lat: form.lat ?? null,
+      lng: form.lng ?? null,
+      active: form.active,
+    };
+    try {
+      if (form.id) await patch(`/api/merchant/pickup-points/${form.id}`, body);
+      else await post('/api/merchant/pickup-points', body);
+      toast(t.pick.saved);
+      setForm(null);
+      void list.reload();
+    } catch (e2) {
+      setError(err(e2));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!st.current && !st.loading) return <EmptyState icon={<StoreIcon className="h-6 w-6" />} title={t.merchant.setupLead} />;
+  return (
+    <div>
+      <PageHeader
+        title={t.pick.title}
+        lead={t.pick.lead}
+        actions={
+          <Button icon={<Plus className="h-4 w-4" />} onClick={() => (setError(null), setForm({ ...blank }))}>
+            {t.pick.add}
+          </Button>
+        }
+      />
+      <div className="mb-4">
+        <StoreSwitcher st={st} />
+      </div>
+      {!list.data ? (
+        <Skeleton className="h-40 rounded-3xl" />
+      ) : !list.data.points.length ? (
+        <EmptyState icon={<MapPin className="h-6 w-6" />} title={t.pick.none} action={<Button onClick={() => setForm({ ...blank })}>{t.pick.add}</Button>} />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {list.data.points.map((x, i) => (
+            <motion.div key={x.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className={cx('card p-5', !x.active && 'opacity-60')}>
+              <div className="flex items-start gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-stitch/10 text-stitch">
+                  <MapPin className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{x.name}</p>
+                  {(x.city || x.address) && <p className="text-sm text-muted">{[x.city, x.address].filter(Boolean).join(' · ')}</p>}
+                  {x.hours && <p className="mt-0.5 text-xs text-muted">{x.hours}</p>}
+                </div>
+                {!x.active && <Badge>{t.pick.off}</Badge>}
+              </div>
+              {x.description && <p className="mt-3 rounded-xl bg-sunk/60 p-3 text-sm">{x.description}</p>}
+              <div className="mt-4 flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => (setError(null), setForm({ ...blank, ...x, description: x.description ?? '', city: x.city ?? '', address: x.address ?? '', hours: x.hours ?? '' }))}>
+                  {t.common.edit}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={async () => {
+                    if (!(await confirm({ title: t.pick.deleteQ, body: t.pick.deleteB, confirmLabel: t.common.delete, tone: 'danger' }))) return;
+                    try {
+                      await del(`/api/merchant/pickup-points/${x.id}`);
+                      void list.reload();
+                    } catch (e) {
+                      toast(err(e), 'error');
+                    }
+                  }}
+                >
+                  {t.common.delete}
+                </Button>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+      <Sheet open={!!form} onClose={() => setForm(null)} title={form?.id ? t.pick.edit : t.pick.add} wide>
+        {form && (
+          <form onSubmit={save} className="space-y-4">
+            <Field label={t.pick.name} placeholder={t.pick.namePh} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required minLength={2} maxLength={80} />
+            <TextArea label={t.pick.description} placeholder={t.pick.descPh} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} maxLength={300} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label={t.mstore.city} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} maxLength={60} />
+              <Field label={t.mstore.address} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} maxLength={200} />
+            </div>
+            <Field label={t.pick.hours} value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} maxLength={120} />
+            <Toggle checked={form.active} onChange={(v) => setForm({ ...form, active: v })} label={t.pick.active} />
+            <div>
+              <p className="mb-2 text-sm font-medium text-ink/80">{t.mstore.pin}</p>
+              <MapView pins={form.lat != null ? [{ lat: form.lat, lng: form.lng, kind: 'store', label: form.name }] : []} onPick={(p) => setForm((f: any) => ({ ...f, ...p }))} className="h-52 rounded-2xl" />
+            </div>
+            <ErrorNote>{error}</ErrorNote>
+            <Button block size="lg" loading={busy}>
+              {t.common.save}
+            </Button>
+          </form>
+        )}
+      </Sheet>
     </div>
   );
 }

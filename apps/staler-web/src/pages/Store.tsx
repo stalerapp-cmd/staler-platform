@@ -495,7 +495,15 @@ function OrderCard({ o, i, onChanged }: { o: any; i: number; onChanged: () => vo
                   </div>
                   <div className="rounded-2xl border border-line p-3">
                     <p className="text-muted">{o.fulfillment === 'pickup' ? t.ord.pickupAt : t.ord.deliverTo}</p>
-                    <p className="line-clamp-2">{o.fulfillment === 'pickup' ? o.store_address ?? o.store_name : o.delivery_address}</p>
+                    {o.fulfillment === 'pickup' && o.pickup_info ? (
+                      <>
+                        <p className="font-medium">{o.pickup_info.name}</p>
+                        {(o.pickup_info.city || o.pickup_info.address) && <p className="text-xs text-muted">{[o.pickup_info.city, o.pickup_info.address].filter(Boolean).join(' · ')}</p>}
+                        {o.pickup_info.description && <p className="mt-1 line-clamp-3 text-xs">{o.pickup_info.description}</p>}
+                      </>
+                    ) : (
+                      <p className="line-clamp-2">{o.fulfillment === 'pickup' ? o.store_address ?? o.store_name : o.delivery_address}</p>
+                    )}
                   </div>
                 </div>
               )}

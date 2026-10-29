@@ -68,7 +68,7 @@ export default function StorePage() {
   const { t, err } = useI18n();
   const { user } = useAuth();
   const { count } = useCart();
-  const [data, setData] = useState<{ store: any; branches: Branch[]; ads: Ad[] } | null>(null);
+  const [data, setData] = useState<{ store: any; branches: Branch[]; ads: Ad[]; pickupPoints?: any[] } | null>(null);
   const [missing, setMissing] = useState(false);
   const [products, setProducts] = useState<Product[] | null>(null);
   const [q, setQ] = useState('');
@@ -269,6 +269,31 @@ export default function StorePage() {
                       if (ad.product_id) setParams({ p: ad.product_id }, { replace: true });
                     }}
                   />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ------------------------------------------------ pickup points */}
+          {!!data!.pickupPoints?.length && (
+            <section className="mb-6">
+              <h2 className="mb-3 flex items-center gap-2 text-lg">
+                <MapPin className="h-5 w-5 text-stitch" /> {t.pick.title}
+              </h2>
+              <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+                {data!.pickupPoints.map((x: any, i: number) => (
+                  <motion.div
+                    key={x.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="w-64 shrink-0 snap-start rounded-3xl bg-surface p-4 shadow-lift ring-1 ring-line/70"
+                  >
+                    <p className="font-semibold">{x.name}</p>
+                    {(x.city || x.address) && <p className="text-sm text-muted">{[x.city, x.address].filter(Boolean).join(' · ')}</p>}
+                    {x.description && <p className="mt-2 line-clamp-3 text-sm">{x.description}</p>}
+                    {x.hours && <p className="mt-2 text-xs text-muted">{x.hours}</p>}
+                  </motion.div>
                 ))}
               </div>
             </section>

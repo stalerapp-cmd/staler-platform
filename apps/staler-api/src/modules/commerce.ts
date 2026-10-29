@@ -296,7 +296,17 @@ storeRouter.get(
     });
     res.json({
       success: true,
-      data: { store: { ...pub(m), owner_name: m.owner_name, main: pub(main) }, branches: branches.rows, ads: ads.rows },
+      data: {
+        store: { ...pub(m), owner_name: m.owner_name, main: pub(main) },
+        branches: branches.rows,
+        ads: ads.rows,
+        pickupPoints: (
+          await pool.query(
+            `SELECT id, merchant_id, name, description, city, address, hours, lat, lng FROM ${S}.pickup_points WHERE merchant_id = ANY($1) AND active ORDER BY sort, created_at`,
+            [branches.rows.map((x) => x.id)],
+          )
+        ).rows,
+      },
     });
   }),
 );
@@ -315,6 +325,8 @@ const checkoutBody = z
     lat: z.number().min(-90).max(90).optional(),
     lng: z.number().min(-180).max(180).optional(),
     note: z.string().trim().max(300).optional(),
+    /** Chosen pickup point per store (only for stores that list pickup points). */
+    pickupPoints: z.record(idParam, idParam).optional(),
   })
   .strict();
 
@@ -381,6 +393,19 @@ storeRouter.post(
           reference: checkoutRef,
           balanceAfter: balance,
         });
+        // Pickup: a store with pickup points needs one chosen; it must be its own and open.
+        const pickup = new Map<string, any>();
+        if (hasPhysical && b.fulfillment === 'pickup') {
+          for (const [merchantId, g] of groups) {
+            if (g.digitalOnly) continue;
+            const pts = await c.query(`SELECT id, name, description, city, address, hours, lat, lng FROM ${S}.pickup_points WHERE merchant_id = $1 AND active`, [merchantId]);
+            if (!pts.rowCount) continue;
+            const chosen = b.pickupPoints?.[merchantId];
+            const pt = pts.rows.find((x) => String(x.id) === String(chosen));
+            if (!pt) throw badRequest('PICKUP_POINT_REQUIRED', 'Choose where to pick up your order');
+            pickup.set(merchantId, pt);
+          }
+        }
         const orders: any[] = [];
         for (const [merchantId, g] of groups) {
           const due = g.full - g.now;
@@ -407,6 +432,8 @@ storeRouter.post(
             ],
             c,
           );
+          const pt = pickup.get(merchantId);
+          if (pt) await c.query(`UPDATE ${S}.orders SET pickup_point_id = $2, pickup_info = $3 WHERE id = $1`, [order.id, pt.id, JSON.stringify(pt)]);
           for (const l of g.lines) {
             await c.query(
               `INSERT INTO ${S}.order_items (order_id, product_id, quantity, price, is_digital, digital_file_url, product_name, licence_code)
@@ -447,7 +474,7 @@ async function ordersWithItems(where: string, params: unknown[], opts: { buyer?:
     `SELECT o.id, o.user_id, o.merchant_id, o.total_amount, o.amount_paid, o.balance_due, o.balance_paid_via, o.deposit_refundable, o.status,
             o.payment_status, o.escrow_status, o.created_at, o.paid_at, o.accepted_at, o.shipped_at, o.delivered_at, o.completed_at,
             o.fulfillment, o.delivery_address, o.delivery_phone, o.delivery_lat, o.delivery_lng, o.buyer_note, o.dispute_status, o.dispute_reason,
-            o.cancel_reason, ${opts.buyer ? 'o.handover_code,' : ''}
+            o.cancel_reason, o.pickup_info, ${opts.buyer ? 'o.handover_code,' : ''}
             m.store_name, m.branch_name, m.slug AS store_slug, m.logo_url AS store_logo, m.lat AS store_lat, m.lng AS store_lng, m.address AS store_address,
             m.user_id AS merchant_user_id, u.full_name AS buyer_name,
             COALESCE((SELECT json_agg(json_build_object('kind', e.kind, 'actor', e.actor, 'note', e.note, 'lat', e.lat, 'lng', e.lng, 'at', e.created_at) ORDER BY e.created_at)
@@ -1324,5 +1351,97 @@ merchantRouter.get(
     );
     if (!r) throw notFound('No sale with this licence code');
     res.json({ success: true, data: { licence: r } });
+  }),
+);
+
+// ------------------------------------------------------------ pickup points
+/** Public: open pickup points of the given stores (checkout shows them only when there are some). */
+storeRouter.get(
+  '/pickup-points',
+  validate({ query: z.object({ stores: z.string().trim().max(2000) }).strict() }),
+  ah(async (req, res) => {
+    const ids = String(req.query.stores)
+      .split(',')
+      .map((x) => x.trim())
+      .filter((x) => idParam.safeParse(x).success)
+      .slice(0, 30);
+    if (!ids.length) return res.json({ success: true, data: { points: [] } });
+    const r = await pool.query(
+      `SELECT id, merchant_id, name, description, city, address, hours, lat, lng FROM ${S}.pickup_points WHERE merchant_id = ANY($1) AND active ORDER BY sort, created_at`,
+      [ids],
+    );
+    res.json({ success: true, data: { points: r.rows } });
+  }),
+);
+
+const pickupBody = z
+  .object({
+    name: z.string().trim().min(2).max(80),
+    description: z.string().trim().max(300).optional().nullable(),
+    city: z.string().trim().max(60).optional().nullable(),
+    address: z.string().trim().max(200).optional().nullable(),
+    hours: z.string().trim().max(120).optional().nullable(),
+    lat: z.number().min(-90).max(90).optional().nullable(),
+    lng: z.number().min(-180).max(180).optional().nullable(),
+    active: z.boolean().optional(),
+  })
+  .strict();
+
+merchantRouter.get(
+  '/pickup-points',
+  ah(async (req, res) => {
+    const m = await myMerchant(req);
+    const r = await pool.query(`SELECT * FROM ${S}.pickup_points WHERE merchant_id = $1 ORDER BY sort, created_at`, [m.id]);
+    res.json({ success: true, data: { points: r.rows } });
+  }),
+);
+
+merchantRouter.post(
+  '/pickup-points',
+  validate({ body: pickupBody }),
+  ah(async (req, res) => {
+    const m = await myMerchant(req);
+    const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.pickup_points WHERE merchant_id = $1`, [m.id]);
+    if ((n?.n ?? 0) >= 30) throw conflict('PICKUP_LIMIT', 'You can have up to 30 pickup points per store');
+    const b = req.body;
+    const r = await one(
+      `INSERT INTO ${S}.pickup_points (merchant_id, name, description, city, address, hours, lat, lng, active, sort)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9,true),$10) RETURNING *`,
+      [m.id, b.name, b.description ?? null, b.city ?? null, b.address ?? null, b.hours ?? null, b.lat ?? null, b.lng ?? null, b.active ?? null, n?.n ?? 0],
+    );
+    res.status(201).json({ success: true, data: { point: r } });
+  }),
+);
+
+merchantRouter.patch(
+  '/pickup-points/:id',
+  validate({ params: z.object({ id: idParam }).strict(), body: pickupBody.partial().strict() }),
+  ah(async (req, res) => {
+    const m = await myMerchant(req);
+    const b = req.body;
+    const cols: Record<string, string> = { name: 'name', description: 'description', city: 'city', address: 'address', hours: 'hours', lat: 'lat', lng: 'lng', active: 'active' };
+    const sets: string[] = [];
+    const vals: unknown[] = [req.params.id, m.id];
+    for (const [k, v] of Object.entries(b)) {
+      if (!cols[k] || v === undefined) continue;
+      vals.push(v);
+      sets.push(`${cols[k]} = $${vals.length}`);
+    }
+    if (sets.length) {
+      const r = await pool.query(`UPDATE ${S}.pickup_points SET ${sets.join(', ')} WHERE id = $1 AND merchant_id = $2`, vals);
+      if (!r.rowCount) throw notFound('Pickup point not found');
+    }
+    res.json({ success: true });
+  }),
+);
+
+merchantRouter.delete(
+  '/pickup-points/:id',
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const m = await myMerchant(req);
+    const r = await pool.query(`DELETE FROM ${S}.pickup_points WHERE id = $1 AND merchant_id = $2`, [req.params.id, m.id]);
+    if (!r.rowCount) throw notFound('Pickup point not found');
+    res.json({ success: true });
   }),
 );

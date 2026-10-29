@@ -54,7 +54,7 @@ import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 import { useConfirm } from '../components/Confirm';
 import { usePublicConfig } from '../lib/config';
-import { LangSwitch, ThemeSwitch } from '../components/Fun';
+import { PrefsPill } from '../components/Fun';
 
 interface NavItem {
   to: string;
@@ -132,6 +132,7 @@ function useNav() {
         { to: '/app/merchant/orders', label: t.nav.storeOrders, icon: ClipboardList },
         { to: '/app/merchant/stores', label: t.nav.myStores, icon: GitBranch },
         { to: '/app/merchant/ads', label: t.nav.ads, icon: Megaphone },
+        { to: '/app/merchant/pickup', label: t.nav.pickup, icon: MapPin },
       ],
     });
   }
@@ -186,9 +187,7 @@ function SideLink({ item, onClick, animated = true, rail = false }: { item: NavI
     >
       {({ isActive }) => (
         <>
-          {isActive && animated && (
-            <motion.span layoutId="side-active" className="stitch-bg absolute inset-0 rounded-xl ring-1 ring-stitch/15" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />
-          )}
+          {isActive && animated && <motion.span layoutId="side-active" className="absolute inset-0 rounded-xl bg-sunk" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />}
           <span
             className={cx(
               'relative grid h-8 w-8 shrink-0 place-items-center rounded-[10px] transition duration-300',
@@ -196,13 +195,8 @@ function SideLink({ item, onClick, animated = true, rail = false }: { item: NavI
             )}
           >
             <item.icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.2 : 1.8} />
-            {isActive && (
-              <motion.svg initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} viewBox="0 0 10 10" className="absolute -end-1 -top-1 h-3 w-3" aria-hidden="true">
-                <path d="M2 2L8 8M8 2L2 8" stroke="rgb(var(--gold))" strokeWidth="2.4" strokeLinecap="round" />
-              </motion.svg>
-            )}
           </span>
-          {!rail && <span className={cx('relative truncate', isActive && 'font-semibold')}>{item.label}</span>}
+          {!rail && <span className="relative truncate">{item.label}</span>}
         </>
       )}
     </NavLink>
@@ -356,12 +350,12 @@ function MessagesButton() {
     <NavLink
       to="/app/messages"
       onClick={() => setUnread(0)}
-      className={({ isActive }) => cx('relative rounded-xl p-2.5 transition hover:bg-sunk hover:text-ink', isActive ? 'text-ink' : 'text-muted')}
+      className={({ isActive }) => cx('hbtn relative hover:bg-sunk hover:text-ink', isActive ? 'text-ink' : 'text-muted')}
       aria-label={t.nav.messages}
     >
-      <MessageCircle className="h-5 w-5" />
+      <MessageCircle className="h-[19px] w-[19px]" />
       {unread > 0 && (
-        <span className="absolute end-1.5 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-stitch px-1 text-[10px] font-bold text-white">
+        <span className="absolute -end-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-stitch px-1 text-[10px] font-bold text-white">
           {unread > 9 ? '9+' : unread}
         </span>
       )}
@@ -397,12 +391,12 @@ function Notifications() {
           setOpen(true);
           if (data?.unread) void post('/api/notifications/read-all').then(load);
         }}
-        className="relative rounded-xl p-2.5 text-muted transition hover:bg-sunk hover:text-ink"
+        className="hbtn relative text-muted hover:bg-sunk hover:text-ink"
         aria-label={t.nav.notifications}
       >
-        <Bell className="h-5 w-5" />
+        <Bell className="h-[19px] w-[19px]" />
         {!!data?.unread && (
-          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute end-1.5 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-stitch px-1 text-[10px] font-bold text-white">
+          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute -end-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-stitch px-1 text-[10px] font-bold text-white">
             {data.unread > 9 ? '9+' : data.unread}
           </motion.span>
         )}
@@ -445,10 +439,7 @@ function Notifications() {
 
 export function TopControls({ onDark = false }: { onDark?: boolean }) {
   return (
-    <div className="flex items-center gap-2">
-      <LangSwitch onDark={onDark} />
-      <ThemeSwitch onDark={onDark} />
-    </div>
+    <PrefsPill onDark={onDark} />
   );
 }
 
@@ -569,11 +560,11 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       <div className="min-w-0">
         <Announcement />
         <BioOffer />
-        <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-bg/85 backdrop-blur-md">
+        <header className="safe-top sticky top-0 z-30 bg-bg/85 backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-1.5">
               {loc.pathname !== '/app' && <BackButton />}
-              <NavLink to="/app/settings" className="flex min-w-0 items-center gap-2.5 rounded-2xl py-1 pe-2 transition hover:bg-sunk" aria-label={t.nav.settings}>
+              <NavLink to="/app/settings" className="flex min-w-0 items-center gap-2.5 rounded-full bg-surface/80 py-1 pe-3 ps-1 shadow-sm ring-1 ring-line transition hover:ring-ink/25 active:scale-[0.98]" aria-label={t.nav.settings}>
                 <span className="relative shrink-0">
                   <Avatar name={user?.full_name} src={user?.profile_image} size={38} />
                   <span className="absolute -bottom-0.5 -end-0.5 h-3 w-3 rounded-full bg-olive ring-2 ring-bg" />
@@ -588,30 +579,24 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                 <RoleBadge className="hidden md:inline-flex" />
               </NavLink>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+            <div className="flex shrink-0 items-center gap-2">
               <div className="hidden sm:block">
                 <TopControls />
               </div>
-              <button
-                onClick={() => setSupport(true)}
-                className="hidden rounded-xl p-2.5 text-olive transition hover:bg-olive/10 sm:block"
-                aria-label={t.navg.support}
-                title={t.navg.support}
-              >
-                <LifeBuoy className="h-5 w-5" />
-              </button>
-              <MessagesButton />
-              <Notifications />
-              <button
-                onClick={signOut}
-                className="hidden rounded-xl p-2.5 text-muted transition hover:bg-stitch/10 hover:text-stitch active:scale-95 sm:block"
-                aria-label={t.common.signOut}
-                title={t.common.signOut}
-              >
-                <LogOut className="h-5 w-5 flip-rtl" />
-              </button>
+              <div className="flex items-center gap-0.5 rounded-full bg-surface/80 p-0.5 shadow-sm ring-1 ring-line">
+                <button onClick={() => setSupport(true)} className="hbtn hidden text-olive hover:bg-olive/10 sm:grid" aria-label={t.navg.support} title={t.navg.support}>
+                  <LifeBuoy className="h-[19px] w-[19px]" />
+                </button>
+                <MessagesButton />
+                <Notifications />
+                <button onClick={signOut} className="hbtn hidden text-muted hover:bg-stitch/10 hover:text-stitch sm:grid" aria-label={t.common.signOut} title={t.common.signOut}>
+                  <LogOut className="h-[19px] w-[19px] flip-rtl" />
+                </button>
+              </div>
             </div>
           </div>
+          {/* A row of cross-stitch along the bar's lower edge, sewn in once when the app opens. */}
+          <StitchBand width={160} cell={4} className="pointer-events-none absolute inset-x-0 -bottom-[5px] h-[10px] w-full opacity-60" colors={['rgb(var(--stitch))', 'rgb(var(--gold))']} />
         </header>
 
         <main className="mx-auto max-w-6xl px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:pb-12">
@@ -717,7 +702,7 @@ function TabLink({ item }: { item: NavItem }) {
     <NavLink to={item.to} end={item.end} className="relative flex h-full min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[11px] leading-tight transition active:scale-90">
       {({ isActive }) => (
         <>
-          {isActive && <motion.span layoutId="tab-pill" className="stitch-bg absolute inset-x-1 inset-y-1.5 rounded-[20px] ring-1 ring-stitch/20" transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }} />}
+          {isActive && <motion.span layoutId="tab-pill" className="absolute inset-x-1 inset-y-1.5 rounded-[20px] bg-stitch/15" transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }} />}
           <motion.span
             className={cx('relative', isActive ? 'text-stitch' : 'text-muted')}
             animate={isActive ? { y: -1, scale: 1.12 } : { y: 0, scale: 1 }}

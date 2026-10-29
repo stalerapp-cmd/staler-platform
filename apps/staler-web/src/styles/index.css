@@ -199,3 +199,17 @@ input::-ms-reveal, input::-ms-clear { display: none; }
     linear-gradient(-45deg, transparent 44%, rgb(var(--stitch) / 0.1) 45% 55%, transparent 56%);
   background-size: 10px 10px;
 }
+
+/* Menu links: a soft ring for keyboard focus instead of the bright outline. */
+nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)); }
+:focus:not(:focus-visible) { outline: none; }
+
+/* Header icon buttons: round, with a small wiggle on hover and a press. */
+.hbtn { display: grid; place-items: center; height: 2.25rem; width: 2.25rem; border-radius: 9999px; transition: background-color .2s, color .2s, transform .15s; }
+.hbtn:active { transform: scale(0.88); }
+@keyframes hbtn-wiggle { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-14deg); } 60% { transform: rotate(10deg); } }
+@media (hover: hover) { .hbtn:hover > svg { animation: hbtn-wiggle .5s ease; } }
+
+/* Profile cloth: deep indigo warming into pomegranate — sits well in light and dark. */
+.cloth-plum { background: radial-gradient(120% 160% at 100% 0%, #8E3352 0%, transparent 55%), linear-gradient(135deg, #1A1F4E 0%, #2C2560 50%, #4A2453 100%); }
+[data-theme='dark'] .cloth-plum { background: radial-gradient(120% 160% at 100% 0%, #7A2C48 0%, transparent 55%), linear-gradient(135deg, #141842 0%, #221D4E 50%, #3A1C44 100%); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06); }

@@ -16,15 +16,13 @@ export function AuthBack({ onDark = false }: { onDark?: boolean }) {
       type="button"
       onClick={() => ((window.history.state?.idx ?? 0) > 0 ? nav(-1) : nav('/'))}
       className={cx(
-        'group flex h-9 items-center gap-1.5 rounded-full pe-3.5 ps-1 text-sm font-medium transition active:scale-95',
-        onDark ? 'bg-white/15 text-[#FBF6EA] hover:bg-white/25' : 'bg-surface text-ink shadow-sm ring-1 ring-line hover:ring-gold/50',
+        'grid h-10 w-10 place-items-center rounded-full transition active:scale-90',
+        onDark ? 'bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20' : 'bg-surface/80 text-ink ring-1 ring-line hover:text-gold hover:ring-ink/25',
       )}
       aria-label={t.common.back}
+      title={t.common.back}
     >
-      <span className={cx('grid h-7 w-7 place-items-center rounded-full transition group-hover:scale-110', onDark ? 'bg-[#E2C27A] text-night' : 'bg-night text-[#E2C27A]')}>
-        <ArrowLeft className="h-4 w-4 flip-rtl" />
-      </span>
-      {t.common.back}
+      <ArrowLeft className="h-5 w-5 flip-rtl" />
     </button>
   );
 }

@@ -43,7 +43,7 @@ import { usePublicConfig } from '../lib/config';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 import { useConfirm } from '../components/Confirm';
-import { LangSwitch, ThemeSwitch } from '../components/Fun';
+import { PrefsPill } from '../components/Fun';
 
 interface NavItem {
   to: string;
@@ -137,7 +137,7 @@ function SideLink({ item, onClick, animated = true, rail = false }: { item: NavI
     >
       {({ isActive }) => (
         <>
-          {isActive && animated && <motion.span layoutId="side-active" className="engraved-bg absolute inset-0 rounded-xl ring-1 ring-gold/25" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />}
+          {isActive && animated && <motion.span layoutId="side-active" className="absolute inset-0 rounded-xl bg-sunk" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />}
           <span
             className={cx(
               'relative grid h-8 w-8 shrink-0 place-items-center rounded-[10px] transition duration-300',
@@ -278,12 +278,12 @@ function Notifications() {
           setOpen(true);
           if (data?.unread) void post('/api/notifications/read-all').then(load);
         }}
-        className="relative rounded-xl p-2.5 text-muted transition hover:bg-sunk hover:text-ink"
+        className="hbtn relative text-muted hover:bg-sunk hover:text-ink"
         aria-label={t.nav.notifications}
       >
-        <Bell className="h-5 w-5" />
+        <Bell className="h-[19px] w-[19px]" />
         {!!data?.unread && (
-          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute end-1.5 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[10px] font-bold text-night">
+          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute -end-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-gold px-1 text-[10px] font-bold text-night">
             {data.unread > 9 ? '9+' : data.unread}
           </motion.span>
         )}
@@ -315,10 +315,7 @@ function Notifications() {
 
 export function TopControls({ onDark = false }: { onDark?: boolean }) {
   return (
-    <div className="flex items-center gap-2">
-      <LangSwitch onDark={onDark} />
-      <ThemeSwitch onDark={onDark} />
-    </div>
+    <PrefsPill onDark={onDark} />
   );
 }
 
@@ -420,11 +417,11 @@ export default function AppShell({ children }: { children?: ReactNode }) {
 
       <div className="min-w-0">
         <BioOffer />
-        <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-bg/85 backdrop-blur-md">
+        <header className="safe-top sticky top-0 z-30 bg-bg/85 backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-1.5">
               {loc.pathname !== '/app' && <BackButton />}
-              <NavLink to="/app/settings" className="flex min-w-0 items-center gap-2.5 rounded-2xl py-1 pe-2 transition hover:bg-sunk" aria-label={t.nav.settings}>
+              <NavLink to="/app/settings" className="flex min-w-0 items-center gap-2.5 rounded-full bg-surface/80 py-1 pe-3 ps-1 shadow-sm ring-1 ring-line transition hover:ring-ink/25 active:scale-[0.98]" aria-label={t.nav.settings}>
                 <span className="relative shrink-0 rounded-full ring-2 ring-gold/50">
                   <Avatar name={user?.full_name} size={38} />
                 </span>
@@ -435,24 +432,23 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                 <RoleBadge className="hidden md:inline-flex" />
               </NavLink>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+            <div className="flex shrink-0 items-center gap-2">
               <div className="hidden sm:block">
                 <TopControls />
               </div>
-              <button onClick={() => setSupport(true)} className="rounded-xl p-2.5 text-olive transition hover:bg-olive/10" aria-label={t.navg.support} title={t.navg.support}>
-                <LifeBuoy className="h-5 w-5" />
-              </button>
-              <Notifications />
-              <button
-                onClick={signOut}
-                className="hidden rounded-xl p-2.5 text-muted transition hover:bg-stitch/10 hover:text-stitch active:scale-95 sm:block"
-                aria-label={t.common.signOut}
-                title={t.common.signOut}
-              >
-                <LogOut className="h-5 w-5 flip-rtl" />
-              </button>
+              <div className="flex items-center gap-0.5 rounded-full bg-surface/80 p-0.5 shadow-sm ring-1 ring-line">
+                <button onClick={() => setSupport(true)} className="hbtn text-olive hover:bg-olive/10" aria-label={t.navg.support} title={t.navg.support}>
+                  <LifeBuoy className="h-[19px] w-[19px]" />
+                </button>
+                <Notifications />
+                <button onClick={signOut} className="hbtn hidden text-muted hover:bg-stitch/10 hover:text-stitch sm:grid" aria-label={t.common.signOut} title={t.common.signOut}>
+                  <LogOut className="h-[19px] w-[19px] flip-rtl" />
+                </button>
+              </div>
             </div>
           </div>
+          {/* Engraved double rule along the bar's lower edge, like the border of a banknote. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[5px] border-y border-gold/25 bg-[repeating-linear-gradient(115deg,rgb(var(--brass)/0.35)_0_1px,transparent_1px_5px)]" aria-hidden="true" />
         </header>
 
         <main className="mx-auto max-w-6xl px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:pb-12">

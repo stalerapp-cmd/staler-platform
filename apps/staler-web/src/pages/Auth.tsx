@@ -80,17 +80,15 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
         </div>
-        <div className="safe-top hidden items-center justify-between px-6 py-4 lg:flex">
+        <div className="safe-top hidden items-center justify-between px-8 py-5 lg:flex">
           <div className="flex items-center gap-3">
             <AuthBack />
-            <Link to="/" className="flex items-center gap-2 rounded-full bg-surface py-1 pe-3.5 ps-1 shadow-sm ring-1 ring-line transition hover:ring-ink/30">
-              <Logo className="h-7 w-7" />
-              <span className="font-display text-base">S-Taler</span>
+            <Link to="/" className="flex items-center gap-2.5">
+              <Logo className="h-9 w-9" />
+              <span className="font-display text-xl">S-Taler</span>
             </Link>
           </div>
-          <div className="rounded-full bg-surface p-1 shadow-sm ring-1 ring-line">
-            <TopControls />
-          </div>
+          <TopControls />
         </div>
         <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center">
           <motion.div

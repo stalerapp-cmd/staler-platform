@@ -1,7 +1,7 @@
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Moon, Sun } from 'lucide-react';
+import { ArrowLeft, Languages, Moon, Sun } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import { cx } from './ui';
@@ -24,47 +24,33 @@ export function MoreLink({ to, children, icon, className, tone = 'stitch' }: { t
   );
 }
 
-/** Language as a two-letter pill with a sliding knob. */
-export function LangSwitch({ onDark = false }: { onDark?: boolean }) {
-  const { lang, setLang } = useI18n();
-  return (
-    <div dir="ltr" role="radiogroup" aria-label="Language" className={cx('relative flex h-9 items-center rounded-full p-1 text-xs font-bold', onDark ? 'bg-white/15 text-white' : 'bg-sunk text-muted ring-1 ring-line')}>
-      {(['ar', 'en'] as const).map((l) => (
-        <button key={l} role="radio" aria-checked={lang === l} onClick={() => setLang(l)} className={cx('relative z-10 grid h-7 w-9 place-items-center rounded-full transition', lang === l && 'text-night')}>
-          {lang === l && <motion.span layoutId={`lang-knob-${onDark}`} className={cx('absolute inset-0 -z-10 rounded-full shadow', onDark ? 'bg-white' : 'bg-gold')} transition={{ type: 'spring', bounce: 0.3, duration: 0.4 }} />}
-          {l === 'ar' ? 'ع' : 'EN'}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Light/dark as a tiny sky switch: the sun rolls over and becomes a moon. */
-export function ThemeSwitch({ onDark = false }: { onDark?: boolean }) {
+/** Language and theme, side by side in one quiet pill (header, menus, sign-in screens). */
+export function PrefsPill({ onDark = false }: { onDark?: boolean }) {
+  const { lang, setLang, t } = useI18n();
   const { theme, setTheme } = useTheme();
-  const { t } = useI18n();
   const dark = theme === 'dark';
+  const btn = cx('relative grid h-8 place-items-center rounded-full transition active:scale-90', onDark ? 'text-white/85 hover:bg-white/15 hover:text-white' : 'text-muted hover:bg-sunk hover:text-ink');
   return (
-    <button
-      dir="ltr"
-      role="switch"
-      aria-checked={dark}
-      aria-label={t.common.theme}
-      onClick={() => setTheme(dark ? 'light' : 'dark')}
-      className={cx('relative h-9 w-16 shrink-0 overflow-hidden rounded-full p-1 transition-colors duration-500', dark ? 'bg-[#1E2257]' : onDark ? 'bg-white/20' : 'bg-[#CDE8FF]')}
-    >
-      {dark &&
-        [18, 30, 42].map((x, i) => (
-          <motion.span key={x} className="absolute h-1 w-1 rounded-full bg-[#FFE7A6]" style={{ left: x - 10, top: 9 + (i % 2) * 12 }} animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1.6 + i * 0.4 }} />
-        ))}
-      <motion.span
-        className={cx('relative grid h-7 w-7 place-items-center rounded-full shadow', dark ? 'bg-[#F4E7C9] text-[#3B3F8C]' : 'bg-[#FFC94A] text-[#B86A00]')}
-        animate={{ x: dark ? 28 : 0, rotate: dark ? 360 : 0 }}
-        transition={{ type: 'spring', bounce: 0.35, duration: 0.6 }}
-      >
-        {dark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-      </motion.span>
-    </button>
+    <div className={cx('flex items-center gap-0.5 rounded-full p-0.5 backdrop-blur', onDark ? 'bg-white/10 ring-1 ring-white/20' : 'bg-surface/80 ring-1 ring-line')}>
+      <button onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} className={cx(btn, 'gap-1.5 px-2.5 text-[13px] font-semibold')} aria-label={t.common.language} title={t.common.language}>
+        <span className="flex items-center gap-1.5">
+          <Languages className="h-4 w-4" />
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span key={lang} initial={{ y: 8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -8, opacity: 0 }} transition={{ duration: 0.18 }}>
+              {lang === 'ar' ? 'EN' : 'ع'}
+            </motion.span>
+          </AnimatePresence>
+        </span>
+      </button>
+      <span className={cx('h-4 w-px', onDark ? 'bg-white/25' : 'bg-line')} />
+      <button onClick={() => setTheme(dark ? 'light' : 'dark')} className={cx(btn, 'w-8')} aria-label={t.common.theme} title={t.common.theme}>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span key={theme} initial={{ rotate: -90, scale: 0.5, opacity: 0 }} animate={{ rotate: 0, scale: 1, opacity: 1 }} exit={{ rotate: 90, scale: 0.5, opacity: 0 }} transition={{ duration: 0.25 }}>
+            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </motion.span>
+        </AnimatePresence>
+      </button>
+    </div>
   );
 }
 

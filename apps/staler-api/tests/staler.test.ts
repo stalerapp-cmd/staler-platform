@@ -741,3 +741,29 @@ describe('account changes need an e-mailed code', () => {
     expect((await request(app).post('/api/auth/login').send({ email: u.email, password: NEW })).status).toBe(200);
   });
 });
+
+describe('pickup points', () => {
+  it('stores with pickup points make the buyer choose one, and the order remembers it', async () => {
+    const m = await walletUser(app, 'Kiosk Seller', 'merchant');
+    await request(app).post('/api/merchant/profile').set(auth(m.token)).send({ storeName: 'Kiosk' });
+    const p = await request(app).post('/api/merchant/products').set(auth(m.token)).send({ name: 'Zaatar Jar', price: '5', stock: 5 });
+    const pt = await request(app).post('/api/merchant/pickup-points').set(auth(m.token)).send({ name: 'Old City counter', description: 'Next to the clock tower', city: 'Nablus' });
+    expect(pt.status).toBe(201);
+    const storeId = p.body.data.product.merchant_id ?? pt.body.data.point.merchant_id;
+    const pub = await request(app).get(`/api/store/pickup-points?stores=${storeId}`);
+    expect(pub.body.data.points.map((x: any) => x.name)).toContain('Old City counter');
+
+    const buyer = await walletUser(app, 'Kiosk Buyer');
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: buyer.walletId, amount: '20' });
+    const items = [{ productId: p.body.data.product.id, quantity: 1 }];
+    const no = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items, fulfillment: 'pickup' });
+    expect(no.body.error.code).toBe('PICKUP_POINT_REQUIRED');
+    const ok = await request(app)
+      .post('/api/store/checkout')
+      .set(auth(buyer.token))
+      .send({ items, fulfillment: 'pickup', pickupPoints: { [storeId]: pt.body.data.point.id } });
+    expect(ok.status).toBe(201);
+    const mine = await request(app).get('/api/store/orders').set(auth(buyer.token));
+    expect(mine.body.data.orders[0].pickup_info.name).toBe('Old City counter');
+  });
+});

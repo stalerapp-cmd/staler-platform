@@ -28,6 +28,7 @@ const LOOKS: [RegExp, ClothTone, LucideIcon][] = [
   [/^\/app\/merchant\/orders/, 'sand', ClipboardList],
   [/^\/app\/merchant\/stores/, 'sand', GitBranch],
   [/^\/app\/merchant\/ads/, 'sand', Megaphone],
+  [/^\/app\/merchant\/pickup/, 'sand', MapPin],
   [/^\/app\/merchant/, 'sand', Store],
   [/^\/app\/admin\/users/, 'night', Users],
   [/^\/app\/admin\/stores/, 'sand', Store],

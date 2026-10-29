@@ -159,3 +159,13 @@ input::-ms-reveal, input::-ms-clear { display: none; }
   .no-scrollbar { scrollbar-width: none; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
 }
+
+/* Menu links: a soft ring for keyboard focus instead of the bright outline. */
+nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)); }
+:focus:not(:focus-visible) { outline: none; }
+
+/* Header icon buttons: round, with a small wiggle on hover and a press. */
+.hbtn { display: grid; place-items: center; height: 2.25rem; width: 2.25rem; border-radius: 9999px; transition: background-color .2s, color .2s, transform .15s; }
+.hbtn:active { transform: scale(0.88); }
+@keyframes hbtn-wiggle { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-14deg); } 60% { transform: rotate(10deg); } }
+@media (hover: hover) { .hbtn:hover > svg { animation: hbtn-wiggle .5s ease; } }

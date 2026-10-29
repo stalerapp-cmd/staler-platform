@@ -13,6 +13,7 @@ import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { Avatar, Badge, Button, CodeInput, CopyButton, ErrorNote, Field, PasswordStrength, Sheet, cx } from '../components/ui';
 import { StarMotif } from '../components/Tatreez';
+import { ImageCropper } from '../components/ImageCropper';
 import { fill } from '../lib/format';
 import { useConfirm } from '../components/Confirm';
 
@@ -48,6 +49,7 @@ export default function Settings() {
   const confirm = useConfirm();
   const sessions = useData<{ sessions: any[] }>('/api/auth/me/sessions');
   const [tab, setTab] = useState<Tab>('profile');
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   const [name, setName] = useState(user?.full_name ?? '');
   const [phone, setPhone] = useState(user?.phone_number ?? '');
@@ -95,7 +97,7 @@ export default function Settings() {
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="cloth cloth-sky mb-6 overflow-hidden rounded-[30px] p-5 shadow-card sm:p-7"
+        className="cloth cloth-plum mb-6 overflow-hidden rounded-[30px] p-5 shadow-card sm:p-7"
       >
         <div className="pointer-events-none absolute -end-12 top-1/2 h-56 w-56 -translate-y-1/2 opacity-25">
           <div className="spin-slow h-full w-full">
@@ -120,14 +122,24 @@ export default function Settings() {
               type="file"
               accept="image/jpeg,image/png,image/webp"
               hidden
-              onChange={(e) =>
-                e.target.files?.[0] &&
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setCropFile(f);
+                e.target.value = '';
+              }}
+            />
+            <ImageCropper
+              file={cropFile}
+              shape="circle"
+              onCancel={() => setCropFile(null)}
+              onConfirm={(blob) =>
                 act('avatar', async () => {
                   const fd = new FormData();
-                  fd.append('image', e.target.files![0]!);
+                  fd.append('image', blob, 'photo.png');
                   await upload('/api/auth/me/avatar', fd);
                   await reload();
-                  e.target.value = '';
+                  setCropFile(null);
+                  toast(t.crop.saved);
                 })
               }
             />
