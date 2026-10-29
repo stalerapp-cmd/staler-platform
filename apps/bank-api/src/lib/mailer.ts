@@ -131,53 +131,111 @@ export async function sendMail(mail: Mail): Promise<void> {
 }
 
 type Lang = 'en' | 'ar';
-const T = {
-  verify: { en: 'Verify your e-mail', ar: 'تأكيد البريد الإلكتروني' },
+export type CodeKind = 'verify' | 'reset' | 'security' | 'email-change' | 'email-new' | 'password';
+const BRAND = { name: env.BANK_NAME, color: '#9A7425', dark: '#0C1A17', accent: '#C9A45C' };
+const site = () => env.PUBLIC_URL.replace(/\/+$/, '');
+
+const TITLE: Record<CodeKind, Record<Lang, string>> = {
+  verify: { en: 'Confirm your e-mail', ar: 'تأكيد البريد الإلكتروني' },
   reset: { en: 'Reset your password', ar: 'إعادة تعيين كلمة المرور' },
-  security: { en: 'Security alert', ar: 'تنبيه أمني' },
-  codeIntro: {
-    en: 'Use this code to continue. It expires in 15 minutes.',
-    ar: 'استخدم هذا الرمز للمتابعة. صالح لمدة 15 دقيقة.',
-  },
-  ignore: {
-    en: 'If you did not request this, ignore this e-mail and consider changing your password.',
-    ar: 'إذا لم تطلب ذلك، تجاهل هذه الرسالة وفكّر في تغيير كلمة المرور.',
-  },
-} as const;
+  security: { en: 'Security code', ar: 'رمز أمان' },
+  'email-change': { en: 'Approve the e-mail change', ar: 'وافق على تغيير الإيميل' },
+  'email-new': { en: 'Confirm your new e-mail', ar: 'أكّد إيميلك الجديد' },
+  password: { en: 'Approve the password change', ar: 'وافق على تغيير كلمة المرور' },
+};
+const INTRO: Record<CodeKind, Record<Lang, string>> = {
+  verify: { en: 'Welcome! Enter this code to finish creating your account.', ar: 'أهلًا فيك! اكتب هالرمز لتكمّل إنشاء حسابك.' },
+  reset: { en: 'Enter this code on the “Forgot password” page to choose a new password.', ar: 'اكتب هالرمز بصفحة «نسيت كلمة المرور» لتختار كلمة مرور جديدة.' },
+  security: { en: 'Enter this code to continue.', ar: 'اكتب هالرمز لتكمّل.' },
+  'email-change': { en: 'A request was made to change the e-mail on your account. Enter this code to approve it — nothing changes without it.', ar: 'في طلب لتغيير إيميل حسابك. اكتب هالرمز لتوافق — ولا إشي بيتغيّر بدونه.' },
+  'email-new': { en: 'Enter this code to confirm this is your new e-mail address.', ar: 'اكتب هالرمز لتأكّد إنه هاد إيميلك الجديد.' },
+  password: { en: 'A request was made to change your password. Enter this code to approve it — nothing changes without it.', ar: 'في طلب لتغيير كلمة مرورك. اكتب هالرمز لتوافق — ولا إشي بيتغيّر بدونه.' },
+};
+const L = {
+  expires: { en: 'Valid for 15 minutes. Never share it — our team will never ask for it.', ar: 'صالح لمدة 15 دقيقة. لا تعطيه لحدا — فريقنا عمره ما رح يطلبه منك.' },
+  ignore: { en: 'Didn’t ask for this? Ignore this e-mail and change your password.', ar: 'ما طلبت هاد؟ تجاهل الرسالة وغيّر كلمة المرور.' },
+  open: { en: 'Open', ar: 'افتح' },
+};
 
 /**
- * Deliberately plain, light e-mails: one short message, the code as text, no images,
- * no tracking, a matching plain-text part. Personal-looking mail like this is what
- * Gmail and Outlook put in the inbox rather than Spam.
+ * Branded, light e-mail: logo header, a thin pattern stripe, one message, the code
+ * as text and a matching plain-text part. No tracking pixels.
  */
 function layout(lang: Lang, title: string, body: string): string {
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const align = lang === 'ar' ? 'right' : 'left';
-  return `<!doctype html><html lang="${lang}" dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
-<body style="margin:0;padding:24px 12px;background:#f5f5f7;font-family:Tahoma,Arial,sans-serif;color:#1f2330">
-<div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:14px;padding:28px;text-align:${align};border:1px solid #e6e6ec">
-<p style="margin:0 0 18px;font-size:15px;font-weight:bold;color:#9A7425">${esc(env.BANK_NAME)}</p>
-<h1 style="margin:0 0 10px;font-size:19px;color:#1f2330">${esc(title)}</h1>
+  return `<!doctype html><html lang="${lang}" dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title></head>
+<body style="margin:0;padding:24px 10px;background:#f3f1ec;font-family:Tahoma,Arial,sans-serif;color:#1f2330">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e6e3dc">
+<tr><td style="background:${BRAND.dark};padding:20px 26px;text-align:${align}">
+<a href="${site()}" style="text-decoration:none"><img src="${site()}/icon-192.png" width="44" height="44" alt="" style="border-radius:12px;vertical-align:middle;border:0">
+<span style="color:#ffffff;font-size:20px;font-weight:bold;vertical-align:middle;padding:0 10px">${esc(BRAND.name)}</span></a></td></tr>
+<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:6px;background:#C9A45C"></td><td style="height:6px;background:#0C1A17"></td><td style="height:6px;background:#3E6E5A"></td><td style="height:6px;background:#9A7425"></td><td style="height:6px;background:#C9A45C"></td><td style="height:6px;background:#0C1A17"></td><td style="height:6px;background:#3E6E5A"></td><td style="height:6px;background:#9A7425"></td><td style="height:6px;background:#C9A45C"></td><td style="height:6px;background:#0C1A17"></td><td style="height:6px;background:#3E6E5A"></td><td style="height:6px;background:#9A7425"></td><td style="height:6px;background:#C9A45C"></td><td style="height:6px;background:#0C1A17"></td><td style="height:6px;background:#3E6E5A"></td><td style="height:6px;background:#9A7425"></td></tr></table></td></tr>
+<tr><td style="padding:28px 26px;text-align:${align}">
+<h1 style="margin:0 0 12px;font-size:20px;color:#1f2330">${esc(title)}</h1>
 ${body}
-<p style="margin:24px 0 0;font-size:12px;color:#777">${esc(T.ignore[lang])}</p>
-</div></body></html>`;
+</td></tr>
+<tr><td style="padding:16px 26px;background:#faf8f3;border-top:1px dashed #e6e3dc;text-align:${align};font-size:12px;color:#7a7a80;line-height:1.6">
+${esc(L.ignore[lang])}<br><a href="${site()}" style="color:${BRAND.color};text-decoration:none">${esc(site().replace(/^https?:\/\//, ''))}</a>
+</td></tr></table></td></tr></table></body></html>`;
 }
 
-export function codeMail(to: string, kind: 'verify' | 'reset' | 'security', code: string, lang: Lang = 'en'): Mail {
-  const title = T[kind][lang];
-  const body = `<p style="margin:0;font-size:15px;line-height:1.7">${esc(T.codeIntro[lang])}</p>
-<p style="margin:20px 0;font-size:32px;letter-spacing:8px;font-weight:bold;text-align:center;color:#1f2330" dir="ltr">${esc(code)}</p>`;
-  const subject = lang === 'ar' ? `${code} هو رمز ${env.BANK_NAME}` : `${code} is your ${env.BANK_NAME} code`;
-  const text = `${title}\n\n${T.codeIntro[lang]}\n\n${code}\n\n${T.ignore[lang]}\n— ${env.BANK_NAME}`;
+const para = (t: string) => `<p style="margin:0 0 6px;font-size:15px;line-height:1.75">${esc(t)}</p>`;
+const codeBox = (code: string) =>
+  `<div dir="ltr" style="margin:20px 0 8px;padding:16px;border:2px dashed ${BRAND.accent};border-radius:16px;background:#fbf8ef;text-align:center;font-size:34px;letter-spacing:10px;font-weight:bold;color:${BRAND.dark};font-family:Consolas,Menlo,monospace">${esc(code)}</div>`;
+const button = (label: string, url: string) =>
+  `<p style="margin:20px 0 4px"><a href="${esc(url)}" style="display:inline-block;background:${BRAND.color};color:#ffffff;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:bold;font-size:15px">${esc(label)}</a></p>`;
+
+export function codeMail(to: string, kind: CodeKind, code: string, lang: Lang = 'en', cta?: { label: string; url: string }): Mail {
+  const title = TITLE[kind][lang];
+  const body = para(INTRO[kind][lang]) + codeBox(code) + `<p style="margin:0;font-size:12px;color:#7a7a80;text-align:center">${esc(L.expires[lang])}</p>` + (cta ? button(cta.label, cta.url) : '');
+  const subject = lang === 'ar' ? `${code} هو رمز ${BRAND.name}` : `${code} is your ${BRAND.name} code`;
+  const text = `${title}\n\n${INTRO[kind][lang]}\n\n${code}\n\n${L.expires[lang]}${cta ? `\n\n${cta.label}: ${cta.url}` : ''}\n\n${L.ignore[lang]}\n— ${BRAND.name}`;
   return { to, subject, html: layout(lang, title, body), text };
 }
 
-export function noticeMail(to: string, title: string, message: string, lang: Lang = 'en'): Mail {
+export function noticeMail(to: string, title: string, message: string, lang: Lang = 'en', cta?: { label: string; url: string }): Mail {
   return {
     to,
-    subject: `${env.BANK_NAME}: ${title}`,
-    html: layout(lang, title, `<p style="margin:0;font-size:15px;line-height:1.7">${esc(message)}</p>`),
-    text: `${title}\n\n${message}\n— ${env.BANK_NAME}`,
+    subject: `${BRAND.name}: ${title}`,
+    html: layout(lang, title, para(message) + (cta ? button(cta.label, cta.url) : '')),
+    text: `${title}\n\n${message}${cta ? `\n\n${cta.url}` : ''}\n— ${BRAND.name}`,
+  };
+}
+
+/** Bilingual security notices (sent after something important changed). */
+export function securityNotice(
+  to: string,
+  event: 'password' | 'password-reset' | 'email-old' | 'email-new',
+  lang: Lang = 'en',
+  vars: Record<string, string> = {},
+): Mail {
+  const when = new Date().toLocaleString(lang === 'ar' ? 'ar' : 'en-GB', { timeZone: 'Asia/Hebron', dateStyle: 'medium', timeStyle: 'short' });
+  const M = {
+    password: { en: ['Your password was changed', `Your password was changed on ${when} and other devices were signed out. If this wasn’t you, reset your password now.`], ar: ['انتغيّرت كلمة المرور', `انتغيّرت كلمة مرورك بتاريخ ${when} وانطلعت باقي الأجهزة. إذا مش إنت، غيّرها فورًا.`] },
+    'password-reset': { en: ['Your password was reset', `Your password was reset on ${when} and all devices were signed out. If this wasn’t you, reset it again now.`], ar: ['انعادت كلمة المرور', `انعمل تعيين جديد لكلمة مرورك بتاريخ ${when} وانطلعت كل الأجهزة. إذا مش إنت، غيّرها فورًا.`] },
+    'email-old': { en: ['Your e-mail was changed', `The e-mail on your account was changed to ${vars.email ?? ''} on ${when}. If this wasn’t you, contact support immediately.`], ar: ['انتغيّر الإيميل', `انتغيّر إيميل حسابك لـ ${vars.email ?? ''} بتاريخ ${when}. إذا مش إنت، تواصل مع الدعم فورًا.`] },
+    'email-new': { en: ['This is now your sign-in e-mail', `From now on, sign in to ${BRAND.name} with this e-mail.`], ar: ['صار هاد إيميل الدخول تبعك', `من هلّأ وطالع، ادخل على ${BRAND.name} بهالإيميل.`] },
+  }[event][lang];
+  return noticeMail(to, M[0]!, M[1]!, lang, { label: lang === 'ar' ? `افتح ${BRAND.name}` : `Open ${BRAND.name}`, url: `${site()}/login` });
+}
+
+/** Someone tried to sign up with an e-mail that already has an account: give them a way in. */
+export function existingAccountMail(to: string, code: string, lang: Lang = 'en'): Mail {
+  const title = lang === 'ar' ? `عندك حساب ${BRAND.name} بهالإيميل` : `You already have a ${BRAND.name} account`;
+  const intro =
+    lang === 'ar'
+      ? 'حدا (غالبًا إنت) حاول يفتح حساب جديد بهالإيميل، بس الحساب موجود. سجّل دخول عادي، أو إذا نسيت كلمة المرور استخدم هالرمز بصفحة «نسيت كلمة المرور».'
+      : 'Someone (probably you) tried to open a new account with this e-mail, but it already has one. Just sign in — or if you forgot your password, use this code on the “Forgot password” page.';
+  const url = `${site()}/forgot?email=${encodeURIComponent(to)}&step=code`;
+  const label = lang === 'ar' ? 'اختار كلمة مرور جديدة' : 'Choose a new password';
+  const body = para(intro) + codeBox(code) + `<p style="margin:0;font-size:12px;color:#7a7a80;text-align:center">${esc(L.expires[lang])}</p>` + button(label, url);
+  return {
+    to,
+    subject: lang === 'ar' ? `${code} — رمز الدخول لحسابك بـ ${BRAND.name}` : `${code} — your ${BRAND.name} account code`,
+    html: layout(lang, title, body),
+    text: `${title}\n\n${intro}\n\n${code}\n\n${url}\n— ${BRAND.name}`,
   };
 }
 

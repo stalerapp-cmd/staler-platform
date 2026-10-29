@@ -315,7 +315,7 @@ export function ErrorNote({ children }: { children: ReactNode }) {
   );
 }
 
-export type ClothTone = 'night' | 'stitch' | 'olive' | 'gold' | 'sky';
+export type ClothTone = 'night' | 'stitch' | 'olive' | 'gold' | 'sky' | 'sand';
 
 /**
  * Page title. By default it opens the page with a coloured "cloth" banner
@@ -350,6 +350,7 @@ export function PageHeader({
   }
   const t = tone ?? look.tone;
   const Icon = look.icon;
+  const sand = t === 'sand';
   return (
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.985 }}
@@ -359,12 +360,12 @@ export function PageHeader({
     >
       <div className="pointer-events-none absolute -end-14 top-1/2 h-40 w-40 -translate-y-1/2 opacity-30 sm:-end-10 sm:h-52 sm:w-52" aria-hidden="true">
         <div className="spin-slow h-full w-full">
-          <StarMotif size={17} cell={10} className="h-full w-full" colors={['#FFFFFF', '#FFE3A1']} strokeWidth={2.2} delay={0.15} />
+          <StarMotif size={17} cell={10} className="h-full w-full" colors={sand ? ['#C8344A', '#B5781D'] : ['#FFFFFF', '#FFE3A1']} strokeWidth={2.2} delay={0.15} />
         </div>
       </div>
       <div className="pointer-events-none absolute -bottom-6 end-24 hidden h-16 w-16 opacity-25 sm:block" aria-hidden="true">
         <div className="floaty h-full w-full">
-          <StarMotif size={9} cell={10} className="h-full w-full" colors={['#FFFFFF', '#FFFFFF']} strokeWidth={2.4} delay={0.4} />
+          <StarMotif size={9} cell={10} className="h-full w-full" colors={sand ? ['#5E7A2E', '#5E7A2E'] : ['#FFFFFF', '#FFFFFF']} strokeWidth={2.4} delay={0.4} />
         </div>
       </div>
       <div className="relative flex flex-wrap items-end justify-between gap-4">
@@ -373,12 +374,15 @@ export function PageHeader({
             initial={{ rotate: -18, scale: 0.6, opacity: 0 }}
             animate={{ rotate: 0, scale: 1, opacity: 1 }}
             transition={{ type: 'spring', bounce: 0.5, delay: 0.1 }}
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-dashed border-white/40 bg-white/15 backdrop-blur-sm sm:h-14 sm:w-14"
+            className={cx(
+              'grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-dashed backdrop-blur-sm sm:h-14 sm:w-14',
+              sand ? 'border-[#B5781D]/50 bg-white/50 text-stitch dark:bg-white/10' : 'border-white/40 bg-white/15',
+            )}
           >
             {icon ?? <Icon className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.9} />}
           </motion.span>
           <div className="min-w-0">
-            <h1 className="text-2xl text-white sm:text-[2rem]">{title}</h1>
+            <h1 className="text-2xl sm:text-[2rem]">{title}</h1>
             {lead && <p className="lead mt-1 max-w-xl text-[15px]">{lead}</p>}
           </div>
         </div>

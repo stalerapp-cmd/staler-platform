@@ -58,6 +58,9 @@ export default function Settings() {
   const [newEmail, setNewEmail] = useState('');
   const [emailPw, setEmailPw] = useState('');
   const [emailCode, setEmailCode] = useState('');
+  const [emailOld, setEmailOld] = useState('');
+  const [pwStep, setPwStep] = useState<'form' | 'code'>('form');
+  const [pwCode, setPwCode] = useState('');
 
   const [cur, setCur] = useState('');
   const [next, setNext] = useState('');
@@ -100,12 +103,17 @@ export default function Settings() {
           </div>
         </div>
         <div className="relative flex flex-wrap items-center gap-5">
-          <div className="relative">
-            <span className="block rounded-full ring-4 ring-white/30">
+          {/* Photo: the avatar with its own two clear actions right under it */}
+          <div className="flex flex-col items-center gap-2.5">
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="group relative rounded-full ring-4 ring-white/30 transition hover:ring-white/60"
+              aria-label={user?.profile_image ? t.settings.changePhoto2 : t.settings.addPhoto}
+            >
               <Avatar name={user?.full_name} src={user?.profile_image} size={92} />
-            </span>
-            <button onClick={() => fileRef.current?.click()} className="absolute -bottom-1 -end-1 grid h-10 w-10 place-items-center rounded-full bg-stitch text-white shadow-lift transition hover:scale-110" aria-label={t.settings.changePhoto}>
-              <Camera className="h-4 w-4" />
+              <span className="absolute inset-0 grid place-items-center rounded-full bg-night/45 text-white opacity-0 transition group-hover:opacity-100">
+                {busy === 'avatar' ? <span className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Camera className="h-7 w-7" />}
+              </span>
             </button>
             <input
               ref={fileRef}
@@ -119,9 +127,27 @@ export default function Settings() {
                   fd.append('image', e.target.files![0]!);
                   await upload('/api/auth/me/avatar', fd);
                   await reload();
+                  e.target.value = '';
                 })
               }
             />
+            <div className="flex overflow-hidden rounded-full bg-white/15 text-xs font-medium text-white ring-1 ring-white/25 backdrop-blur">
+              <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 transition hover:bg-white/20">
+                <Camera className="h-3.5 w-3.5" /> {user?.profile_image ? t.settings.changePhoto2 : t.settings.addPhoto}
+              </button>
+              {user?.profile_image && (
+                <button
+                  onClick={async () => {
+                    if (!(await confirm({ title: t.ask.photoTitle, body: t.ask.photoBody, confirmLabel: t.ask.photoOk, tone: 'danger' }))) return;
+                    await act('avatar', async () => (await del('/api/auth/me/avatar'), await reload()));
+                  }}
+                  className="flex items-center gap-1.5 border-s border-white/25 px-3 py-1.5 transition hover:bg-stitch/80"
+                  aria-label={t.settings.removePhoto2}
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> {t.settings.removePhoto2}
+                </button>
+              )}
+            </div>
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-display text-2xl text-white">{user?.full_name}</p>
@@ -135,17 +161,6 @@ export default function Settings() {
                 </span>
               )}
             </div>
-            {user?.profile_image && (
-              <button
-                className="mt-2 text-sm text-white/80 underline-offset-4 hover:underline"
-                onClick={async () => {
-                  if (!(await confirm({ title: t.ask.photoTitle, body: t.ask.photoBody, confirmLabel: t.ask.photoOk, tone: 'danger' }))) return;
-                  await act('avatar', async () => (await del('/api/auth/me/avatar'), await reload()));
-                }}
-              >
-                {t.settings.removePhoto}
-              </button>
-            )}
           </div>
           <div className="w-full rounded-2xl bg-white/12 p-3.5 backdrop-blur-sm sm:w-64">
             {(() => {
@@ -236,23 +251,7 @@ export default function Settings() {
           ))}
         </div>
         <p className="mb-2 mt-5 text-sm font-medium text-ink/80">{t.settings.appearance}</p>
-        <div className="grid grid-cols-2 gap-3">
-          {(['light', 'dark'] as const).map((v) => (
-            <button key={v} onClick={() => setTheme(v)} className={cx('overflow-hidden rounded-2xl border text-start transition', theme === v ? 'border-stitch ring-2 ring-stitch/20' : 'border-line hover:border-ink/30')}>
-              <div className={cx('flex h-20 items-end gap-1.5 p-2.5', v === 'light' ? 'bg-[#F4F5F9]' : 'bg-[#0D1230]')}>
-                <span className={cx('h-10 w-6 rounded-md', v === 'light' ? 'bg-white' : 'bg-[#161D45]')} />
-                <span className="flex-1 space-y-1.5">
-                  <span className="block h-4 rounded-md bg-[#C8344A]" />
-                  <span className={cx('block h-3 w-2/3 rounded-md', v === 'light' ? 'bg-white' : 'bg-[#161D45]')} />
-                </span>
-              </div>
-              <span className="flex items-center gap-2 px-3 py-2.5 text-sm">
-                {v === 'light' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                {v === 'light' ? t.settings.light : t.settings.dark}
-              </span>
-            </button>
-          ))}
-        </div>
+        <ThemePicker theme={theme} onChange={setTheme} />
       </Section>
         </>
       )}
@@ -282,25 +281,41 @@ export default function Settings() {
           </form>
         )}
         {emailStep === 'code' && (
-          <div className="mt-4 space-y-4">
-            <p className="text-sm text-muted">{t.settings.emailCode}</p>
-            <CodeInput value={emailCode} onChange={setEmailCode} />
+          <div className="mt-4 space-y-5">
+            <div className="rounded-2xl bg-sunk/60 p-4">
+              <p className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <ShieldCheck className="h-4 w-4 text-olive" /> {fill(t.settings.codeOld, { email: user?.email ?? '' })}
+              </p>
+              <CodeInput value={emailOld} onChange={setEmailOld} />
+            </div>
+            <div className="rounded-2xl bg-sunk/60 p-4">
+              <p className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <AtSign className="h-4 w-4 text-sky" /> {fill(t.settings.codeNew, { email: newEmail })}
+              </p>
+              <CodeInput value={emailCode} onChange={setEmailCode} autoFocus={false} />
+            </div>
             <ErrorNote>{error.email}</ErrorNote>
-            <Button
-              loading={busy === 'email'}
-              disabled={emailCode.length !== 6}
-              onClick={() =>
-                act('email', async () => {
-                  await post('/api/auth/me/email/confirm', { code: emailCode });
-                  await reload();
-                  setEmailStep('idle');
-                  setEmailCode('');
-                  toast(t.common.saved);
-                })
-              }
-            >
-              {t.common.confirm}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                loading={busy === 'email'}
+                disabled={emailCode.length !== 6 || emailOld.length !== 6}
+                onClick={() =>
+                  act('email', async () => {
+                    await post('/api/auth/me/email/confirm', { code: emailCode, oldCode: emailOld });
+                    await reload();
+                    setEmailStep('idle');
+                    setEmailCode('');
+                    setEmailOld('');
+                    toast(t.settings.emailChanged);
+                  })
+                }
+              >
+                {t.common.confirm}
+              </Button>
+              <Button variant="ghost" onClick={() => (setEmailStep('idle'), setEmailCode(''), setEmailOld(''))}>
+                {t.common.cancel}
+              </Button>
+            </div>
           </div>
         )}
       </Section>
@@ -311,42 +326,69 @@ export default function Settings() {
       {tab === 'security' && (
         <>
       <Section title={t.settings.password} icon={LockKeyhole}>
-        <form
-          className="grid gap-4 sm:grid-cols-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (next !== next2) return setError((x) => ({ ...x, password: t.auth.mismatch }));
-            void act('password', async () => {
-              const s = await post('/api/auth/me/password', { currentPassword: cur, newPassword: next });
-              await applySession(s);
-              setCur('');
-              setNext('');
-              setNext2('');
-              toast(t.settings.pwChanged);
-              void sessions.reload();
-            });
-          }}
-        >
-          <Field label={t.settings.currentPassword} type="password" value={cur} onChange={(e) => setCur(e.target.value)} dir="ltr" required autoComplete="current-password" />
-          <div>
-            <Field label={t.auth.newPassword} type="password" value={next} onChange={(e) => setNext(e.target.value)} dir="ltr" required autoComplete="new-password" />
-            <PasswordStrength value={next} />
-          </div>
-          <Field
-            label={t.auth.confirmPassword}
-            type="password"
-            value={next2}
-            onChange={(e) => setNext2(e.target.value)}
-            dir="ltr"
-            required
-            autoComplete="new-password"
-            error={next2 && !next.startsWith(next2) ? t.auth.mismatch : undefined}
-          />
-          <div className="sm:col-span-2">
+        {pwStep === 'form' ? (
+          <form
+            className="grid gap-4 sm:grid-cols-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (next !== next2) return setError((x) => ({ ...x, password: t.auth.mismatch }));
+              void act('password', async () => {
+                await post('/api/auth/me/password/request', { currentPassword: cur, newPassword: next });
+                setPwStep('code');
+                setPwCode('');
+              });
+            }}
+          >
+            <Field label={t.settings.currentPassword} type="password" value={cur} onChange={(e) => setCur(e.target.value)} dir="ltr" required autoComplete="current-password" />
+            <div>
+              <Field label={t.auth.newPassword} type="password" value={next} onChange={(e) => setNext(e.target.value)} dir="ltr" required autoComplete="new-password" />
+              <PasswordStrength value={next} />
+            </div>
+            <Field
+              label={t.auth.confirmPassword}
+              type="password"
+              value={next2}
+              onChange={(e) => setNext2(e.target.value)}
+              dir="ltr"
+              required
+              autoComplete="new-password"
+              error={next2 && !next.startsWith(next2) ? t.auth.mismatch : undefined}
+            />
+            <div className="sm:col-span-2">
+              <ErrorNote>{error.password}</ErrorNote>
+              <Button loading={busy === 'password'}>{t.settings.changePassword}</Button>
+            </div>
+          </form>
+        ) : (
+          <div className="space-y-4">
+            <p className="rounded-2xl bg-sunk/60 p-4 text-sm">{fill(t.settings.pwCodeSent, { email: user?.email ?? '' })}</p>
+            <CodeInput value={pwCode} onChange={setPwCode} />
             <ErrorNote>{error.password}</ErrorNote>
-            <Button loading={busy === 'password'}>{t.settings.changePassword}</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                loading={busy === 'password'}
+                disabled={pwCode.length !== 6}
+                onClick={() =>
+                  act('password', async () => {
+                    const s = await post('/api/auth/me/password', { code: pwCode });
+                    await applySession(s);
+                    setCur('');
+                    setNext('');
+                    setNext2('');
+                    setPwStep('form');
+                    toast(t.settings.pwChanged);
+                    void sessions.reload();
+                  })
+                }
+              >
+                {t.settings.changePassword}
+              </Button>
+              <Button variant="ghost" onClick={() => setPwStep('form')}>
+                {t.common.cancel}
+              </Button>
+            </div>
           </div>
-        </form>
+        )}
       </Section>
 
       <BioToggle />
@@ -521,6 +563,75 @@ export default function Settings() {
           </Button>
         </form>
       </Sheet>
+    </div>
+  );
+}
+
+/** Light / dark as two little skies: a sun that spins its rays, a moon with twinkling stars. */
+function ThemePicker({ theme, onChange }: { theme: string; onChange: (v: 'light' | 'dark') => void }) {
+  const { t } = useI18n();
+  return (
+    <div role="radiogroup" aria-label={t.settings.appearance} className="grid grid-cols-2 gap-3">
+      {(['light', 'dark'] as const).map((v) => {
+        const on = theme === v;
+        const light = v === 'light';
+        return (
+          <motion.button
+            key={v}
+            role="radio"
+            aria-checked={on}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => onChange(v)}
+            className={cx('relative overflow-hidden rounded-[22px] p-1.5 text-start transition', on ? 'bg-stitch/12 ring-2 ring-stitch' : 'bg-sunk/70 ring-1 ring-line hover:ring-ink/30')}
+          >
+            <div className={cx('relative h-24 overflow-hidden rounded-[18px]', light ? 'bg-gradient-to-b from-[#BFE3FF] to-[#FFF4D6]' : 'bg-gradient-to-b from-[#0B1033] to-[#2A2466]')}>
+              {light ? (
+                <>
+                  <motion.svg viewBox="0 0 40 40" className="absolute end-4 top-3 h-12 w-12" animate={on ? { rotate: 360 } : { rotate: 0 }} transition={on ? { repeat: Infinity, duration: 12, ease: 'linear' } : {}}>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <line key={i} x1="20" y1="3" x2="20" y2="8" stroke="#F2A93B" strokeWidth="2.6" strokeLinecap="round" transform={`rotate(${i * 45} 20 20)`} />
+                    ))}
+                    <circle cx="20" cy="20" r="8" fill="#FFC94A" />
+                  </motion.svg>
+                  <motion.span animate={{ x: [0, 10, 0] }} transition={{ repeat: Infinity, duration: 6 }} className="absolute bottom-4 start-4 h-5 w-14 rounded-full bg-white/90 shadow-sm" />
+                  <span className="absolute bottom-7 start-8 h-6 w-8 rounded-full bg-white/90" />
+                </>
+              ) : (
+                <>
+                  <motion.svg viewBox="0 0 40 40" className="absolute end-4 top-3 h-12 w-12" animate={on ? { rotate: [-8, 8, -8] } : { rotate: 0 }} transition={{ repeat: Infinity, duration: 5 }}>
+                    <path d="M26 6a14 14 0 1 0 8 25A12 12 0 0 1 26 6Z" fill="#F4E7C9" />
+                  </motion.svg>
+                  {[
+                    [16, 22],
+                    [34, 52],
+                    [58, 30],
+                    [24, 68],
+                    [48, 74],
+                  ].map(([x, y], i) => (
+                    <motion.span
+                      key={i}
+                      className="absolute h-1.5 w-1.5 rounded-full bg-[#FFE7A6]"
+                      style={{ insetInlineStart: `${x}%`, top: `${y}%` }}
+                      animate={{ opacity: [0.2, 1, 0.2], scale: [0.7, 1.2, 0.7] }}
+                      transition={{ repeat: Infinity, duration: 1.8 + i * 0.4, delay: i * 0.3 }}
+                    />
+                  ))}
+                </>
+              )}
+              {on && (
+                <motion.span layoutId="theme-check" className="absolute start-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-stitch text-white shadow">
+                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                </motion.span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 px-2 pb-1 pt-2.5">
+              {light ? <Sun className="h-4 w-4 text-[#E59A1E]" /> : <Moon className="h-4 w-4 text-[#7C83D6]" />}
+              <span className="font-semibold">{light ? t.settings.themeLight : t.settings.themeDark}</span>
+            </div>
+            <p className="px-2 pb-1.5 text-xs text-muted">{light ? t.settings.themeLightD : t.settings.themeDarkD}</p>
+          </motion.button>
+        );
+      })}
     </div>
   );
 }

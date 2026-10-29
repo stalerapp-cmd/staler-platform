@@ -145,3 +145,17 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .sewn::after { content: ''; position: absolute; inset: 6px; border-radius: inherit; border: 1px dashed rgb(var(--brass) / 0.4); pointer-events: none; }
 @keyframes floaty { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-10px) rotate(6deg); } }
 .floaty { animation: floaty 7s ease-in-out infinite; }
+
+/* Active menu item: an engraved patch. */
+.engraved-bg {
+  background-color: rgb(var(--sunk));
+  background-image: repeating-linear-gradient(115deg, rgb(var(--brass) / 0.12) 0 1px, transparent 1px 6px);
+}
+@keyframes note-drift { from { background-position: 0 0; } to { background-position: 140px 0; } }
+.note::before { animation: note-drift 30s linear infinite; }
+@media (hover: hover) and (pointer: fine) {
+  html { scrollbar-width: none; }
+  html::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}

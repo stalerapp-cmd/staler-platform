@@ -83,9 +83,9 @@ body { overscroll-behavior-y: none; }
 /* ---------------------------------------------------------------- pointer
    S-Taler: indigo arrow with gold edge, ruby pointer. Only for real mice/trackpads; touch screens are untouched. */
 @media (hover: hover) and (pointer: fine) {
-  html { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M4.2 2.6 L4.2 20.2 L8.9 16 L12 22.6 L15 21.3 L11.9 14.8 L18.3 14.6 Z' fill='%23141B3D' stroke='%23E3B448' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 4 3, auto; }
+  html { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3E%3Cpath d='M5 3.5 L5 21 Q5 22.6 6.3 21.6 L10.3 18.3 L13.2 24.4 Q13.7 25.5 14.8 25 L16.2 24.4 Q17.2 23.9 16.7 22.9 L13.9 16.9 L19.4 16.7 Q21 16.6 19.8 15.4 Z' fill='%23C8344A' stroke='%23FFFFFF' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M21.5 4.5 L26.5 9.5 M26.5 4.5 L21.5 9.5' stroke='%23E3B448' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") 5 4, auto; }
   a, button, summary, label[for], select, [role='button'], [role='tab'], [role='switch'], input[type='checkbox'], input[type='radio'], input[type='range'] {
-    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M4.2 2.6 L4.2 20.2 L8.9 16 L12 22.6 L15 21.3 L11.9 14.8 L18.3 14.6 Z' fill='%23C8344A' stroke='%23FFFFFF' stroke-width='1.6' stroke-linejoin='round'/%3E%3Ccircle cx='19.5' cy='19.5' r='3' fill='%23E3B448' stroke='%23FFFFFF' stroke-width='1.2'/%3E%3C/svg%3E") 4 3, pointer;
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3E%3Cpath d='M5 3.5 L5 21 Q5 22.6 6.3 21.6 L10.3 18.3 L13.2 24.4 Q13.7 25.5 14.8 25 L16.2 24.4 Q17.2 23.9 16.7 22.9 L13.9 16.9 L19.4 16.7 Q21 16.6 19.8 15.4 Z' fill='%23141B3D' stroke='%23E3B448' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M21.5 4.5 L26.5 9.5 M26.5 4.5 L21.5 9.5' stroke='%23C8344A' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") 5 4, pointer;
   }
   input:not([type='checkbox']):not([type='radio']):not([type='range']), textarea, [contenteditable='true'] { cursor: text; }
   button:disabled, [aria-disabled='true'] { cursor: not-allowed; }
@@ -171,3 +171,31 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 /* Grid and flex children may shrink below their content (long names, IBANs, truncated text)
    instead of widening the page on phones. */
 .grid > * { min-width: 0; }
+
+/* Banner texture drifts slowly, like cloth moving. */
+@keyframes cloth-drift { from { background-position: 0 0, 0 0; } to { background-position: 120px 60px, 120px 60px; } }
+.cloth::before { animation: cloth-drift 26s linear infinite; }
+
+/* Beige cloth for shopping pages: sits well with every store colour. */
+.cloth-sand { background: linear-gradient(135deg, #F3E6CF 0%, #E8D3AE 55%, #DCC08F 100%); color: #3B2A16; }
+[data-theme='dark'] .cloth-sand { background: linear-gradient(135deg, #3A2E1E 0%, #4A3A24 60%, #5A4429 100%); color: #F6E9D2; }
+.cloth-sand .lead { color: rgb(59 42 22 / 0.75); }
+[data-theme='dark'] .cloth-sand .lead { color: rgb(246 233 210 / 0.78); }
+.cloth-sand::after { border-color: rgb(150 105 40 / 0.4); }
+
+/* Our own page scrollbar on desktop, so the custom pointer stays everywhere. */
+@media (hover: hover) and (pointer: fine) {
+  html { scrollbar-width: none; }
+  html::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+/* Active menu item: a patch of cross-stitch cloth. */
+.stitch-bg {
+  background-color: rgb(var(--sunk));
+  background-image:
+    linear-gradient(45deg, transparent 44%, rgb(var(--stitch) / 0.1) 45% 55%, transparent 56%),
+    linear-gradient(-45deg, transparent 44%, rgb(var(--stitch) / 0.1) 45% 55%, transparent 56%);
+  background-size: 10px 10px;
+}

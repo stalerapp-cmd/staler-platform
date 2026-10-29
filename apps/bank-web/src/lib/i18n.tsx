@@ -36,6 +36,7 @@ const en = {
     ledger: 'All transactions', exchange: 'Exchange & reserves', audit: 'Audit log', system: 'Bank settings', more: 'More', home: 'Home', statementsTab: 'Statement',
   },
   auth: {
+    haveAccountHint: 'Did the e-mail say you already have an account? Use its code here to choose a new password.',
     phone: 'Mobile number', or: 'or', viaEmail: 'E-mail', viaSms: 'SMS', sendVia: 'Send my code by', smsNeedsPhone: 'Add your phone number to get the code by SMS.', verifyLeadSms: 'We sent a 6-digit code by SMS to',
     resendIn: 'Send a new code in', noMailTitle: 'No code yet?', noMail1: 'Check Spam, Promotions and Updates — first e-mails often land there.', noMail2: 'It can take up to a minute to arrive.', noMail3: 'Typo in the address?', changeEmail: 'Change e-mail', reviewTitle: 'Is this e-mail right?', reviewBody: 'We’ll send your 6-digit code to {email}. Make sure it’s an inbox you can open now.', reviewOk: 'Yes, send the code',
     confirmPassword: 'Confirm password', mismatch: 'The two passwords don’t match.',
@@ -93,6 +94,7 @@ const en = {
     scope: { read: 'See balance', withdraw: 'Top up your wallet' } as Record<string, string>,
   },
   settings: {
+    pwCodeSent: 'We sent a code to {email}. Your password changes only after you enter it.', themeLight: 'Light', themeDark: 'Dark', themeLightD: 'Bright and clear', themeDarkD: 'Easy on the eyes at night',
     title: 'Profile & security', profile: 'Profile', fullName: 'Full name', phone: 'Phone', language: 'Language', appearance: 'Appearance', light: 'Light',
     dark: 'Dark', username: 'Username', password: 'Password', currentPassword: 'Current password', change: 'Change password',
     changed: 'Password changed. Other devices were signed out.', twofa: 'Two-step verification', on: 'On', off: 'Off',
@@ -198,6 +200,7 @@ const ar: Dict = {
     exchange: 'الصرّاف والاحتياطي', audit: 'سجل التدقيق', system: 'إعدادات البنك', more: 'المزيد', home: 'الرئيسية', statementsTab: 'الكشوف',
   },
   auth: {
+    haveAccountHint: 'الإيميل حكالك إنه عندك حساب؟ استخدم الرمز اللي فيه هون لتختار كلمة مرور جديدة.',
     phone: 'رقم الجوال', or: 'أو', viaEmail: 'الإيميل', viaSms: 'رسالة SMS', sendVia: 'ابعتلي الرمز على', smsNeedsPhone: 'أضف رقم جوالك لتستلم الرمز برسالة SMS.', verifyLeadSms: 'بعتنالك رمز من 6 أرقام برسالة SMS على',
     resendIn: 'رمز جديد بعد', noMailTitle: 'ما وصلك الرمز؟', noMail1: 'افحص البريد المزعج (Spam) والعروض (Promotions) — أول رسالة كثير بتروح هناك.', noMail2: 'ممكن تاخد لحد دقيقة لتوصل.', noMail3: 'في غلط بالإيميل؟', changeEmail: 'غيّر الإيميل', reviewTitle: 'الإيميل صحيح؟', reviewBody: 'رح نبعت الرمز المكوّن من 6 أرقام على {email}. تأكد إنه إيميل بتقدر تفتحه هلّأ.', reviewOk: 'آه، ابعت الرمز',
     confirmPassword: 'تأكيد كلمة المرور', mismatch: 'كلمتا المرور مش متطابقتين.',
@@ -248,6 +251,7 @@ const ar: Dict = {
     scope: { read: 'عرض الرصيد', withdraw: 'شحن محفظتك' },
   },
   settings: {
+    pwCodeSent: 'بعتنا رمز على {email}. كلمة المرور ما بتتغيّر إلا بعد ما تكتبه.', themeLight: 'فاتح', themeDark: 'داكن', themeLightD: 'واضح ومشرق', themeDarkD: 'مريح للعين بالليل',
     title: 'الملف والأمان', profile: 'الملف الشخصي', fullName: 'الاسم الكامل', phone: 'الهاتف', language: 'اللغة', appearance: 'المظهر', light: 'فاتح', dark: 'داكن',
     username: 'اسم المستخدم', password: 'كلمة المرور', currentPassword: 'كلمة المرور الحالية', change: 'تغيير كلمة المرور', changed: 'تم التغيير وتسجيل خروج الأجهزة الأخرى.',
     twofa: 'التحقق بخطوتين', on: 'مفعّل', off: 'غير مفعّل', twofaLead: 'بيحمي الدخول والحوالات وعمليات السحب برمز من جوالك.', enable: 'تفعيل', disable: 'إيقاف',

@@ -1,5 +1,4 @@
 import { StrictMode } from 'react';
-import { receiveNativeGoogle } from './components/GoogleButton';
 import { createRoot } from 'react-dom/client';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -37,10 +36,6 @@ if (isNative) {
   });
   // talerbank://pay/<uuid> deep links open the pay screen.
   void CapApp.addListener('appUrlOpen', ({ url }) => {
-    if (receiveNativeGoogle(url)) {
-      if (!/^\/(login|register)/.test(location.pathname)) location.assign('/login');
-      return;
-    }
     const m = /^talerbank:\/\/pay\/([0-9a-f-]{36})$/i.exec(url);
     if (m) location.assign(`/app/pay/${m[1]}`);
   });

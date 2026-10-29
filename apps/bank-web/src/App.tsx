@@ -6,8 +6,8 @@ import { Guilloche } from './components/Guilloche';
 import { Spinner } from './components/ui';
 import { ErrorBoundary, lazyRetry } from './components/Boundary';
 import { AppLock } from './components/AppLock';
+import { PageScrollbar } from './components/Fun';
 import { Forgot, Login, Register, Verify } from './pages/Auth';
-const GoogleApp = lazyRetry(() => import('./pages/GoogleApp'));
 import Landing from './pages/Landing';
 import { isNative } from './lib/api';
 
@@ -70,6 +70,7 @@ export default function App() {
   return (
     <ErrorBoundary full>
     <AppLock />
+    <PageScrollbar />
     <BrowserRouter>
       <Routes>
         <Route path="/" element={isNative ? <Navigate to="/login" replace /> : <GuestOnly><Landing /></GuestOnly>} />
@@ -77,7 +78,6 @@ export default function App() {
         <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
         <Route path="/verify" element={<GuestOnly><Verify /></GuestOnly>} />
         <Route path="/forgot" element={<GuestOnly><Forgot /></GuestOnly>} />
-        <Route path="/google-app" element={page(<GoogleApp />)} />
         <Route path="/app" element={<Private><Shell /></Private>}>
           <Route index element={page(<Overview />)} />
           <Route path="transfer" element={page(<Transfer />)} />

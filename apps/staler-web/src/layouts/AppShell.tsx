@@ -5,6 +5,7 @@ import {
   Activity,
   ArrowLeft,
   Bell,
+  Mail,
   ChevronDown,
   HandCoins,
   LifeBuoy,
@@ -25,7 +26,6 @@ import {
   Megaphone,
   Menu,
   MessageCircle,
-  Moon,
   Package,
   QrCode,
   Scale,
@@ -34,7 +34,6 @@ import {
   ShieldCheck,
   ShoppingBag,
   Store,
-  Sun,
   Ticket,
   UserPlus,
   Users,
@@ -45,16 +44,17 @@ import { usePerm } from '../lib/perm';
 import { RoleBadge } from '../components/RoleBadge';
 import { BioOffer } from '../components/AppLock';
 import { useI18n } from '../lib/i18n';
-import { useTheme } from '../lib/theme';
 import { get, post } from '../lib/api';
 import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { localize, targetOf, type Notice } from '../lib/notifications';
 import { useToast } from '../components/Toast';
-import { Logo } from '../components/Tatreez';
+import { Logo, StitchBand } from '../components/Tatreez';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 import { useConfirm } from '../components/Confirm';
+import { usePublicConfig } from '../lib/config';
+import { LangSwitch, ThemeSwitch } from '../components/Fun';
 
 interface NavItem {
   to: string;
@@ -178,7 +178,7 @@ function SideLink({ item, onClick, animated = true, rail = false }: { item: NavI
       aria-label={rail ? item.label : undefined}
       className={({ isActive }) =>
         cx(
-          'group relative flex items-center gap-3 rounded-xl py-1.5 text-[15px] transition',
+          'group relative flex items-center gap-3 rounded-xl py-1.5 text-[15px] transition active:scale-[0.97]',
           rail ? 'justify-center px-0' : 'px-2',
           isActive ? (animated ? 'text-ink' : 'bg-sunk font-medium text-ink') : 'text-muted hover:bg-sunk hover:text-ink',
         )
@@ -186,7 +186,9 @@ function SideLink({ item, onClick, animated = true, rail = false }: { item: NavI
     >
       {({ isActive }) => (
         <>
-          {isActive && animated && <motion.span layoutId="side-active" className="absolute inset-0 rounded-xl bg-sunk" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />}
+          {isActive && animated && (
+            <motion.span layoutId="side-active" className="stitch-bg absolute inset-0 rounded-xl ring-1 ring-stitch/15" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />
+          )}
           <span
             className={cx(
               'relative grid h-8 w-8 shrink-0 place-items-center rounded-[10px] transition duration-300',
@@ -194,8 +196,13 @@ function SideLink({ item, onClick, animated = true, rail = false }: { item: NavI
             )}
           >
             <item.icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.2 : 1.8} />
+            {isActive && (
+              <motion.svg initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} viewBox="0 0 10 10" className="absolute -end-1 -top-1 h-3 w-3" aria-hidden="true">
+                <path d="M2 2L8 8M8 2L2 8" stroke="rgb(var(--gold))" strokeWidth="2.4" strokeLinecap="round" />
+              </motion.svg>
+            )}
           </span>
-          {!rail && <span className="relative truncate">{item.label}</span>}
+          {!rail && <span className={cx('relative truncate', isActive && 'font-semibold')}>{item.label}</span>}
         </>
       )}
     </NavLink>
@@ -290,6 +297,46 @@ export function useOpenSupport() {
       toast(err(e), 'error');
     }
   };
+}
+
+/** Support: chat in the app, e-mail, or the how-it-works guide. */
+function SupportSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
+  const cfg = usePublicConfig();
+  const openChat = useOpenSupport();
+  const nav = useNavigate();
+  const mail = (cfg?.supportEmail as string | null) ?? null;
+  const items: { key: string; icon: typeof Home; title: string; d: string; c: string; run: () => void }[] = [
+    { key: 'chat', icon: MessageCircle, title: t.navg.chat, d: t.navg.chatD, c: 'bg-olive text-white', run: () => (onClose(), void openChat()) },
+    ...(mail ? [{ key: 'mail', icon: Mail, title: t.navg.emailUs, d: `${t.navg.emailD} ${mail}`, c: 'bg-night text-white dark:bg-white/15', run: () => window.open(`mailto:${mail}?subject=S-Taler`, '_blank') }] : []),
+    { key: 'help', icon: HelpCircle, title: t.nav.help, d: t.navg.helpD, c: 'bg-gold text-night', run: () => (onClose(), nav('/app/help')) },
+  ];
+  return (
+    <Sheet open={open} onClose={onClose} title={t.navg.support}>
+      <p className="mb-4 text-muted">{t.navg.supportLead}</p>
+      <div className="space-y-3">
+        {items.map((i, n) => (
+          <motion.button
+            key={i.key}
+            onClick={i.run}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: n * 0.06 }}
+            whileTap={{ scale: 0.97 }}
+            className="sewn flex w-full items-center gap-4 rounded-2xl bg-sunk/60 p-4 text-start transition hover:bg-sunk"
+          >
+            <span className={cx('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', i.c)}>
+              <i.icon className="h-6 w-6" />
+            </span>
+            <span className="min-w-0">
+              <span className="block font-semibold">{i.title}</span>
+              <span className="block break-words text-sm text-muted">{i.d}</span>
+            </span>
+          </motion.button>
+        ))}
+      </div>
+    </Sheet>
+  );
 }
 
 /** Messages shortcut with unread badge, always visible in the top bar. */
@@ -396,17 +443,11 @@ function Notifications() {
   );
 }
 
-export function TopControls() {
-  const { t, toggle } = useI18n();
-  const { theme, setTheme } = useTheme();
+export function TopControls({ onDark = false }: { onDark?: boolean }) {
   return (
-    <div className="flex items-center gap-1">
-      <button onClick={toggle} className="rounded-xl px-2.5 py-2 text-sm font-medium text-muted transition hover:bg-sunk hover:text-ink">
-        {t.common.language}
-      </button>
-      <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="rounded-xl p-2.5 text-muted transition hover:bg-sunk hover:text-ink" aria-label={t.common.theme}>
-        {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-      </button>
+    <div className="flex items-center gap-2">
+      <LangSwitch onDark={onDark} />
+      <ThemeSwitch onDark={onDark} />
     </div>
   );
 }
@@ -437,7 +478,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     setRail(!rail);
   };
   const confirm = useConfirm();
-  const openSupport = useOpenSupport();
+  const [support, setSupport] = useState(false);
   const signOut = async () => {
     if (!(await confirm({ title: t.ask.signOutTitle, body: t.ask.signOutBody, confirmLabel: t.ask.signOutOk }))) return;
     await logout();
@@ -475,7 +516,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         <button
           onClick={() => {
             onClick?.();
-            void openSupport();
+            setSupport(true);
           }}
           title={isRail ? t.navg.support : undefined}
           className={cx('group flex items-center gap-3 rounded-xl py-1.5 text-[15px] text-olive transition hover:bg-olive/10', isRail ? 'justify-center' : 'px-2')}
@@ -521,7 +562,8 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             {rail ? <PanelLeftOpen className="h-5 w-5 flip-rtl" /> : <PanelLeftClose className="h-5 w-5 flip-rtl" />}
           </button>
         </div>
-        <div className={cx('min-h-0 flex-1 overflow-y-auto overflow-x-hidden', rail ? 'px-3' : 'px-4')}>{sidebar(undefined, true, rail)}</div>
+        {!rail && <StitchBand width={44} className="mx-5 mb-3 h-3.5 opacity-70" colors={['rgb(var(--stitch))', 'rgb(var(--gold))']} />}
+        <div className={cx('no-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden', rail ? 'px-3' : 'px-4')}>{sidebar(undefined, true, rail)}</div>
       </aside>
 
       <div className="min-w-0">
@@ -551,7 +593,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                 <TopControls />
               </div>
               <button
-                onClick={() => void openSupport()}
+                onClick={() => setSupport(true)}
                 className="hidden rounded-xl p-2.5 text-olive transition hover:bg-olive/10 sm:block"
                 aria-label={t.navg.support}
                 title={t.navg.support}
@@ -586,6 +628,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       {/* phone tab bar with the scan button raised in the middle */}
       <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden" aria-label="Tabs">
         <div className="pointer-events-auto relative mx-auto grid h-[66px] max-w-md grid-cols-5 items-center rounded-[26px] border border-line/80 bg-surface/90 px-1 shadow-[0_14px_40px_-14px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          <span className="pointer-events-none absolute inset-[4px] rounded-[22px] border border-dashed border-stitch/20" aria-hidden="true" />
           {bottom.slice(0, 2).map((i) => (
             <TabLink key={i.to} item={i} />
           ))}
@@ -638,13 +681,14 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="mt-3 flex justify-end text-white sm:hidden [&_button]:text-white/85">
-              <TopControls />
+            <div className="mt-3 flex justify-end sm:hidden">
+              <TopControls onDark />
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4">{sidebar(() => setMenu(false), false)}</div>
         </aside>
       </div>
+      <SupportSheet open={support} onClose={() => setSupport(false)} />
     </div>
   );
 }
@@ -670,10 +714,10 @@ export function BackButton() {
 
 function TabLink({ item }: { item: NavItem }) {
   return (
-    <NavLink to={item.to} end={item.end} className="relative flex h-full min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[11px] leading-tight">
+    <NavLink to={item.to} end={item.end} className="relative flex h-full min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[11px] leading-tight transition active:scale-90">
       {({ isActive }) => (
         <>
-          {isActive && <motion.span layoutId="tab-pill" className="absolute inset-x-1 inset-y-1.5 rounded-[20px] bg-stitch/15" transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }} />}
+          {isActive && <motion.span layoutId="tab-pill" className="stitch-bg absolute inset-x-1 inset-y-1.5 rounded-[20px] ring-1 ring-stitch/20" transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }} />}
           <motion.span
             className={cx('relative', isActive ? 'text-stitch' : 'text-muted')}
             animate={isActive ? { y: -1, scale: 1.12 } : { y: 0, scale: 1 }}

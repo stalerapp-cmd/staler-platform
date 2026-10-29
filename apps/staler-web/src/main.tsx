@@ -1,5 +1,4 @@
 import { StrictMode } from 'react';
-import { receiveNativeGoogle } from './components/GoogleButton';
 import { createRoot } from 'react-dom/client';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -37,12 +36,7 @@ if (isNative) {
     if (canGoBack && location.pathname !== '/app') history.back();
     else void CapApp.exitApp();
   });
-  // taler://google?code=… comes back from the Google sign-in page in the browser.
   void CapApp.addListener('appUrlOpen', ({ url }) => {
-    if (receiveNativeGoogle(url)) {
-      if (!/^\/(login|register)/.test(location.pathname)) location.assign('/login');
-      return;
-    }
     const m = /^taler:\/\/exchange-claim\?v=([^&]+)/i.exec(url);
     if (m) location.assign(`/app/claim?v=${m[1]}`);
   });

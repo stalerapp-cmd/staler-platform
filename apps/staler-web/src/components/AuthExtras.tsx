@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Inbox } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { isNative } from '../lib/api';
-import { Button } from './ui';
+import { Button, cx } from './ui';
 
-/** Back arrow for the sign-in screens: goes back if there is somewhere to go, otherwise home. */
-export function AuthBack() {
+/** Back for the sign-in screens: goes back if there is somewhere to go, otherwise home. */
+export function AuthBack({ onDark = false }: { onDark?: boolean }) {
   const { t } = useI18n();
   const nav = useNavigate();
   // In the app the sign-in screen is the first screen: with nothing behind it, a back arrow would do nothing.
@@ -15,10 +15,16 @@ export function AuthBack() {
     <button
       type="button"
       onClick={() => ((window.history.state?.idx ?? 0) > 0 ? nav(-1) : nav('/'))}
-      className="rounded-xl p-2.5 text-muted transition hover:bg-sunk hover:text-ink active:scale-95"
+      className={cx(
+        'group flex h-9 items-center gap-1.5 rounded-full pe-3.5 ps-1 text-sm font-medium transition active:scale-95',
+        onDark ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-surface text-ink shadow-sm ring-1 ring-line hover:ring-ink/30',
+      )}
       aria-label={t.common.back}
     >
-      <ArrowLeft className="h-5 w-5 flip-rtl" />
+      <span className={cx('grid h-7 w-7 place-items-center rounded-full transition group-hover:scale-110', onDark ? 'bg-white text-night' : 'bg-night text-white dark:bg-white dark:text-night')}>
+        <ArrowLeft className="h-4 w-4 flip-rtl" />
+      </span>
+      {t.common.back}
     </button>
   );
 }

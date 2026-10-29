@@ -6,10 +6,10 @@ import { Logo } from './components/Tatreez';
 import { Spinner } from './components/ui';
 import { ErrorBoundary, lazyRetry } from './components/Boundary';
 import { AppLock } from './components/AppLock';
+import { PageScrollbar } from './components/Fun';
 import Landing from './pages/Landing';
 import { isNative } from './lib/api';
 import { Forgot, Login, Register, Verify } from './pages/Auth';
-const GoogleApp = lazyRetry(() => import('./pages/GoogleApp'));
 
 const Home = lazyRetry(() => import('./pages/Home'));
 const Send = lazyRetry(() => import('./pages/Send'));
@@ -88,6 +88,7 @@ export default function App() {
   return (
     <ErrorBoundary full>
     <AppLock />
+    <PageScrollbar />
     <BrowserRouter>
       <Routes>
         <Route path="/" element={isNative ? <Navigate to="/login" replace /> : <GuestOnly><Landing /></GuestOnly>} />
@@ -95,7 +96,6 @@ export default function App() {
         <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
         <Route path="/verify" element={<GuestOnly><Verify /></GuestOnly>} />
         <Route path="/forgot" element={<GuestOnly><Forgot /></GuestOnly>} />
-        <Route path="/google-app" element={page(<GoogleApp />)} />
         <Route path="/store" element={page(<Store publicMode />)} />
         <Route path="/stores" element={page(<StoresPage />)} />
         <Route path="/s/:slug" element={page(<StorePage />)} />

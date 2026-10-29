@@ -7,6 +7,8 @@ import { RoleBadge } from '../components/RoleBadge';
 import { BioToggle } from '../components/AppLock';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
+import { ThemePicker } from '../components/ThemePicker';
+import { fill } from '../lib/format';
 import { useData } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
@@ -41,6 +43,8 @@ export default function Settings() {
   const [cur, setCur] = useState('');
   const [next, setNext] = useState('');
   const [next2, setNext2] = useState('');
+  const [pwStep, setPwStep] = useState<'form' | 'code'>('form');
+  const [pwCode, setPwCode] = useState('');
   const [totp, setTotp] = useState<{ qr: string; secret: string } | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [recovery, setRecovery] = useState<string[] | null>(null);
@@ -95,9 +99,9 @@ export default function Settings() {
             <p className="mb-1.5 text-sm font-medium text-ink/80">{t.settings.language}</p>
             <Segmented value={lang} onChange={setLang} options={[{ value: 'ar', label: 'العربية' }, { value: 'en', label: 'English' }]} />
           </div>
-          <div>
+          <div className="sm:col-span-2">
             <p className="mb-1.5 text-sm font-medium text-ink/80">{t.settings.appearance}</p>
-            <Segmented value={theme} onChange={setTheme} options={[{ value: 'dark', label: t.settings.dark }, { value: 'light', label: t.settings.light }]} />
+            <ThemePicker theme={theme} onChange={setTheme} />
           </div>
           <div className="sm:col-span-2">
             <ErrorNote>{error.profile}</ErrorNote>
@@ -107,41 +111,68 @@ export default function Settings() {
       </Section>
 
       <Section title={t.settings.password}>
-        <form
-          className="grid gap-4 sm:grid-cols-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (next !== next2) return setError((x) => ({ ...x, password: t.auth.mismatch }));
-            void act('password', async () => {
-              await applySession(await post('/api/auth/me/password', { currentPassword: cur, newPassword: next }));
-              setCur('');
-              setNext('');
-              setNext2('');
-              toast(t.settings.changed);
-              void sessions.reload();
-            });
-          }}
-        >
-          <Field label={t.settings.currentPassword} type="password" value={cur} onChange={(e) => setCur(e.target.value)} dir="ltr" required autoComplete="current-password" />
-          <div>
-            <Field label={t.auth.newPassword} type="password" value={next} onChange={(e) => setNext(e.target.value)} dir="ltr" required autoComplete="new-password" />
-            <PasswordStrength value={next} />
-          </div>
-          <Field
-            label={t.auth.confirmPassword}
-            type="password"
-            value={next2}
-            onChange={(e) => setNext2(e.target.value)}
-            dir="ltr"
-            required
-            autoComplete="new-password"
-            error={next2 && !next.startsWith(next2) ? t.auth.mismatch : undefined}
-          />
-          <div className="sm:col-span-2">
+        {pwStep === 'form' ? (
+          <form
+            className="grid gap-4 sm:grid-cols-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (next !== next2) return setError((x) => ({ ...x, password: t.auth.mismatch }));
+              void act('password', async () => {
+                await post('/api/auth/me/password/request', { currentPassword: cur, newPassword: next });
+                setPwCode('');
+                setPwStep('code');
+              });
+            }}
+          >
+            <Field label={t.settings.currentPassword} type="password" value={cur} onChange={(e) => setCur(e.target.value)} dir="ltr" required autoComplete="current-password" />
+            <div>
+              <Field label={t.auth.newPassword} type="password" value={next} onChange={(e) => setNext(e.target.value)} dir="ltr" required autoComplete="new-password" />
+              <PasswordStrength value={next} />
+            </div>
+            <Field
+              label={t.auth.confirmPassword}
+              type="password"
+              value={next2}
+              onChange={(e) => setNext2(e.target.value)}
+              dir="ltr"
+              required
+              autoComplete="new-password"
+              error={next2 && !next.startsWith(next2) ? t.auth.mismatch : undefined}
+            />
+            <div className="sm:col-span-2">
+              <ErrorNote>{error.password}</ErrorNote>
+              <Button loading={busy === 'password'}>{t.settings.change}</Button>
+            </div>
+          </form>
+        ) : (
+          <div className="space-y-4">
+            <p className="framed rounded-2xl bg-sunk/60 p-4 text-sm">{fill(t.settings.pwCodeSent, { email: user?.email ?? '' })}</p>
+            <CodeInput value={pwCode} onChange={setPwCode} />
             <ErrorNote>{error.password}</ErrorNote>
-            <Button loading={busy === 'password'}>{t.settings.change}</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                loading={busy === 'password'}
+                disabled={pwCode.length !== 6}
+                onClick={() =>
+                  act('password', async () => {
+                    await applySession(await post('/api/auth/me/password', { code: pwCode }));
+                    setCur('');
+                    setNext('');
+                    setNext2('');
+                    setPwStep('form');
+                    toast(t.settings.changed);
+                    void sessions.reload();
+                  })
+                }
+              >
+                {t.settings.change}
+              </Button>
+              <Button variant="ghost" onClick={() => setPwStep('form')}>
+                {t.common.cancel}
+              </Button>
+            </div>
           </div>
-        </form>
+        )}
       </Section>
 
       <BioToggle />

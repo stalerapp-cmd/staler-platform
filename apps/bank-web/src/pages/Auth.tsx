@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Fingerprint, KeySquare, Scale } from 'lucide-react';
+import { Eye, EyeOff, Fingerprint, KeySquare, Scale, KeyRound } from 'lucide-react';
 import { ApiError, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -11,7 +11,6 @@ import { TopControls } from '../layouts/Shell';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
 import { AuthBack, MailTips, ResendCode } from '../components/AuthExtras';
-import { GoogleButton } from '../components/GoogleButton';
 import { usePublicConfig } from '../lib/config';
 import { fill } from '../lib/format';
 
@@ -30,9 +29,9 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           <div className="pointer-events-none absolute -end-20 -top-16 h-64 w-64 opacity-80">
             <Guilloche className="h-full w-full" color="#E2C27A" />
           </div>
-          <div className="relative flex items-center justify-between [&_button]:text-[#FBF6EA]/85">
-            <AuthBack />
-            <TopControls />
+          <div className="relative flex items-center justify-between">
+            <AuthBack onDark />
+            <TopControls onDark />
           </div>
           <div className="relative mt-3 flex items-center gap-3 px-2">
             <Emblem className="h-12 w-12" />
@@ -43,14 +42,16 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <div className="safe-top hidden items-center justify-between px-6 py-4 lg:flex">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-3">
             <AuthBack />
-            <Link to="/" className="flex items-center gap-2.5">
-              <Emblem className="h-9 w-9" />
-              <span className="font-display text-2xl">TalerBank</span>
+            <Link to="/" className="flex items-center gap-2 rounded-full bg-surface py-1 pe-3.5 ps-1 shadow-sm ring-1 ring-line transition hover:ring-gold/50">
+              <Emblem className="h-7 w-7" />
+              <span className="font-display text-lg">TalerBank</span>
             </Link>
           </div>
-          <TopControls />
+          <div className="rounded-full bg-surface p-1 shadow-sm ring-1 ring-line">
+            <TopControls />
+          </div>
         </div>
         <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center">
           <motion.div
@@ -106,8 +107,8 @@ function Secret({ label, value, onChange, autoComplete, error }: { label: string
 }
 
 export function Login() {
-  const { t, err, lang } = useI18n();
-  const { login, completeMfa, signedOutForIdle, google, googleRedeem } = useAuth();
+  const { t, err } = useI18n();
+  const { login, completeMfa, signedOutForIdle } = useAuth();
   const nav = useNavigate();
   const loc = useLocation() as { state?: { from?: string } };
   const [id, setId] = useState('');
@@ -117,32 +118,6 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const go = () => nav(loc.state?.from ?? '/app', { replace: true });
-  const onNativeGoogle = async (p: { code: string; verifier: string }) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await googleRedeem(p);
-      if (r.mfaToken) setMfa(r.mfaToken);
-      else go();
-    } catch (e2) {
-      setError(err(e2));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const onGoogle = async (credential: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await google(credential, { language: lang });
-      if (r.mfaToken) setMfa(r.mfaToken);
-      else go();
-    } catch (e2) {
-      setError(err(e2));
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <AuthLayout>
       <h1 className="text-4xl">{mfa ? t.auth.mfaTitle : t.auth.welcome}</h1>
@@ -177,8 +152,14 @@ export function Login() {
           <>
             <Field label={t.auth.login} value={id} onChange={(e) => setId(e.target.value)} autoComplete="username" required dir="ltr" autoFocus />
             <Secret label={t.auth.password} value={pw} onChange={setPw} autoComplete="current-password" />
-            <div className="text-end">
-              <Link to="/forgot" className="text-sm text-gold hover:underline">
+            <div className="flex justify-end">
+              <Link
+                to={id.includes('@') ? `/forgot?email=${encodeURIComponent(id.trim())}` : '/forgot'}
+                className="group inline-flex items-center gap-2 rounded-full bg-sunk px-3 py-1.5 text-sm text-ink/80 ring-1 ring-line transition hover:bg-gold/15 hover:ring-gold/40"
+              >
+                <motion.span whileHover={{ rotate: [0, -20, 15, 0] }} className="grid h-6 w-6 place-items-center rounded-full bg-night text-[#E2C27A]">
+                  <KeyRound className="h-3.5 w-3.5" />
+                </motion.span>
                 {t.auth.forgot}
               </Link>
             </div>
@@ -189,7 +170,6 @@ export function Login() {
           {mfa ? t.common.confirm : t.auth.signIn}
         </Button>
       </form>
-      {!mfa && <GoogleButton onCredential={onGoogle} onNativeCode={onNativeGoogle} />}
       {!mfa && (
         <p className="mt-8 text-center text-muted">
           {t.auth.noAccount}{' '}
@@ -207,7 +187,6 @@ export function Register() {
   const nav = useNavigate();
   const confirm = useConfirm();
   const cfg = usePublicConfig();
-  const { google, googleRedeem } = useAuth();
   const [method, setMethod] = useState<'email' | 'sms'>('email');
   const prefill = (useLocation() as { state?: { email?: string } }).state?.email ?? '';
   const [f, setF] = useState({ fullName: '', email: prefill, username: '', password: '', phone: '' });
@@ -275,31 +254,6 @@ export function Register() {
           {t.auth.create}
         </Button>
       </form>
-      <GoogleButton
-        text="signup_with"
-        onNativeCode={async (p) => {
-          setBusy(true);
-          try {
-            const r = await googleRedeem(p);
-            nav(r.mfaToken ? '/login' : '/app', { replace: true });
-          } catch (e2) {
-            setError(err(e2));
-          } finally {
-            setBusy(false);
-          }
-        }}
-        onCredential={async (cred) => {
-          setBusy(true);
-          try {
-            const r = await google(cred, { language: lang });
-            nav(r.mfaToken ? '/login' : '/app', { replace: true });
-          } catch (e2) {
-            setError(err(e2));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      />
       <p className="mt-6 text-center text-muted">
         {t.auth.have}{' '}
         <Link to="/login" className="font-medium text-ink underline decoration-gold decoration-2 underline-offset-4">
@@ -320,6 +274,7 @@ export function Verify() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [wrong, setWrong] = useState(false);
   return (
     <AuthLayout>
       <h1 className="text-4xl">{t.auth.verifyTitle}</h1>
@@ -337,6 +292,7 @@ export function Verify() {
             nav('/app', { replace: true });
           } catch (e2) {
             setError(err(e2));
+            setWrong(true);
             setCode('');
           } finally {
             setBusy(false);
@@ -346,6 +302,15 @@ export function Verify() {
         {!loc.state?.email && <Field label={t.auth.email} type="email" value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" required />}
         <CodeInput value={code} onChange={setCode} />
         <ErrorNote>{error}</ErrorNote>
+        {wrong && email.trim() && (
+          <Link
+            to={`/forgot?email=${encodeURIComponent(email.trim())}&step=code`}
+            className="flex items-center gap-3 rounded-2xl border border-dashed border-line bg-sunk/60 p-3.5 text-sm transition hover:border-ink/30"
+          >
+            <KeyRound className="h-5 w-5 shrink-0 text-muted" />
+            <span>{t.auth.haveAccountHint}</span>
+          </Link>
+        )}
         <Button block size="lg" loading={busy} disabled={code.length !== 6}>
           {t.auth.verify}
         </Button>
@@ -365,8 +330,10 @@ export function Forgot() {
   const { t, err } = useI18n();
   const nav = useNavigate();
   const toast = useToast();
-  const [step, setStep] = useState<'email' | 'reset'>('email');
-  const [email, setEmail] = useState('');
+  // Links in the e-mails open this page with the address filled in, straight on the code step.
+  const qs = new URLSearchParams(useLocation().search);
+  const [step, setStep] = useState<'email' | 'reset'>(qs.get('step') === 'code' && qs.get('email') ? 'reset' : 'email');
+  const [email, setEmail] = useState(qs.get('email') ?? '');
   const [code, setCode] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');

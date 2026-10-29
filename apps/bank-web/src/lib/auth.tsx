@@ -29,9 +29,6 @@ interface AuthState {
   /** Re-read the fingerprint setting after it changes in Settings. */
   refreshBio: () => void;
   login: (login: string, password: string) => Promise<{ mfaToken?: string }>;
-  /** Continue with Google: signs in, or creates the account on first use. */
-  google: (credential: string, extra?: Record<string, unknown>) => Promise<{ mfaToken?: string }>;
-  googleRedeem: (p: { code: string; verifier: string }) => Promise<{ mfaToken?: string }>;
   completeMfa: (mfaToken: string, code: string) => Promise<void>;
   finishVerification: (data: any) => Promise<void>;
   logout: () => Promise<void>;
@@ -119,20 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser,
       async login(login, password) {
         const data = await post('/api/auth/login', { login, password });
-        if (data.mfaRequired) return { mfaToken: data.mfaToken };
-        setIdle(false);
-        await applySession(data);
-        return {};
-      },
-      async googleRedeem(p) {
-        const data = await post('/api/auth/google/redeem', p);
-        if (data.mfaRequired) return { mfaToken: data.mfaToken };
-        setIdle(false);
-        await applySession(data);
-        return {};
-      },
-      async google(credential, extra) {
-        const data = await post('/api/auth/google', { credential, ...(extra ?? {}) });
         if (data.mfaRequired) return { mfaToken: data.mfaToken };
         setIdle(false);
         await applySession(data);

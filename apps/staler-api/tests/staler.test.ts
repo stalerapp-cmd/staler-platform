@@ -705,3 +705,39 @@ describe('Google sign-in hand-off for the app', () => {
     expect(bad.status).toBe(400);
   });
 });
+
+describe('account changes need an e-mailed code', () => {
+  it('password: current password + code, then a notice', async () => {
+    const u = await walletUser(app, 'Careful Person');
+    const NEW = 'An0ther!Passw0rd#';
+    expect((await request(app).post('/api/auth/me/password/request').set(auth(u.token)).send({ currentPassword: 'wrong', newPassword: NEW })).status).toBe(400);
+    expect((await request(app).post('/api/auth/me/password/request').set(auth(u.token)).send({ currentPassword: STRONG, newPassword: NEW })).status).toBe(200);
+    const code = lastCode(u.email);
+    // Old password still works until the code is used.
+    expect((await request(app).post('/api/auth/login').send({ email: u.email, password: STRONG })).status).toBe(200);
+    expect((await request(app).post('/api/auth/me/password').set(auth(u.token)).send({ code: code === '000000' ? '111111' : '000000' })).status).toBe(400);
+    expect((await request(app).post('/api/auth/me/password').set(auth(u.token)).send({ code })).status).toBe(200);
+    expect((await request(app).post('/api/auth/login').send({ email: u.email, password: NEW })).status).toBe(200);
+  });
+
+  it('e-mail: needs the code from the old and the new address', async () => {
+    const u = await walletUser(app, 'Moving Person');
+    const next = `${uniq('n')}@example.com`;
+    expect((await request(app).post('/api/auth/me/email').set(auth(u.token)).send({ newEmail: next, password: STRONG })).status).toBe(200);
+    const oldCode = lastCode(u.email);
+    const newCode = lastCode(next);
+    expect((await request(app).post('/api/auth/me/email/confirm').set(auth(u.token)).send({ code: newCode, oldCode: newCode === oldCode ? '123456' : newCode })).status).toBe(400);
+    const ok = await request(app).post('/api/auth/me/email/confirm').set(auth(u.token)).send({ code: newCode, oldCode });
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.user.email).toBe(next);
+  });
+
+  it('signing up again with a used e-mail mails a working reset code', async () => {
+    const u = await walletUser(app, 'Forgetful Person');
+    expect((await request(app).post('/api/auth/register').send({ fullName: 'Again', email: u.email, password: STRONG })).status).toBe(201);
+    const code = lastCode(u.email);
+    const NEW = 'Fresh!Passw0rd#9';
+    expect((await request(app).post('/api/auth/reset-password').send({ email: u.email, code, newPassword: NEW })).status).toBe(200);
+    expect((await request(app).post('/api/auth/login').send({ email: u.email, password: NEW })).status).toBe(200);
+  });
+});

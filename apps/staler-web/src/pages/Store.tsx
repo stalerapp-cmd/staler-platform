@@ -33,6 +33,7 @@ import {
   TrendingDown,
   TrendingUp,
   Flame,
+  ArrowLeft,
 } from 'lucide-react';
 import { ApiError, downloadFile, get, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -48,7 +49,8 @@ import { MapView, type Pin } from '../components/MapView';
 import { QRImage } from '../components/QR';
 import { SecureReader } from '../components/Reader';
 import { PublicShell } from '../layouts/PublicShell';
-import { StoreLogo, type StoreSummary } from './Stores';
+import { StoreLogo, accentOf, type StoreSummary } from './Stores';
+import { StarMotif } from '../components/Tatreez';
 
 export { CartProvider, useCart } from '../components/Commerce';
 export type { Product } from '../components/Commerce';
@@ -161,28 +163,49 @@ function Market() {
       </section>
 
       {stores.length > 0 && cat === 'all' && !q.trim() && (
-        <section className="mb-6 rounded-[26px] bg-surface/70 p-4 ring-1 ring-line/70">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg">
-              <StoreIcon className="h-5 w-5 text-stitch" /> {t.market.byStore}
-            </h2>
-            <Link to="/app/stores" className="text-sm text-sky hover:underline">
-              {t.shop.allStores}
-            </Link>
-          </div>
-          <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">
+        <section className="mb-6">
+          <h2 className="mb-3 flex items-center gap-2 text-lg">
+            <StoreIcon className="h-5 w-5 text-stitch" /> {t.market.byStore}
+          </h2>
+          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-3 pt-1 sm:mx-0 sm:px-1">
             {stores.map((s, i) => (
-              <motion.div key={s.id} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.04, type: 'spring', bounce: 0.4 }}>
-                <Link to={`/s/${s.slug}`} className="group flex w-[84px] shrink-0 snap-start flex-col items-center gap-2 text-center">
-                  <span className="rounded-[1.3rem] p-[3px] transition duration-300 group-hover:rotate-3 group-hover:scale-105" style={{ background: s.ads ? 'linear-gradient(135deg,#E2506A,#E9C060)' : 'rgb(var(--line))' }}>
-                    <span className="block rounded-[1.1rem] bg-surface p-[2px]">
-                      <StoreLogo s={s} size={64} />
+              <motion.div
+                key={s.id}
+                initial={{ opacity: 0, y: 16, rotate: i % 2 ? 2 : -2 }}
+                animate={{ opacity: 1, y: 0, rotate: 0 }}
+                transition={{ delay: i * 0.05, type: 'spring', bounce: 0.4 }}
+                whileHover={{ y: -4, rotate: i % 2 ? 1.5 : -1.5 }}
+                whileTap={{ scale: 0.95 }}
+                className="shrink-0 snap-start"
+              >
+                <Link to={`/s/${s.slug}`} className="block w-[128px] overflow-hidden rounded-[22px] bg-surface text-center shadow-lift ring-1 ring-line/70">
+                  <div className="relative h-12 overflow-hidden" style={{ background: accentOf(s) }}>
+                    <StarMotif size={9} cell={10} className="absolute -end-3 -top-4 h-16 w-16 opacity-40" colors={['#FFFFFF', '#E9C060']} animate={false} />
+                  </div>
+                  <div className="relative -mt-8 flex justify-center">
+                    <span className="rounded-[18px] bg-surface p-1 shadow-sm">
+                      <StoreLogo s={s} size={56} />
                     </span>
-                  </span>
-                  <span className="line-clamp-2 text-xs font-medium leading-tight">{s.store_name}</span>
+                  </div>
+                  <p className="mt-1.5 line-clamp-1 px-2 text-sm font-semibold">{s.store_name}</p>
+                  <p className="mb-3 mt-1 inline-flex items-center gap-1 rounded-full bg-sunk px-2 py-0.5 text-[11px] text-muted">
+                    <Package className="h-3 w-3" /> <span className="num">{s.products}</span>
+                  </p>
                 </Link>
               </motion.div>
             ))}
+            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: stores.length * 0.05 }} whileHover={{ y: -4 }} whileTap={{ scale: 0.95 }} className="shrink-0 snap-start">
+              <Link
+                to="/app/stores"
+                className="group flex h-full min-h-[150px] w-[128px] flex-col items-center justify-center gap-2.5 rounded-[22px] border-2 border-dashed border-stitch/40 bg-stitch/5 text-center text-stitch transition hover:bg-stitch/10"
+              >
+                <span className="relative grid h-14 w-14 place-items-center rounded-full bg-stitch text-white shadow-md shadow-stitch/30">
+                  <span className="absolute -inset-1.5 rounded-full border-2 border-dashed border-stitch/50 motion-safe:animate-[spin_12s_linear_infinite]" />
+                  <ArrowLeft className="h-6 w-6 transition group-hover:-translate-x-0.5 ltr:rotate-180" />
+                </span>
+                <span className="text-sm font-semibold">{t.shop.allStores}</span>
+              </Link>
+            </motion.div>
           </div>
         </section>
       )}

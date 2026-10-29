@@ -8,7 +8,7 @@ import { codeHash, decrypt, encrypt, numericCode, randomToken } from '../lib/cry
 import { AppError, badRequest, conflict, forbidden, notFound, tooMany, unauthorized } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { signToken, verifyToken } from '../lib/jwt.js';
-import { codeMail, noticeMail, sendMail } from '../lib/mailer.js';
+import { codeMail, existingAccountMail, noticeMail, securityNotice, sendMail } from '../lib/mailer.js';
 import { verifyGoogleCredential } from '../lib/google.js';
 import { checkSmsCode, sendSmsCode, smsEnabled } from '../lib/sms.js';
 import { hashPassword, needsRehash, passwordSchema, verifyPassword } from '../lib/passwords.js';
@@ -108,11 +108,11 @@ authRouter.post(
       throw badRequest('WEAK_PASSWORD', 'Password must not contain your username or e-mail');
     }
 
-    const taken = await one(`SELECT 1 FROM ${S}.users WHERE lower(email) = $1`, [mail]);
+    const taken = await one<any>(`SELECT id, status, role, language FROM ${S}.users WHERE lower(email) = $1`, [mail]);
     const generic = { success: true, message: 'If this e-mail can be registered, a verification code has been sent.' };
     if (taken) {
-      // Don't reveal whether the e-mail exists; tell the real owner instead.
-      await sendMail(noticeMail(mail, 'Registration attempt', 'Someone tried to open an account with your e-mail. If it was you, simply sign in.', language));
+      // Don't reveal whether the e-mail exists; give the real owner a code that works instead.
+      if (taken.status === 'active' && taken.role !== 'exchange') await sendMail(existingAccountMail(mail, await newResetCode(taken.id, mail), taken.language ?? language));
       return res.status(201).json(generic);
     }
     const unameTaken = await one(
@@ -184,6 +184,10 @@ authRouter.post(
       );
       if (p.verification_method === 'sms' && p.phone && smsEnabled()) await sendSmsCode(p.phone, p.language ?? 'ar');
       else await sendMail(codeMail(req.body.email, 'verify', code, p.language ?? 'en'));
+    }
+    if (!p) {
+      const u = await one<any>(`SELECT id, language, role FROM ${S}.users WHERE lower(email) = $1 AND status = 'active'`, [req.body.email]);
+      if (u && u.role !== 'exchange') await sendMail(existingAccountMail(req.body.email, await newResetCode(u.id, req.body.email), u.language ?? 'ar'));
     }
     res.json({ success: true, message: 'If a registration is pending, a new code has been sent.' });
   }),
@@ -393,6 +397,16 @@ authRouter.post(
 );
 
 // ------------------------------------------------------------ password reset
+/** A fresh password-reset code for an active account (older unused ones stop working). */
+async function newResetCode(userId: string, mail: string) {
+  const code = numericCode(6);
+  await pool.query(`UPDATE ${S}.verification_codes SET used = true WHERE lower(email) = $1 AND type = 'reset_password' AND used = false`, [mail]);
+  await pool.query(
+    `INSERT INTO ${S}.verification_codes (email, code, type, expires_at, user_id) VALUES ($1, $2, 'reset_password', now() + interval '${CODE_TTL_MIN} minutes', $3)`,
+    [mail, codeHash('reset', mail, code), userId],
+  );
+  return code;
+}
 authRouter.post(
   '/forgot-password',
   codeLimiter,
@@ -400,13 +414,8 @@ authRouter.post(
   ah(async (req, res) => {
     const u = await one<any>(`SELECT id, language, role FROM ${S}.users WHERE lower(email) = $1 AND status = 'active'`, [req.body.email]);
     if (u && u.role !== 'exchange') {
-      const code = numericCode(6);
-      await pool.query(`UPDATE ${S}.verification_codes SET used = true WHERE lower(email) = $1 AND type = 'reset_password' AND used = false`, [req.body.email]);
-      await pool.query(
-        `INSERT INTO ${S}.verification_codes (email, code, type, expires_at, user_id) VALUES ($1, $2, 'reset_password', now() + interval '${CODE_TTL_MIN} minutes', $3)`,
-        [req.body.email, codeHash('reset', req.body.email, code), u.id],
-      );
-      await sendMail(codeMail(req.body.email, 'reset', code, u.language ?? 'en'));
+      const code = await newResetCode(u.id, req.body.email);
+      await sendMail(codeMail(req.body.email, 'reset', code, u.language ?? 'ar', { label: u.language === 'en' ? 'Choose a new password' : 'اختار كلمة مرور جديدة', url: `${env.PUBLIC_URL}/forgot?email=${encodeURIComponent(req.body.email)}&step=code` }));
     }
     if (!u) {
       // Never finished signing up? Send the sign-up code again and send them to the code page.
@@ -449,7 +458,8 @@ authRouter.post(
     );
     await revokeAllSessions(v.user_id);
     await audit({ userId: v.user_id, action: 'auth.password_reset' }, req);
-    await sendMail(noticeMail(mail, 'Password changed', 'Your password was reset and all devices were signed out.'));
+    const who = await one<any>(`SELECT language FROM ${S}.users WHERE id = $1`, [v.user_id]);
+    await sendMail(securityNotice(mail, 'password-reset', who?.language ?? 'ar'));
     res.json({ success: true, message: 'Password updated. Please sign in.' });
   }),
 );
@@ -488,23 +498,54 @@ authRouter.patch(
   }),
 );
 
+/** Password change, step 1: check the current password and e-mail a code. Nothing changes yet. */
+authRouter.post(
+  '/me/password/request',
+  requireAuth,
+  codeLimiter,
+  validate({ body: z.object({ currentPassword: z.string().min(1).max(256), newPassword: passwordSchema }).strict() }),
+  ah(async (req, res) => {
+    const u = await one<any>(`SELECT id, email, password_hash, language FROM ${S}.users WHERE id = $1`, [req.auth!.userId]);
+    if (!u || !(await verifyPassword(req.body.currentPassword, u.password_hash))) throw badRequest('WRONG_PASSWORD', 'Current password is incorrect');
+    if (req.body.currentPassword === req.body.newPassword) throw badRequest('SAME_PASSWORD', 'Choose a different password');
+    const mail = u.email.toLowerCase();
+    const code = numericCode(6);
+    await pool.query(`UPDATE ${S}.verification_codes SET used = true WHERE user_id = $1 AND type = 'profile_update' AND used = false`, [u.id]);
+    await pool.query(
+      `INSERT INTO ${S}.verification_codes (email, code, type, expires_at, user_id, payload_enc) VALUES ($1, $2, 'profile_update', now() + interval '${CODE_TTL_MIN} minutes', $3, $4)`,
+      [mail, codeHash('pw-change', mail, code), u.id, encrypt(await hashPassword(req.body.newPassword))],
+    );
+    await sendMail(codeMail(u.email, 'password', code, u.language ?? 'ar'));
+    res.json({ success: true, message: 'A code was sent to your e-mail.' });
+  }),
+);
+
+/** Password change, step 2: the e-mailed code applies it, signs out other devices and sends a notice. */
 authRouter.post(
   '/me/password',
   requireAuth,
-  validate({ body: z.object({ currentPassword: z.string().min(1).max(256), newPassword: passwordSchema }).strict() }),
+  codeLimiter,
+  validate({ body: z.object({ code: otpCode }).strict() }),
   ah(async (req, res) => {
-    const u = await one<any>(`SELECT id, role, email, password_hash FROM ${S}.users WHERE id = $1`, [req.auth!.userId]);
-    if (!u || !(await verifyPassword(req.body.currentPassword, u.password_hash))) {
-      throw badRequest('WRONG_PASSWORD', 'Current password is incorrect');
+    const u = await one<any>(`SELECT id, email, language FROM ${S}.users WHERE id = $1`, [req.auth!.userId]);
+    const mail = u.email.toLowerCase();
+    const v = await one<any>(
+      `SELECT id, code, attempts, expires_at, payload_enc FROM ${S}.verification_codes
+        WHERE user_id = $1 AND type = 'profile_update' AND used = false ORDER BY created_at DESC LIMIT 1`,
+      [u.id],
+    );
+    if (!v || !v.payload_enc || v.attempts >= MAX_CODE_ATTEMPTS || new Date(v.expires_at) < new Date() || v.code !== codeHash('pw-change', mail, req.body.code)) {
+      if (v) await pool.query(`UPDATE ${S}.verification_codes SET attempts = attempts + 1 WHERE id = $1`, [v.id]);
+      throw badRequest('INVALID_CODE', 'Invalid or expired code');
     }
-    if (req.body.currentPassword === req.body.newPassword) throw badRequest('SAME_PASSWORD', 'Choose a different password');
-    await pool.query(`UPDATE ${S}.users SET password_hash = $2, password_changed_at = now() WHERE id = $1`, [u.id, await hashPassword(req.body.newPassword)]);
+    const used = await pool.query(`UPDATE ${S}.verification_codes SET used = true WHERE id = $1 AND used = false`, [v.id]);
+    if (!used.rowCount) throw badRequest('INVALID_CODE', 'Invalid or expired code');
+    await pool.query(`UPDATE ${S}.users SET password_hash = $2, password_changed_at = now() WHERE id = $1`, [u.id, decrypt(v.payload_enc)]);
     await revokeAllSessions(u.id);
     await audit({ userId: u.id, action: 'auth.password_changed' }, req);
-    await sendMail(noticeMail(u.email, 'Password changed', 'Your password was changed and other devices were signed out.'));
+    await sendMail(securityNotice(u.email, 'password', u.language ?? 'ar'));
     const fresh = await one<any>(`SELECT id, role, token_version FROM ${S}.users WHERE id = $1`, [u.id]);
-    const session = await issueSession(req, res, fresh);
-    res.json({ success: true, data: session });
+    res.json({ success: true, data: await issueSession(req, res, fresh) });
   }),
 );
 

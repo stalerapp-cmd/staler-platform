@@ -8,6 +8,7 @@ import { useData } from '../lib/hooks';
 import { money } from '../lib/format';
 import { BalanceCard, TxDetails, TxRow, type Tx } from '../components/Wallet';
 import { AreaChart } from '../components/Chart';
+import { MoreLink } from '../components/Fun';
 import { Button, EmptyState, Sheet, Skeleton } from '../components/ui';
 
 export default function Home() {
@@ -120,9 +121,9 @@ export default function Home() {
       <section className="card h-fit p-3 sm:p-4">
         <div className="mb-2 flex items-center justify-between px-3 pt-2">
           <h2 className="text-lg">{t.home.recent}</h2>
-          <Link to="/app/activity" className="text-sm text-sky hover:underline">
+          <MoreLink to="/app/activity" tone="sky">
             {t.home.seeAll}
-          </Link>
+          </MoreLink>
         </div>
         {txs.loading && !txs.data ? (
           <div className="space-y-3 p-3">

@@ -91,6 +91,7 @@ export function createApp(): Express {
         bankUrl: env.BANK_PUBLIC_URL ?? env.BANK_API_URL,
         googleClientId: env.GOOGLE_CLIENT_ID ?? null,
         sms: smsEnabled(),
+        supportEmail: env.SMTP_USER?.includes('@') ? env.SMTP_USER : null,
         allowRegistrations: s.allow_registrations ?? true,
         maintenance: s.maintenance_mode ?? false,
         announcement: s.announcement ?? null,

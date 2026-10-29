@@ -19,12 +19,10 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  Moon,
   QrCode,
   ScanLine,
   Settings2,
   ShieldCheck,
-  Sun,
   Users,
   Vault,
   Wallet,
@@ -36,7 +34,6 @@ import { RoleBadge } from '../components/RoleBadge';
 import { BioOffer } from '../components/AppLock';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
-import { useTheme } from '../lib/theme';
 import { get, post } from '../lib/api';
 import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
@@ -46,6 +43,7 @@ import { usePublicConfig } from '../lib/config';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 import { useConfirm } from '../components/Confirm';
+import { LangSwitch, ThemeSwitch } from '../components/Fun';
 
 interface NavItem {
   to: string;
@@ -131,7 +129,7 @@ function SideLink({ item, onClick, animated = true, rail = false }: { item: NavI
       aria-label={rail ? item.label : undefined}
       className={({ isActive }) =>
         cx(
-          'group relative flex items-center gap-3 rounded-xl py-1.5 text-[15px] transition',
+          'group relative flex items-center gap-3 rounded-xl py-1.5 text-[15px] transition active:scale-[0.97]',
           rail ? 'justify-center' : 'px-2',
           isActive ? (animated ? 'text-ink' : 'bg-sunk font-medium text-ink') : 'text-muted hover:bg-sunk hover:text-ink',
         )
@@ -139,7 +137,7 @@ function SideLink({ item, onClick, animated = true, rail = false }: { item: NavI
     >
       {({ isActive }) => (
         <>
-          {isActive && animated && <motion.span layoutId="side-active" className="absolute inset-0 rounded-xl bg-sunk" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />}
+          {isActive && animated && <motion.span layoutId="side-active" className="engraved-bg absolute inset-0 rounded-xl ring-1 ring-gold/25" transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }} />}
           <span
             className={cx(
               'relative grid h-8 w-8 shrink-0 place-items-center rounded-[10px] transition duration-300',
@@ -315,17 +313,11 @@ function Notifications() {
   );
 }
 
-export function TopControls() {
-  const { t, toggle } = useI18n();
-  const { theme, setTheme } = useTheme();
+export function TopControls({ onDark = false }: { onDark?: boolean }) {
   return (
-    <div className="flex items-center gap-1">
-      <button onClick={toggle} className="rounded-xl px-2.5 py-2 text-sm font-medium text-muted transition hover:bg-sunk hover:text-ink">
-        {t.common.language}
-      </button>
-      <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="rounded-xl p-2.5 text-muted transition hover:bg-sunk hover:text-ink" aria-label={t.common.theme}>
-        {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-      </button>
+    <div className="flex items-center gap-2">
+      <LangSwitch onDark={onDark} />
+      <ThemeSwitch onDark={onDark} />
     </div>
   );
 }
@@ -422,7 +414,8 @@ export default function AppShell({ children }: { children?: ReactNode }) {
             {rail ? <PanelLeftOpen className="h-5 w-5 flip-rtl" /> : <PanelLeftClose className="h-5 w-5 flip-rtl" />}
           </button>
         </div>
-        <div className={cx('min-h-0 flex-1 overflow-y-auto overflow-x-hidden', rail ? 'px-3' : 'px-4')}>{sidebar(undefined, true, rail)}</div>
+        {!rail && <div className="mx-5 mb-3 h-px bg-[repeating-linear-gradient(90deg,rgb(var(--brass)/0.6)_0_6px,transparent_6px_10px)]" />}
+        <div className={cx('no-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden', rail ? 'px-3' : 'px-4')}>{sidebar(undefined, true, rail)}</div>
       </aside>
 
       <div className="min-w-0">
@@ -476,6 +469,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       {/* phone tab bar with the scan button raised in the middle */}
       <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden" aria-label="Tabs">
         <div className="pointer-events-auto relative mx-auto grid h-[66px] max-w-md grid-cols-5 items-center rounded-[26px] border border-line/80 bg-surface/90 px-1 shadow-[0_14px_40px_-14px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          <span className="pointer-events-none absolute inset-[4px] rounded-[22px] border border-dashed border-gold/30" aria-hidden="true" />
           {bottom.slice(0, 2).map((i) => (
             <TabLink key={i.to} item={i} />
           ))}
@@ -529,8 +523,8 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="relative mt-3 flex justify-end sm:hidden [&_button]:text-[#FBF6EA]/85">
-              <TopControls />
+            <div className="relative mt-3 flex justify-end sm:hidden">
+              <TopControls onDark />
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4">{sidebar(() => setMenu(false), false)}</div>
@@ -562,7 +556,7 @@ function BackButton() {
 
 function TabLink({ item }: { item: NavItem }) {
   return (
-    <NavLink to={item.to} end={item.end} className="relative flex h-full min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[11px] leading-tight">
+    <NavLink to={item.to} end={item.end} className="relative flex h-full min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[11px] leading-tight transition active:scale-90">
       {({ isActive }) => (
         <>
           {isActive && <motion.span layoutId="tab-pill" className="absolute inset-x-1 inset-y-1.5 rounded-[20px] bg-gold/15" transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }} />}

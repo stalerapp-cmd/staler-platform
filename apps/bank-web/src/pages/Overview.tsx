@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { MoreLink } from '../components/Fun';
 import { Link } from 'react-router-dom';
 import { ArrowRightLeft, BookText, KeyRound, QrCode, Wallet } from 'lucide-react';
 import { useAuth } from '../lib/auth';
@@ -72,10 +73,9 @@ export default function Overview() {
       <section className="card h-fit p-3">
         <div className="flex items-center justify-between px-3 pb-1 pt-2">
           <h2 className="text-xl">{t.home.recent}</h2>
-          <Link to="/app/transactions" className="flex items-center gap-1 text-sm text-gold hover:underline">
-            <BookText className="h-4 w-4" />
+          <MoreLink to="/app/transactions" icon={<BookText className="h-4 w-4" />}>
             {t.home.seeAll}
-          </Link>
+          </MoreLink>
         </div>
         {!txs.data ? (
           <div className="space-y-3 p-3">
