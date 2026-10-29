@@ -25,13 +25,13 @@ export function MoreLink({ to, children, icon, className, tone = 'stitch' }: { t
 }
 
 /** Language and theme, side by side in one quiet pill (header, menus, sign-in screens). */
-export function PrefsPill({ onDark = false }: { onDark?: boolean }) {
+export function PrefsPill({ onDark = false, bare = false }: { onDark?: boolean; bare?: boolean }) {
   const { lang, setLang, t } = useI18n();
   const { theme, setTheme } = useTheme();
   const dark = theme === 'dark';
   const btn = cx('relative grid h-8 place-items-center rounded-full transition active:scale-90', onDark ? 'text-white/85 hover:bg-white/15 hover:text-white' : 'text-muted hover:bg-sunk hover:text-ink');
   return (
-    <div className={cx('flex items-center gap-0.5 rounded-full p-0.5 backdrop-blur', onDark ? 'bg-white/10 ring-1 ring-white/20' : 'bg-surface/80 ring-1 ring-line')}>
+    <div className={cx('flex items-center gap-0.5 rounded-full p-0.5', bare ? '' : onDark ? 'bg-white/10 ring-1 ring-white/20 backdrop-blur' : 'bg-surface/80 ring-1 ring-line backdrop-blur')}>
       <button onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} className={cx(btn, 'gap-1.5 px-2.5 text-[13px] font-semibold')} aria-label={t.common.language} title={t.common.language}>
         <span className="flex items-center gap-1.5">
           <Languages className="h-4 w-4" />

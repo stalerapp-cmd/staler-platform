@@ -205,7 +205,9 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
 :focus:not(:focus-visible) { outline: none; }
 
 /* Header icon buttons: round, with a small wiggle on hover and a press. */
-.hbtn { display: grid; place-items: center; height: 2.25rem; width: 2.25rem; border-radius: 9999px; transition: background-color .2s, color .2s, transform .15s; }
+@layer components {
+  .hbtn { display: grid; place-items: center; height: 2.25rem; width: 2.25rem; border-radius: 9999px; transition: background-color .2s, color .2s, transform .15s; }
+}
 .hbtn:active { transform: scale(0.88); }
 @keyframes hbtn-wiggle { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-14deg); } 60% { transform: rotate(10deg); } }
 @media (hover: hover) { .hbtn:hover > svg { animation: hbtn-wiggle .5s ease; } }
@@ -213,3 +215,20 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
 /* Profile cloth: deep indigo warming into pomegranate — sits well in light and dark. */
 .cloth-plum { background: radial-gradient(120% 160% at 100% 0%, #8E3352 0%, transparent 55%), linear-gradient(135deg, #1A1F4E 0%, #2C2560 50%, #4A2453 100%); }
 [data-theme='dark'] .cloth-plum { background: radial-gradient(120% 160% at 100% 0%, #7A2C48 0%, transparent 55%), linear-gradient(135deg, #141842 0%, #221D4E 50%, #3A1C44 100%); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06); }
+
+/* ------------------------------------------------------------- top bar
+   A floating ribbon of cloth: a sewn seam inside its edge and a faint row of
+   tatreez diamonds that fades out towards both ends. */
+.hdr-ribbon { position: relative; isolation: isolate; }
+.hdr-ribbon::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='16' viewBox='0 0 36 16'%3E%3Cpath d='M10.8 0.8L13.2 3.2M13.2 0.8L10.8 3.2' stroke='%23C8344A' stroke-width='1' stroke-linecap='round'/%3E%3Cpath d='M7.8 3.8L10.2 6.2M10.2 3.8L7.8 6.2' stroke='%23D9A73A' stroke-width='1' stroke-linecap='round'/%3E%3Cpath d='M13.8 3.8L16.2 6.2M16.2 3.8L13.8 6.2' stroke='%23D9A73A' stroke-width='1' stroke-linecap='round'/%3E%3Cpath d='M4.8 6.8L7.2 9.2M7.2 6.8L4.8 9.2' stroke='%23C8344A' stroke-width='1' stroke-linecap='round'/%3E%3Cpath d='M10.8 6.8L13.2 9.2M13.2 6.8L10.8 9.2' stroke='%235E7A2E' stroke-width='1' stroke-linecap='round'/%3E%3Cpath d='M16.8 6.8L19.2 9.2M19.2 6.8L16.8 9.2' stroke='%23C8344A' stroke-width='1' stroke-linecap='round'/%3E%3Cpath d='M7.8 9.8L10.2 12.2M10.2 9.8L7.8 12.2' stroke='%23D9A73A' stroke-width='1' stroke-linecap='round'/%3E%3Cpath d='M13.8 9.8L16.2 12.2M16.2 9.8L13.8 12.2' stroke='%23D9A73A' stroke-width='1' stroke-linecap='round'/%3E%3Cpath d='M10.8 12.8L13.2 15.2M13.2 12.8L10.8 15.2' stroke='%23C8344A' stroke-width='1' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-size: 36px 16px; background-repeat: repeat-x; background-position: center;
+  opacity: 0.22;
+  -webkit-mask-image: linear-gradient(90deg, transparent 4%, #000 30%, #000 70%, transparent 96%);
+  mask-image: linear-gradient(90deg, transparent 4%, #000 30%, #000 70%, transparent 96%);
+}
+.hdr-ribbon::after { content: ''; position: absolute; inset: 4px; border-radius: 18px; pointer-events: none; border: 1px dashed rgb(var(--stitch) / 0.22); }
+[data-theme='dark'] .hdr-ribbon::before { opacity: 0.3; }
+@keyframes hdr-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.hdr-ribbon { animation: hdr-in .45s cubic-bezier(.2,.8,.2,1) both; }

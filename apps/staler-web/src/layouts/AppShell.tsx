@@ -457,7 +457,7 @@ export function Announcement() {
 
 export default function AppShell({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth();
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const { quick, groups, footer } = useNav();
   const loc = useLocation();
   const navigate = useNavigate();
@@ -560,43 +560,37 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       <div className="min-w-0">
         <Announcement />
         <BioOffer />
-        <header className="safe-top sticky top-0 z-30 bg-bg/85 backdrop-blur-md">
-          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
-            <div className="flex min-w-0 items-center gap-1.5">
+        <header className="safe-top sticky top-0 z-30 px-2.5 pt-2 sm:px-5">
+          <div className="hdr-ribbon mx-auto flex h-[60px] max-w-6xl items-center justify-between gap-2 rounded-[22px] bg-surface/90 px-2 shadow-[0_12px_32px_-20px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur-md sm:px-3">
+            <div className="flex min-w-0 items-center gap-1">
               {loc.pathname !== '/app' && <BackButton />}
-              <NavLink to="/app/settings" className="flex min-w-0 items-center gap-2.5 rounded-full bg-surface/80 py-1 pe-3 ps-1 shadow-sm ring-1 ring-line transition hover:ring-ink/25 active:scale-[0.98]" aria-label={t.nav.settings}>
-                <span className="relative shrink-0">
-                  <Avatar name={user?.full_name} src={user?.profile_image} size={38} />
-                  <span className="absolute -bottom-0.5 -end-0.5 h-3 w-3 rounded-full bg-olive ring-2 ring-bg" />
+              <NavLink to="/app/settings" className="group flex min-w-0 items-center gap-2.5 rounded-[16px] py-1 pe-2.5 ps-1 transition hover:bg-sunk/80 active:scale-[0.98]" aria-label={t.nav.settings}>
+                <span className="relative shrink-0 rounded-full border border-dashed border-stitch/40 p-[2px] transition group-hover:border-stitch/70">
+                  <Avatar name={user?.full_name} src={user?.profile_image} size={36} />
+                  <span className="absolute bottom-0 end-0 h-2.5 w-2.5 rounded-full bg-olive ring-2 ring-surface" />
                 </span>
                 <span className="min-w-0 leading-tight">
-                  <span className="block truncate text-[11px] text-muted">
-                    {t.home.hello}
-                    {lang === 'ar' ? '' : ','}
-                  </span>
-                  <span className="block max-w-[34vw] truncate text-sm font-semibold sm:max-w-[220px]">{user?.full_name?.split(' ')[0]}</span>
+                  <span className="block truncate text-[11px] text-muted">{t.home.hello}</span>
+                  <span className="block max-w-[34vw] truncate text-[15px] font-semibold sm:max-w-[220px]">{user?.full_name?.split(' ')[0]}</span>
                 </span>
-                <RoleBadge className="hidden md:inline-flex" />
+                <RoleBadge className="ms-1 hidden md:inline-flex" />
               </NavLink>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1">
               <div className="hidden sm:block">
-                <TopControls />
+                <PrefsPill bare />
               </div>
-              <div className="flex items-center gap-0.5 rounded-full bg-surface/80 p-0.5 shadow-sm ring-1 ring-line">
-                <button onClick={() => setSupport(true)} className="hbtn hidden text-olive hover:bg-olive/10 sm:grid" aria-label={t.navg.support} title={t.navg.support}>
-                  <LifeBuoy className="h-[19px] w-[19px]" />
-                </button>
-                <MessagesButton />
-                <Notifications />
-                <button onClick={signOut} className="hbtn hidden text-muted hover:bg-stitch/10 hover:text-stitch sm:grid" aria-label={t.common.signOut} title={t.common.signOut}>
-                  <LogOut className="h-[19px] w-[19px] flip-rtl" />
-                </button>
-              </div>
+              <span className="mx-1 hidden h-1.5 w-1.5 rotate-45 bg-gold/80 sm:block" aria-hidden="true" />
+              <button onClick={() => setSupport(true)} className="hbtn hidden text-olive hover:bg-olive/10 sm:grid" aria-label={t.navg.support} title={t.navg.support}>
+                <LifeBuoy className="h-[19px] w-[19px]" />
+              </button>
+              <MessagesButton />
+              <Notifications />
+              <button onClick={signOut} className="hbtn hidden text-muted hover:bg-stitch/10 hover:text-stitch sm:grid" aria-label={t.common.signOut} title={t.common.signOut}>
+                <LogOut className="h-[19px] w-[19px] flip-rtl" />
+              </button>
             </div>
           </div>
-          {/* A row of cross-stitch along the bar's lower edge, sewn in once when the app opens. */}
-          <StitchBand width={160} cell={4} className="pointer-events-none absolute inset-x-0 -bottom-[5px] h-[10px] w-full opacity-60" colors={['rgb(var(--stitch))', 'rgb(var(--gold))']} />
         </header>
 
         <main className="mx-auto max-w-6xl px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:pb-12">
