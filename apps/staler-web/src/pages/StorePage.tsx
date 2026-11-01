@@ -5,7 +5,7 @@ import { cityWithGov } from './Stores';
 import { fill } from '../lib/format';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Bike, ClipboardList, Map as MapIcon, MapPin, MessageCircle, Package, Phone, Search, Share2, ShoppingBag, Store as StoreIcon } from 'lucide-react';
+import { Bike, ClipboardList, Facebook, GitBranch, Instagram, Map as MapIcon, MapPin, MessageCircle, Music2, Package, Phone, Quote, Search, Share2, ShoppingBag, Store as StoreIcon, Truck } from 'lucide-react';
 import { assetUrl, get, PUBLIC_ORIGIN } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -47,7 +47,7 @@ function AdCard({ ad, onOpen, i }: { ad: Ad; onOpen: () => void; i: number }) {
       whileHover={{ y: -4 }}
       whileTap={{ scale: 0.97 }}
       onClick={onOpen}
-      className="group relative aspect-[4/5] w-[68%] shrink-0 snap-center overflow-hidden rounded-[1.6rem] bg-night text-start shadow-card sm:w-64"
+      className="group relative aspect-[4/5] w-[62%] shrink-0 snap-center overflow-hidden rounded-[1.6rem] bg-night text-start shadow-card sm:w-52 lg:w-48"
     >
       {ad.kind === 'video' ? (
         <video src={url} autoPlay muted loop playsInline preload="metadata" className="h-full w-full object-cover" />
@@ -65,8 +65,8 @@ function AdCard({ ad, onOpen, i }: { ad: Ad; onOpen: () => void; i: number }) {
   );
 }
 
-/** Secondary store actions: equal tiles, icon and word. */
-const ACT = 'inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl bg-surface px-3 text-sm font-medium text-ink ring-1 ring-line transition hover:-translate-y-0.5 hover:ring-ink/20 [&>span]:truncate';
+/** Round frosted buttons on the storefront. */
+const GLASS = 'grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white ring-1 ring-white/30 backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/25 active:scale-95';
 
 export default function StorePage() {
   const { slug } = useParams();
@@ -172,104 +172,143 @@ export default function StorePage() {
         </div>
       ) : (
         <>
-          {/* ---------------------------------------------------------- hero */}
-          <section ref={heroRef} className="relative -mx-4 overflow-hidden sm:mx-0 sm:rounded-[2rem]" style={{ background: accent }}>
-            <motion.div style={{ y: coverY, scale: coverScale }}>
-              <StoreCover s={s.main ?? s} className="h-56 sm:h-72" />
+          {/* ---------------------------------------------------- storefront */}
+          <section ref={heroRef} className="relative -mx-4 overflow-hidden text-white shadow-card sm:mx-0 sm:rounded-[2rem]" style={{ background: accent }}>
+            <motion.div className="absolute inset-0" style={{ y: coverY, scale: coverScale }}>
+              <StoreCover s={s.main ?? s} className="h-full w-full" />
             </motion.div>
-          </section>
-          <div className="relative px-1 sm:px-6">
-            {/* Logo on the cover's edge, name beside it */}
-            <div className="-mt-12 flex items-start gap-4">
-              <motion.div className="shrink-0" initial={{ scale: 0.6, rotate: -12, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: 'spring', bounce: 0.45 }}>
-                <StoreLogo s={s.main ?? s} size={96} />
-              </motion.div>
-              <div className="min-w-0 pt-14">
-                <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="font-display text-2xl leading-tight sm:text-4xl">
-                  {s.store_name}
-                  {s.branch_name && <span className="text-muted"> · {s.branch_name}</span>}
-                </motion.h1>
-                <p className="mt-0.5 truncate text-sm text-muted">
-                  {t.shop.owner}: <span className="font-medium text-ink">{s.owner_name}</span>
-                </p>
-              </div>
-            </div>
-            {/* About on one side, what you can do on the other. */}
-            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:items-start lg:gap-8">
-              <div className="min-w-0">
-                {s.description && <p className="max-w-2xl leading-relaxed text-ink/80">{s.description}</p>}
-                <div className={cx('flex flex-wrap gap-2 text-sm', s.description && 'mt-4')}>
-                  <span className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 ring-1 ring-line/70">
-                    <CatIcon className="h-4 w-4 text-muted" /> {t.shop.cat[s.main?.category ?? s.category ?? 'other']}
+            {/* Legibility: deep at the bottom, a soft veil on the reading side. */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/5" />
+            <div className="absolute inset-0 bg-gradient-to-l from-black/40 via-transparent to-transparent rtl:bg-gradient-to-r" />
+
+            <div className="relative flex min-h-[380px] flex-col justify-between gap-6 p-5 pb-12 sm:min-h-[340px] sm:p-8 sm:pb-14">
+              {/* top line: what the store offers */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/25 backdrop-blur-md">
+                  <CatIcon className="h-3.5 w-3.5" /> {t.shop.cat[s.main?.category ?? s.category ?? 'other']}
+                </span>
+                {s.offers_delivery && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/25 backdrop-blur-md">
+                    <Bike className="h-3.5 w-3.5" /> {t.shop.delivery}
                   </span>
-                  {(s.city || s.main?.city) && (
-                    <span className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 ring-1 ring-line/70">
-                      <MapPin className="h-4 w-4 text-stitch" /> {cityWithGov(s.city ?? s.main?.city, lang)}
-                    </span>
-                  )}
-                  {s.offers_delivery && (
-                    <span className="flex items-center gap-1.5 rounded-full bg-olive/12 px-3 py-1.5 text-olive">
-                      <Bike className="h-4 w-4" /> {t.shop.delivery}
-                    </span>
-                  )}
-                  {s.offers_pickup && (
-                    <span className="flex items-center gap-1.5 rounded-full bg-sky/12 px-3 py-1.5 text-sky">
-                      <ShoppingBag className="h-4 w-4" /> {t.shop.pickup}
-                    </span>
-                  )}
-                </div>
+                )}
+                {s.offers_pickup && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/25 backdrop-blur-md">
+                    <ShoppingBag className="h-3.5 w-3.5" /> {t.shop.pickup}
+                  </span>
+                )}
               </div>
 
-              <div className="rounded-[1.4rem] bg-surface/80 p-2 shadow-[0_14px_34px_-26px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur">
-                <Button variant="stitch" className="w-full" icon={<Share2 className="h-4 w-4" />} onClick={() => setShare(true)}>
-                  {t.shop.shareStore}
-                </Button>
-                <div className="mt-2 grid grid-cols-2 gap-2">
+              {/* bottom: identity on one side, actions on the other */}
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                <div className="flex min-w-0 items-end gap-4">
+                  <motion.div className="shrink-0" initial={{ scale: 0.7, rotate: -10, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: 'spring', bounce: 0.4 }}>
+                    <span className="block rounded-[30px] bg-white/20 p-1 ring-1 ring-white/40 backdrop-blur">
+                      <StoreLogo s={s.main ?? s} size={92} />
+                    </span>
+                  </motion.div>
+                  <div className="min-w-0 pb-1">
+                    <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="font-display text-3xl leading-[1.1] drop-shadow-sm sm:text-5xl">
+                      {s.store_name}
+                    </motion.h1>
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/85">
+                      {s.branch_name && <span className="font-semibold text-white">{s.branch_name}</span>}
+                      <span>
+                        {t.shop.by} <span className="font-semibold text-white">{s.owner_name}</span>
+                      </span>
+                      {(s.city || s.main?.city) && (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin className="h-3.5 w-3.5" /> {cityWithGov(s.city ?? s.main?.city, lang)}
+                        </span>
+                      )}
+                    </motion.p>
+                  </div>
+                </div>
+
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => setShare(true)} className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-night shadow-lg transition hover:-translate-y-0.5 active:scale-95">
+                    <Share2 className="h-4 w-4" /> {t.shop.shareStore}
+                  </button>
                   {s.phone && (
-                    <a href={`tel:${s.phone}`} className={ACT}>
-                      <Phone className="h-4 w-4 text-sky" /> {t.shop.call}
+                    <a href={`tel:${s.phone}`} className={GLASS} title={t.shop.call} aria-label={t.shop.call}>
+                      <Phone className="h-[18px] w-[18px]" />
                     </a>
                   )}
                   {waPhone && (
-                    <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noopener noreferrer" className={ACT}>
-                      <MessageCircle className="h-4 w-4 text-[#25D366]" /> {t.shop.whatsapp}
+                    <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noopener noreferrer" className={GLASS} title={t.shop.whatsapp} aria-label={t.shop.whatsapp}>
+                      <MessageCircle className="h-[18px] w-[18px]" />
                     </a>
                   )}
                   {pins.length > 0 && (
-                    <button type="button" onClick={() => setShowMap((v) => !v)} className={cx(ACT, showMap && 'bg-night text-white ring-night dark:bg-white/15')}>
-                      <MapIcon className="h-4 w-4" /> {t.ord.map}
+                    <button type="button" onClick={() => setShowMap((v) => !v)} className={cx(GLASS, showMap && 'bg-white text-night')} title={t.ord.map} aria-label={t.ord.map}>
+                      <MapIcon className="h-[18px] w-[18px]" />
                     </button>
-                  )}
-                  {user && (
-                    <Link to="/app/orders" className={ACT}>
-                      <ClipboardList className="h-4 w-4 text-gold" /> {t.shop.yourOrders}
-                    </Link>
                   )}
                   {(['instagram', 'tiktok', 'facebook'] as const)
                     .filter((k) => s[k])
-                    .map((k) => (
-                      <a
-                        key={k}
-                        href={k === 'tiktok' ? `https://www.tiktok.com/@${s[k]}` : `https://www.${k}.com/${s[k]}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-white transition hover:-translate-y-0.5"
-                        style={{ background: k === 'instagram' ? 'linear-gradient(45deg,#F58529,#DD2A7B 55%,#8134AF)' : k === 'tiktok' ? '#111' : '#1877F2' }}
-                      >
-                        <span className="truncate">{t.social[k]}</span>
-                      </a>
-                    ))}
-                </div>
+                    .map((k) => {
+                      const Ico = k === 'instagram' ? Instagram : k === 'facebook' ? Facebook : Music2;
+                      return (
+                        <a key={k} href={k === 'tiktok' ? `https://www.tiktok.com/@${s[k]}` : `https://www.${k}.com/${s[k]}`} target="_blank" rel="noopener noreferrer" className={GLASS} title={t.social[k]} aria-label={t.social[k]}>
+                          <Ico className="h-[18px] w-[18px]" />
+                        </a>
+                      );
+                    })}
+                  {user && (
+                    <Link to="/app/orders" className={GLASS} title={t.shop.yourOrders} aria-label={t.shop.yourOrders}>
+                      <ClipboardList className="h-[18px] w-[18px]" />
+                    </Link>
+                  )}
+                </motion.div>
               </div>
             </div>
-            <AnimatePresence>
-              {showMap && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="mt-4 overflow-hidden">
-                  <MapView pins={pins} className="h-64" />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          </section>
+
+          {/* ------------------------------------------- the store at a glance */}
+          <motion.section
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, type: 'spring', bounce: 0.25 }}
+            className="relative z-10 mx-1 -mt-7 overflow-hidden rounded-[1.6rem] bg-surface shadow-[0_22px_48px_-30px_rgb(var(--night)/0.6)] ring-1 ring-line/70 sm:mx-8"
+          >
+            <dl className="grid grid-cols-2 divide-line sm:grid-cols-4 sm:divide-x rtl:sm:divide-x-reverse [&>div]:border-line max-sm:[&>div:nth-child(-n+2)]:border-b max-sm:[&>div:nth-child(odd)]:border-e">
+              {[
+                { icon: Package, label: t.storeX.products, value: products ? String(products.length) : '…', tone: 'text-stitch' },
+                { icon: MapPin, label: t.storeX.place, value: s.city || s.main?.city ? cityWithGov(s.city ?? s.main?.city, lang) : t.storeX.online, tone: 'text-sky' },
+                {
+                  icon: Truck,
+                  label: t.storeX.getIt,
+                  value: s.offers_delivery && s.offers_pickup ? t.storeX.both : s.offers_delivery ? t.shop.delivery : s.offers_pickup ? t.shop.pickup : t.storeX.ask,
+                  tone: 'text-olive',
+                },
+                { icon: GitBranch, label: t.storeX.branches, value: data!.branches.length > 1 ? fill(t.storeX.nBranches, { n: data!.branches.length }) : t.storeX.oneBranch, tone: 'text-gold' },
+              ].map((c) => (
+                <div key={c.label} className="flex min-w-0 items-center gap-3 px-4 py-3.5 sm:px-5">
+                  <span className={cx('grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-sunk', c.tone)}>
+                    <c.icon className="h-[18px] w-[18px]" />
+                  </span>
+                  <div className="min-w-0">
+                    <dt className="truncate text-xs text-muted">{c.label}</dt>
+                    <dd className="num text-[15px] font-semibold leading-snug">{c.value}</dd>
+                  </div>
+                </div>
+              ))}
+            </dl>
+            {s.description && (
+              <p className="flex items-start gap-3 border-t border-line px-5 py-3.5 text-[15px] leading-relaxed text-ink/80">
+                <Quote className="mt-0.5 h-4 w-4 shrink-0 text-stitch/70" />
+                <span>{s.description}</span>
+              </p>
+            )}
+          </motion.section>
+
+          <AnimatePresence>
+            {showMap && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="mt-4 overflow-hidden sm:mx-8">
+                <MapView pins={pins} className="h-72 rounded-[1.6rem]" />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* --------------------------------------------------------- ads */}
           {data!.ads.length > 0 && (
@@ -338,18 +377,18 @@ export default function StorePage() {
           )}
 
           {/* ----------------------------------------------------- products */}
-          <section className="mt-8">
+          <section className="mt-9">
             <div className="mb-3 flex items-center gap-2.5">
               <h2 className="text-2xl">{t.merchant.products}</h2>
               <CountChip n={products?.length ?? null} />
             </div>
-            <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-4 mb-4 space-y-2.5 bg-bg/85 px-4 py-2.5 backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:px-3">
-              <label className="relative block">
+            <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-4 mb-4 flex flex-col gap-2.5 bg-bg/85 px-4 py-2.5 backdrop-blur-md sm:mx-0 sm:flex-row sm:items-center sm:rounded-2xl sm:px-3">
+              <label className="relative block min-w-0 flex-1">
                 <span className="sr-only">{t.common.search}</span>
                 <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={fill(t.shop.searchIn, { store: s.store_name })} className="field h-12 rounded-2xl ps-12" type="search" />
               </label>
-              <ScrollRow label={t.tx.filter} innerClassName="gap-2 pb-0.5" bleed={false}>
+              <ScrollRow label={t.tx.filter} innerClassName="gap-2 pb-0.5" bleed={false} className="sm:max-w-[55%] sm:shrink-0">
                 {[
                   { value: 'all', label: t.common.all },
                   { value: 'physical', label: t.store.physical },

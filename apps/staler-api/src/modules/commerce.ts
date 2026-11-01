@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import { GOVERNORATES } from '../lib/places.js';
 import type pg from 'pg';
 import crypto from 'node:crypto';
 import multer from 'multer';
@@ -167,6 +168,7 @@ storeRouter.get(
           .max(300)
           .optional()
           .transform((v) => (v ? v.split(',').filter((x) => (STORE_CATEGORIES as readonly string[]).includes(x)) : undefined)),
+        places: z.string().trim().max(3000).optional(),
         type: z.enum(['digital', 'physical', 'deposit', 'deals']).optional(),
         sort: z.enum(['new', 'price_asc', 'price_desc', 'name']).default('new'),
       })
@@ -191,6 +193,14 @@ storeRouter.get(
     if (f.category) {
       params.push(f.category);
       where.push(`p.category = $${params.length}`);
+    }
+    if (f.places) {
+      const list = placeNames(f.places);
+      if (list.length) {
+        params.push(list);
+        const n = `$${params.length}::text[]`;
+        where.push(`(${PLACE_SQL('m.city')} = ANY(${n}) OR ${PLACE_SQL(`(SELECT pm.city FROM ${S}.merchants pm WHERE pm.id = m.parent_id)`)} = ANY(${n}))`);
+      }
     }
     if (f.storeCategory?.length) {
       params.push(f.storeCategory);
@@ -224,6 +234,17 @@ storeRouter.get(
   }),
 );
 
+/** "gov:nablus,town:حوارة" → every matching place name, normalized. */
+function placeNames(tokens: string): string[] {
+  const out = new Set<string>();
+  for (const t of tokens.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 60)) {
+    const g = GOVERNORATES.find((x) => `gov:${x.id}` === t);
+    if (g) [g.ar, g.en, ...g.towns].forEach((n) => out.add(normPlace(n)));
+    else if (t.startsWith('town:')) out.add(normPlace(t.slice(5)));
+  }
+  return [...out];
+}
+
 /** Place names compared loosely: case, spaces and Arabic letter variants (أ/إ/آ, ة/ه, ى/ي) don't matter. */
 const normPlace = (v: string) =>
   v.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ');
@@ -240,6 +261,8 @@ storeRouter.get(
         category: z.string().trim().max(300).optional(),
         // Places, comma separated: a store matches when it (or one of its branches) is in any of them.
         cities: z.string().trim().max(6000).optional(),
+        // Compact form from the place picker: gov:<id> and town:<name>, comma separated.
+        places: z.string().trim().max(3000).optional(),
       })
       .strict(),
   }),
@@ -257,6 +280,14 @@ storeRouter.get(
     if (req.query.q) {
       params.push(like(String(req.query.q)));
       where.push(`(m.store_name ILIKE $${params.length} OR m.description ILIKE $${params.length} OR u.full_name ILIKE $${params.length} OR m.city ILIKE $${params.length})`);
+    }
+    if (req.query.places) {
+      const list = placeNames(String(req.query.places));
+      if (list.length) {
+        params.push(list);
+        const n = `$${params.length}::text[]`;
+        where.push(`(${PLACE_SQL('m.city')} = ANY(${n}) OR EXISTS (SELECT 1 FROM ${S}.merchants b WHERE b.parent_id = m.id AND ${ACTIVE('b')} AND ${PLACE_SQL('b.city')} = ANY(${n})))`);
+      }
     }
     if (req.query.category) {
       params.push(String(req.query.category).split(',').filter(Boolean));

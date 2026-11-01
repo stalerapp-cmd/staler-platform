@@ -55,6 +55,7 @@ import { PublicShell } from '../layouts/PublicShell';
 import { StoreCover, StoreLogo, type StoreSummary } from './Stores';
 import { ScrollRow } from '../components/ScrollRow';
 import { CheckMark } from '../components/Choice';
+import { PlacePicker, placeLabel } from '../components/PlacePicker';
 import { StarMotif } from '../components/Tatreez';
 
 export { CartProvider, useCart } from '../components/Commerce';
@@ -75,12 +76,14 @@ const CATS: { k: string; icon: typeof Package; c: string }[] = [
 ];
 
 function Market() {
-  const { t, err } = useI18n();
+  const { t, err, lang } = useI18n();
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState('');
   const [type, setType] = useState('all');
   const [sort, setSort] = useState('new');
   const [cats, setCats] = useState<string[]>([]);
+  const [places, setPlaces] = useState<string[]>([]);
+  const [pickPlace, setPickPlace] = useState(false);
   const [items, setItems] = useState<Product[] | null>(null);
   const [stores, setStores] = useState<StoreSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +107,7 @@ function Market() {
         if (q.trim()) p.set('q', q.trim());
         if (type !== 'all') p.set('type', type);
         if (cats.length) p.set('storeCategory', cats.join(','));
+        if (places.length) p.set('places', places.join(','));
         const d = await get<{ products: Product[] }>(`/api/store/products?${p}`);
         if (n === seq.current) setItems(d.products);
       } catch (e) {
@@ -111,7 +115,7 @@ function Market() {
       }
     }, 250);
     return () => clearTimeout(h);
-  }, [q, type, sort, cats, err]);
+  }, [q, type, sort, cats, places, err]);
   useEffect(() => {
     if (params.get('cart')) setCartOpen(true);
   }, [params]);
@@ -131,13 +135,14 @@ function Market() {
   ];
   const allCats = [{ k: 'all', icon: LayoutGrid, c: '#141B3D' }, ...CATS];
   const catLabel = (k: string) => (k === 'all' ? M.everything : t.shop.cat[k]);
-  const active = cats.length + (type !== 'all' ? 1 : 0) + (sort !== 'new' ? 1 : 0);
+  const active = cats.length + places.length + (type !== 'all' ? 1 : 0) + (sort !== 'new' ? 1 : 0);
   const isOn = (k: string) => (k === 'all' ? !cats.length : cats.includes(k));
   const flip = (k: string) => (k === 'all' ? setCats([]) : setCats(cats.includes(k) ? cats.filter((x) => x !== k) : [...cats, k]));
   const clear = () => {
     setQ('');
     setType('all');
     setCats([]);
+    setPlaces([]);
     setSort('new');
   };
 
@@ -166,8 +171,19 @@ function Market() {
           </label>
           <button
             type="button"
+            onClick={() => setPickPlace(true)}
+            className={cx('relative flex h-14 shrink-0 items-center gap-2 rounded-2xl px-4 text-sm font-semibold ring-1 backdrop-blur-md transition active:scale-95', places.length ? 'bg-white text-night ring-white' : 'bg-white/12 text-white ring-white/30 hover:bg-white/20')}
+            aria-label={t.shop.pickPlace}
+            title={t.shop.pickPlace}
+          >
+            <MapPin className="h-5 w-5" />
+            <span className="hidden sm:inline">{places.length ? fill(t.shop.inPlaces, { n: places.length }) : t.shop.pickPlace}</span>
+            {places.length > 0 && <span className="num absolute -end-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-stitch px-1 text-[11px] text-white ring-2 ring-night sm:hidden">{places.length}</span>}
+          </button>
+          <button
+            type="button"
             onClick={() => setFilters(true)}
-            className="relative flex h-14 shrink-0 items-center gap-2 rounded-2xl bg-white/12 px-4 text-sm font-semibold text-white ring-1 ring-white/30 backdrop-blur-md transition hover:bg-white/20 active:scale-95"
+            className="relative flex h-14 shrink-0 items-center gap-2 rounded-2xl bg-gold px-4 text-sm font-bold text-night shadow-lg transition hover:brightness-105 active:scale-95"
             aria-label={M.filters}
           >
             <SlidersHorizontal className="h-5 w-5" />
@@ -282,13 +298,19 @@ function Market() {
           </button>
         </div>
         <AnimatePresence initial={false}>
-          {(cats.length > 0 || type !== 'all' || q.trim()) && (
+          {(cats.length > 0 || places.length > 0 || type !== 'all' || q.trim()) && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
               <div className="flex flex-wrap items-center gap-1.5 pt-2.5">
                 {q.trim() && <Pill onClear={() => setQ('')}>“{q.trim()}”</Pill>}
                 {cats.map((c) => (
                   <Pill key={c} onClear={() => flip(c)}>
                     {catLabel(c)}
+                  </Pill>
+                ))}
+                {places.map((k) => (
+                  <Pill key={k} onClear={() => setPlaces(places.filter((x) => x !== k))}>
+                    <MapPin className="me-1 inline h-3 w-3" />
+                    {placeLabel(k, lang)}
                   </Pill>
                 ))}
                 {type !== 'all' && <Pill onClear={() => setType('all')}>{types.find((x) => x.v === type)?.label}</Pill>}
@@ -346,6 +368,16 @@ function Market() {
       >
         <div className="space-y-6">
           <section>
+            <h3 className="mb-2.5 text-sm font-semibold text-ink/80">{t.shop.pickPlace}</h3>
+            <button type="button" onClick={() => setPickPlace(true)} className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface p-3 text-start transition hover:bg-sunk/60">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-stitch/10 text-stitch">
+                <MapPin className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{places.length ? places.map((k) => placeLabel(k, lang)).join('، ') : M.everywhere}</span>
+              <ChevronDown className="h-4 w-4 -rotate-90 text-muted rtl:rotate-90" />
+            </button>
+          </section>
+          <section>
             <h3 className="mb-2.5 text-sm font-semibold text-ink/80">{M.cats}</h3>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {allCats.map((x) => {
@@ -400,6 +432,7 @@ function Market() {
         </div>
       </Sheet>
 
+      <PlacePicker open={pickPlace} onClose={() => setPickPlace(false)} value={places} onChange={setPlaces} />
       <ProductSheet product={open} onClose={() => setOpen(null)} onAdded={() => setCartOpen(true)} />
       <CartSheet
         open={cartOpen}

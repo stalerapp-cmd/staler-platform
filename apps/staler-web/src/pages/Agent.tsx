@@ -9,6 +9,8 @@ import { useData, usePolling } from '../lib/hooks';
 import { AMOUNT_RE, fill, money, relative } from '../lib/format';
 import { QRImage } from '../components/QR';
 import { MapView, type Me } from '../components/MapView';
+import { PlacePicker, placeLabel } from '../components/PlacePicker';
+import { expandPlaces, placeKey } from '../lib/places';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
 import { useSecureAction } from '../components/SecureAction';
@@ -315,7 +317,9 @@ export function AgentsMap() {
   const toast = useToast();
   const data = useData<{ agents: any[] }>('/api/exchange/agents');
   const [q, setQ] = useState('');
-  const [city, setCity] = useState('');
+  const [places, setPlaces] = useState<string[]>([]);
+  const [pickPlace, setPickPlace] = useState(false);
+  const wanted = useMemo(() => new Set(expandPlaces(places).map(placeKey)), [places]);
   const [service, setService] = useState<'all' | 'in' | 'out'>('all');
   const [sel, setSel] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
@@ -325,16 +329,15 @@ export function AgentsMap() {
   const A = t.agentMap;
 
   const all = data.data?.agents ?? [];
-  const cities = useMemo(() => [...new Set(all.map((a) => (a.city ?? '').trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, lang)), [all, lang]);
   const agents = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = all
       .filter((a) => !needle || `${a.display_name} ${a.city ?? ''} ${a.address ?? ''} ${a.phone ?? ''}`.toLowerCase().includes(needle))
-      .filter((a) => !city || (a.city ?? '').trim() === city)
+      .filter((a) => !wanted.size || wanted.has(placeKey(a.city ?? '')))
       .filter((a) => service === 'all' || (service === 'in' ? a.cash_in : a.cash_out))
       .map((a) => ({ ...a, dist: me && a.lat != null ? metres(me, { lat: Number(a.lat), lng: Number(a.lng) }) : null }));
     return me ? list.sort((x, y) => (x.dist ?? Infinity) - (y.dist ?? Infinity)) : list;
-  }, [all, q, city, service, me]);
+  }, [all, q, wanted, service, me]);
   const pins = useMemo(
     () => agents.filter((a) => a.lat != null && a.lng != null).map((a) => ({ id: a.id, lat: Number(a.lat), lng: Number(a.lng), kind: 'agent' as const, label: a.display_name })),
     [agents],
@@ -342,7 +345,7 @@ export function AgentsMap() {
   // Re-frame the map whenever the set of agents shown changes.
   useEffect(() => {
     setFitKey((k) => k + 1);
-  }, [pins.length, city, service]);
+  }, [pins.length, places, service]);
   const chosen = agents.find((a) => a.id === sel) ?? null;
   const fmtDist = (m: number) => (m < 1000 ? fill(A.m, { n: Math.round(m / 10) * 10 }) : fill(A.km, { n: (m / 1000).toFixed(m < 10000 ? 1 : 0) }));
 
@@ -354,7 +357,7 @@ export function AgentsMap() {
         setLocating(false);
         setMe({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy });
         setSel(null);
-        setCity('');
+        setPlaces([]);
         if (p.coords.accuracy > 500) toast(fill(A.rough, { n: Math.round(p.coords.accuracy) }));
       },
       (e) => {
@@ -458,15 +461,41 @@ export function AgentsMap() {
         </div>
 
         <div className="min-w-0 lg:order-1">
-          <label className="relative mb-3 block">
-            <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={A.searchPh} className="field ps-12 pe-10" type="search" />
-            {q && (
-              <button type="button" onClick={() => setQ('')} className="absolute end-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-muted hover:bg-sunk" aria-label={t.common.close}>
-                <XCircle className="h-4 w-4" />
-              </button>
-            )}
-          </label>
+          <div className="mb-3 flex gap-2">
+            <label className="relative block min-w-0 flex-1">
+              <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={A.searchPh} className="field ps-12 pe-10" type="search" />
+              {q && (
+                <button type="button" onClick={() => setQ('')} className="absolute end-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-muted hover:bg-sunk" aria-label={t.common.close}>
+                  <XCircle className="h-4 w-4" />
+                </button>
+              )}
+            </label>
+            <button
+              type="button"
+              onClick={() => setPickPlace(true)}
+              className={cx('relative flex shrink-0 items-center gap-2 rounded-xl px-3.5 text-sm font-medium transition', places.length ? 'bg-stitch text-white shadow-lift' : 'bg-surface text-ink ring-1 ring-line hover:ring-ink/20')}
+              aria-label={t.shop.pickPlace}
+              title={t.shop.pickPlace}
+            >
+              <MapPin className="h-5 w-5" />
+              <span className="hidden sm:inline">{places.length ? fill(t.shop.inPlaces, { n: places.length }) : t.shop.pickPlace}</span>
+              {places.length > 0 && <span className="num grid h-5 min-w-5 place-items-center rounded-full bg-white/25 px-1 text-[11px] sm:hidden">{places.length}</span>}
+            </button>
+          </div>
+          {places.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {places.map((k) => (
+                <span key={k} className="inline-flex items-center gap-1 rounded-full bg-night py-1 pe-1 ps-3 text-xs font-medium text-white dark:bg-white/15">
+                  {placeLabel(k, lang)}
+                  <button type="button" onClick={() => setPlaces(places.filter((x) => x !== k))} className="grid h-5 w-5 place-items-center rounded-full bg-white/15 hover:bg-white/30" aria-label="✕">
+                    <XCircle className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <PlacePicker open={pickPlace} onClose={() => setPickPlace(false)} value={places} onChange={setPlaces} />
           <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
             {(
               [
@@ -480,18 +509,6 @@ export function AgentsMap() {
               </button>
             ))}
           </div>
-          {cities.length > 1 && (
-            <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
-              <button type="button" onClick={() => setCity('')} className={cx('shrink-0 rounded-full px-3 py-1 text-xs transition', !city ? 'bg-gold/25 font-semibold text-ink' : 'bg-sunk text-muted hover:text-ink')}>
-                {A.allCities}
-              </button>
-              {cities.map((c) => (
-                <button key={c} type="button" onClick={() => setCity(c === city ? '' : c)} className={cx('shrink-0 rounded-full px-3 py-1 text-xs transition', city === c ? 'bg-gold/25 font-semibold text-ink' : 'bg-sunk text-muted hover:text-ink')}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          )}
           {data.data && (
             <p className="mb-3 text-sm text-muted">
               {fill(me ? A.countNear : A.count, { n: agents.length })}
@@ -504,7 +521,7 @@ export function AgentsMap() {
               ))}
             </div>
           ) : !agents.length ? (
-            <EmptyState icon={<MapPin className="h-6 w-6" />} title={q || city || service !== 'all' ? A.noMatch : t.agent.none} />
+            <EmptyState icon={<MapPin className="h-6 w-6" />} title={q || places.length || service !== 'all' ? A.noMatch : t.agent.none} />
           ) : (
             <ul ref={listRef} className="space-y-3">
               {agents.map((a, i) => (

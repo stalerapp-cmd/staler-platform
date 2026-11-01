@@ -719,6 +719,8 @@ describe('preferences and filters', () => {
   it('filters by several categories and by places', async () => {
     expect((await request(app).get('/api/store/products?storeCategory=books,food,nonsense')).status).toBe(200);
     expect((await request(app).get('/api/store/stores?category=books,food')).status).toBe(200);
+    expect((await request(app).get(`/api/store/products?places=${encodeURIComponent('gov:nablus,town:حوارة')}`)).status).toBe(200);
+    expect((await request(app).get(`/api/store/stores?places=${encodeURIComponent('gov:ramallah')}`)).status).toBe(200);
     const r = await request(app).get(`/api/store/stores?cities=${encodeURIComponent('رام الله,نابلس')}`);
     expect(r.status).toBe(200);
     expect(Array.isArray(r.body.data.stores)).toBe(true);

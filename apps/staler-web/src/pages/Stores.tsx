@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 import { PlacePicker, placeLabel } from '../components/PlacePicker';
-import { expandPlaces, governorateOf, placeKey } from '../lib/places';
+import { governorateOf, placeKey } from '../lib/places';
 import { fill } from '../lib/format';
 import { ScrollRow } from '../components/ScrollRow';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, FileDown, GitBranch, LayoutGrid, MapPin, Megaphone, Package, RotateCcw, Scissors, Search, Shirt, Smartphone, Sofa, Sparkles, Store as StoreIcon, UtensilsCrossed, Wrench, X } from 'lucide-react';
 import { assetUrl, get } from '../lib/api';
@@ -151,10 +151,7 @@ export function StoresDirectory() {
   const [cats, setCats] = useState<string[]>([]);
   const [places, setPlaces] = useState<string[]>([]);
   const [pickPlace, setPickPlace] = useState(false);
-  const [all, setStores] = useState<StoreSummary[] | null>(null);
-  // Places are matched here (a whole governorate is many names — too many for a link).
-  const wanted = useMemo(() => new Set(expandPlaces(places).map(placeKey)), [places]);
-  const stores = useMemo(() => (all && wanted.size ? all.filter((x) => wanted.has(placeKey(x.city ?? ''))) : all), [all, wanted]);
+  const [stores, setStores] = useState<StoreSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const seq = useRef(0);
   useEffect(() => {
@@ -164,6 +161,7 @@ export function StoresDirectory() {
         const p = new URLSearchParams();
         if (q.trim()) p.set('q', q.trim());
         if (cats.length) p.set('category', cats.join(','));
+        if (places.length) p.set('places', places.join(','));
         const d = await get<{ stores: StoreSummary[] }>(`/api/store/stores?${p}`);
         if (n === seq.current) setStores(d.stores);
       } catch (e) {
@@ -171,7 +169,7 @@ export function StoresDirectory() {
       }
     }, 220);
     return () => clearTimeout(h);
-  }, [q, cats, err]);
+  }, [q, cats, places, err]);
 
   return (
     <div>
