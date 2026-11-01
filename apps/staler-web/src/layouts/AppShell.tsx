@@ -50,7 +50,7 @@ import { relative } from '../lib/format';
 import { localize, targetOf, type Notice } from '../lib/notifications';
 import { useToast } from '../components/Toast';
 import { Logo, StitchBand } from '../components/Tatreez';
-import { StitchCorner, StitchRing } from '../components/HeaderStitch';
+import { StitchCorner } from '../components/HeaderStitch';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 import { useConfirm } from '../components/Confirm';
@@ -572,16 +572,16 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           ))}
         </datalist>
         <header className="safe-top sticky top-0 z-30 px-2.5 pt-2 sm:px-5 lg:px-0 lg:pt-0">
-          <div className="hdr-lux relative flex h-[62px] w-full items-stretch justify-between overflow-hidden rounded-[22px] bg-surface/95 shadow-[0_12px_32px_-20px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur-md lg:h-16 lg:rounded-none lg:ring-0">
+          <div className="hdr-lux hdr-glass relative flex h-[62px] w-full items-stretch justify-between overflow-hidden rounded-[22px] shadow-[0_12px_32px_-20px_rgb(var(--night)/0.55)] lg:h-16 lg:rounded-none">
             <div className="flex min-w-0 items-stretch">
               {/* Name side: a dark embroidered cuff */}
               <NavLink to="/app/settings" className="hdr-cuff group relative flex min-w-0 items-center gap-2.5 bg-night pe-10 ps-1.5 text-white transition active:brightness-110 sm:ps-3 lg:ps-6" aria-label={t.nav.settings}>
-                <StitchRing size={48}>
+                <span className="hdr-halo relative grid h-12 w-12 shrink-0 place-items-center rounded-full">
                   <span className="relative">
-                    <Avatar name={user?.full_name} src={user?.profile_image} size={36} />
+                    <Avatar name={user?.full_name} src={user?.profile_image} size={38} />
                     <span className="absolute bottom-0 end-0 h-2.5 w-2.5 rounded-full bg-olive ring-2 ring-night" />
                   </span>
-                </StitchRing>
+                </span>
                 <span className="relative min-w-0 leading-tight">
                   <span className="block truncate text-[11px] text-white/55">{t.home.hello}</span>
                   <span className="block max-w-[30vw] truncate text-[15px] font-semibold sm:max-w-[200px]">{user?.full_name?.split(' ')[0]}</span>
@@ -600,7 +600,6 @@ export default function AppShell({ children }: { children?: ReactNode }) {
               <div className="hidden sm:block">
                 <PrefsPill bare />
               </div>
-              <span className="mx-1 hidden h-1.5 w-1.5 rotate-45 bg-gold/80 sm:block" aria-hidden="true" />
               <button onClick={() => setSupport(true)} className="hbtn hidden text-olive hover:bg-olive/10 sm:grid" aria-label={t.navg.support} title={t.navg.support}>
                 <LifeBuoy className="h-[19px] w-[19px]" />
               </button>
