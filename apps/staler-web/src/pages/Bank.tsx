@@ -41,10 +41,11 @@ function LinkPanel({ onLinked, bare = false }: { onLinked: () => void; bare?: bo
     }
   };
   return (
-    <motion.div initial={bare ? { opacity: 0, y: 16 } : false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, type: 'spring', bounce: 0.3 }} className={cx('card overflow-hidden', bare && 'border-t-4 border-t-[#C9A45C]')}>
+    <motion.div initial={bare ? { opacity: 0, y: 16 } : false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, type: 'spring', bounce: 0.3 }} className={cx('card overflow-hidden', bare && 'flex flex-col [&>form]:flex-1 [&>form]:lg:p-8')}>
       {bare ? (
-        <div className="px-6 pt-6">
-          <h2 className="text-2xl">{t.bank.linkTitle}</h2>
+        <div className="relative bg-night px-6 pb-9 pt-6 text-white lg:px-8 lg:pt-8">
+          <h2 className="text-2xl lg:text-3xl">{t.bank.linkTitle}</h2>
+          <StitchBand width={60} className="absolute inset-x-0 bottom-0 h-5 w-full opacity-60" colors={['#E2506A', '#E9C060']} />
         </div>
       ) : (
         <div className="relative bg-night p-6 text-white">
@@ -268,9 +269,9 @@ export default function Bank() {
       {link.loading && !link.data ? (
         <Skeleton className="h-64 rounded-3xl" />
       ) : !link.data?.linked ? (
-        <div className="relative mx-auto max-w-5xl py-2">
+        <div className="relative mx-auto flex w-full max-w-6xl items-center py-2 lg:min-h-[calc(100dvh-9rem)]">
           <BankDecor />
-          <div className="relative grid items-stretch gap-5 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+          <div className="relative grid w-full items-stretch gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             {/* The bank itself: tap to open TalerBank */}
             <motion.a
               href={BANK_SITE}
@@ -280,9 +281,9 @@ export default function Bank() {
               animate={{ opacity: 1, y: 0 }}
               whileHover={{ y: -4 }}
               transition={{ type: 'spring', bounce: 0.3 }}
-              className="group relative flex min-h-[300px] flex-col justify-between overflow-hidden rounded-[2rem] bg-[#0C1A17] p-6 text-[#F3E9D2] shadow-card"
+              className="group relative flex min-h-[300px] flex-col justify-between overflow-hidden rounded-[2rem] bg-[#0C1A17] p-6 lg:min-h-[480px] lg:p-8 text-[#F3E9D2] shadow-card"
             >
-              <Guilloche className="pointer-events-none absolute -end-24 -top-24 h-[340px] w-[340px] opacity-60 transition duration-700 group-hover:rotate-12" />
+              <Guilloche className="pointer-events-none absolute -end-24 -top-24 h-[340px] w-[340px] lg:h-[460px] lg:w-[460px] opacity-60 transition duration-700 group-hover:rotate-12" />
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_70%_at_100%_0%,rgba(201,164,92,0.22),transparent_60%)]" />
               <div className="relative flex items-center justify-between">
                 <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#E2C27A] to-[#9C7A30] text-[#0C1A17] shadow-lg">
@@ -293,8 +294,8 @@ export default function Bank() {
                 </span>
               </div>
               <div className="relative">
-                <p className="font-display text-4xl leading-none text-white">TalerBank</p>
-                <ul className="mt-5 space-y-2.5 text-sm text-[#F3E9D2]/85">
+                <p className="font-display text-4xl leading-none text-white lg:text-5xl">TalerBank</p>
+                <ul className="mt-5 space-y-2.5 text-sm text-[#F3E9D2]/85 lg:space-y-3.5 lg:text-base">
                   {[t.bank.why1, t.bank.why2, t.bank.why3].map((w) => (
                     <li key={w} className="flex items-start gap-2.5">
                       <span className="mt-1.5 h-2 w-2 shrink-0 rotate-45 bg-[#C9A45C]" />
