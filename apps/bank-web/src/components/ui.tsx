@@ -10,7 +10,7 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
 } from 'react';
-import { Check, ChevronDown, Copy, Loader2, X } from 'lucide-react';
+import { Check, ChevronDown, Copy, Loader2, X, AlertCircle } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { usePageLook, type NoteTone } from '../lib/pageLook';
 import { Guilloche } from './Guilloche';
@@ -306,12 +306,42 @@ export function EmptyState({ icon, title, action }: { icon: ReactNode; title: st
   );
 }
 
-export function ErrorNote({ children }: { children: ReactNode }) {
-  if (!children) return null;
+/**
+ * An error under a form or action. Always closable, it hides again by itself
+ * after a while, and comes back fresh when a new error arrives.
+ */
+export function ErrorNote({ children, className }: { children: ReactNode; className?: string }) {
+  const { t } = useI18n();
+  const [hidden, setHidden] = useState(false);
+  const key = typeof children === 'string' ? children : String(Date.now());
+  useEffect(() => {
+    setHidden(false);
+    if (!children) return;
+    const h = setTimeout(() => setHidden(true), 15_000);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
   return (
-    <motion.p role="alert" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl bg-stitch/10 px-4 py-3 text-sm text-stitch">
-      {children}
-    </motion.p>
+    <AnimatePresence initial={false}>
+      {children && !hidden && (
+        <motion.div
+          key={key}
+          role="alert"
+          initial={{ opacity: 0, height: 0, y: -4 }}
+          animate={{ opacity: 1, height: 'auto', y: 0 }}
+          exit={{ opacity: 0, height: 0 }}
+          className={cx('overflow-hidden', className)}
+        >
+          <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-stitch/20 bg-stitch/[0.07] py-2.5 pe-2 ps-3.5 text-sm text-stitch">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p className="min-w-0 flex-1 break-words leading-relaxed">{children}</p>
+            <button type="button" onClick={() => setHidden(true)} className="-my-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-stitch/70 transition hover:bg-stitch/10 hover:text-stitch" aria-label={t.common.close}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 

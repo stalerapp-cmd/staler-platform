@@ -234,9 +234,19 @@ describe('cash agents: vouchers (cash-in) and cash-out requests', () => {
     expect([c1!.status, c2!.status].sort()).toEqual([200, 409]);
     expect(await walletBalance(app, u)).toBe('30.00');
 
+    // a voucher locked to one wallet is useless to anyone else holding the QR
+    const other = await walletUser(app, 'QR Thief');
+    const locked = await request(app).post('/api/exchange/vouchers').set(auth(agent)).send({ amount: '5', forWallet: u.email });
+    expect(locked.status).toBe(201);
+    const pv = await request(app).post('/api/exchange/vouchers/preview').set(auth(other.token)).send({ voucher: locked.body.data.voucher.uri });
+    expect(pv.body.data.notYours).toBe(true);
+    expect((await request(app).post('/api/exchange/claim').set(auth(other.token)).send({ voucher: locked.body.data.voucher.uri })).status).toBe(403);
+    expect((await request(app).post('/api/exchange/claim').set(auth(u.token)).send({ voucher: locked.body.data.voucher.uri })).status).toBe(200);
+    expect(await walletBalance(app, u)).toBe('35.00');
+
     const v2 = await request(app).post('/api/exchange/vouchers').set(auth(agent)).send({ amount: '20' });
     await request(app).delete(`/api/exchange/vouchers/${v2.body.data.voucher.id}`).set(auth(agent));
-    expect((await request(app).get('/api/wallet').set(auth(agent))).body.data.wallet.balance).toBe('70.00');
+    expect((await request(app).get('/api/wallet').set(auth(agent))).body.data.wallet.balance).toBe('65.00');
     expect((await request(app).post('/api/exchange/claim').set(auth(u.token)).send({ voucher: v2.body.data.voucher.uri })).status).toBe(409);
 
     // cash-out: the agent shows a request, the customer pays it exactly once
@@ -251,8 +261,8 @@ describe('cash agents: vouchers (cash-in) and cash-out requests', () => {
       request(app).post('/api/exchange/cashouts/pay').set(auth(u.token)).send({ code }),
     ]);
     expect([p1!.status, p2!.status].sort()).toEqual([200, 409]);
-    expect(await walletBalance(app, u)).toBe('17.50');
-    expect((await request(app).get('/api/wallet').set(auth(agent))).body.data.wallet.balance).toBe('82.50');
+    expect(await walletBalance(app, u)).toBe('22.50');
+    expect((await request(app).get('/api/wallet').set(auth(agent))).body.data.wallet.balance).toBe('77.50');
     const stats = await request(app).get('/api/exchange/stats').set(auth(agent));
     expect(stats.body.data.cash_out_today).toBe('12.50');
 
@@ -693,6 +703,31 @@ describe('account deletion', () => {
     expect((await request(app).post('/api/auth/login').send({ email: u.email, password: STRONG })).status).toBe(401);
     const row = await q(`SELECT email, full_name FROM public.users WHERE id = $1`, [u.userId]);
     expect(row.rows[0].full_name).toBe('Deleted user');
+  });
+});
+
+describe('admin force delete', () => {
+  it('refuses a funded account without force, then settles and deletes it with force', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const u = await walletUser(app, 'Rich Person');
+    await q(`UPDATE public.wallets SET balance = 1000000 WHERE user_id = $1`, [u.userId]);
+    const plain = await request(app).delete(`/api/admin/users/${u.userId}`).set(auth(sup)).send({});
+    expect(plain.status).toBe(409);
+    const forced = await request(app).delete(`/api/admin/users/${u.userId}`).set(auth(sup)).send({ force: true, reason: 'test' });
+    expect(forced.status).toBe(200);
+    expect(Number(forced.body.data.writtenOff)).toBe(1000000);
+    const w = await q(`SELECT balance, is_frozen FROM public.wallets WHERE user_id = $1`, [u.userId]);
+    expect(Number(w.rows[0].balance)).toBe(0);
+    expect(w.rows[0].is_frozen).toBe(true);
+    const line = await q(`SELECT amount FROM public.transactions WHERE user_id = $1 AND transaction_type = 'admin_writeoff'`, [u.userId]);
+    expect(Number(line.rows[0].amount)).toBe(-1000000);
+  });
+
+  it('lists cash agents for approval', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const r = await request(app).get('/api/admin/agents').set(auth(sup));
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body.data.agents)).toBe(true);
   });
 });
 

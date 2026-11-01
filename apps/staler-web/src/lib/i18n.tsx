@@ -1,4 +1,4 @@
-import { serverTextAr } from './serverText';
+import { serverTextAr, serverTextEn } from './serverText';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 const en = {
@@ -18,6 +18,27 @@ const en = {
   pick: { title: 'Pickup points', lead: 'Places where buyers collect their orders. Buyers see this choice only when you add at least one.', add: 'New pickup point', edit: 'Edit pickup point', name: 'Name', namePh: 'e.g. Old City counter', description: 'Description for buyers', descPh: 'How to find it, what to bring…', hours: 'Opening hours', active: 'Open for pickups', none: 'No pickup points yet — orders are picked up at the store.', choose: 'Where will you pick it up?', required: 'Choose a pickup point', at: 'Pick up at', deleteQ: 'Delete this pickup point?', deleteB: 'Buyers won’t be able to choose it any more.', saved: 'Pickup point saved', off: 'Closed' },
   crop: { title: 'Adjust your picture', lead: 'Drag to move it, zoom to fit. Only what’s inside the frame is kept.', save: 'Save picture', zoom: 'Zoom', zoomIn: 'Zoom in', zoomOut: 'Zoom out', rotate: 'Turn', saved: 'Picture saved' },
   market: { cats: 'Browse by category', everything: 'Everything', deals: 'Deals', byStore: 'Shop by store', results: '{n} products', newest: 'Newest', cheap: 'Lowest price', pricey: 'Highest price', az: 'A–Z', clear: 'Clear filters' },
+  qr: {
+    matchAgent: 'Match code — ask the customer to read it from their phone before they pay.', matchCustomer: 'Match code — it must be the same on the agent’s screen. If not, don’t pay.',
+    forWallet: 'Only for this customer', forWalletPh: 'Wallet ID or e-mail', forWalletHint: 'Locks the QR to their wallet — a photo of it is useless to anyone else.',
+    lockedTo: 'for {name}', lockedNote: 'Locked to {name}. Nobody else can claim it, even with a photo of this code.', bearerNote: 'Anyone who scans this code first gets the money. Show it only to your customer, and watch it switch to “claimed”.',
+    notYours: 'This voucher is locked to another wallet. Ask the agent to issue one for you.',
+  },
+  ctl: {
+    agents: 'Cash agents', agentsLead: 'People who asked to exchange cash for S-Taler. New requests wait here until you approve them — only then do they show on the map.',
+    waiting: 'Waiting for approval', listed: 'On the map', all: 'All', noneWaiting: 'No requests waiting — you’re all caught up.', noProfile: 'No listing yet',
+    approve: 'Approve and list', approved: 'Approved — they now show on the map', pause: 'Take off the map', pauseQ: 'Take {name} off the map?', pauseB: 'Customers stop seeing them right away. Their account keeps working.',
+    account: 'Account', cashIn: 'Cash in', cashOut: 'Cash out', onMap: 'See on map', balance: 'Balance',
+    storesLead: 'Every store and branch. Open one to edit anything, manage products, or remove it.', searchStores: 'Search by store, owner, e-mail or city', closed: 'Closed',
+    revenue: 'Paid out', inEscrow: 'Held in escrow', orders: 'Orders', details: 'Store details', name: 'Store name', description: 'Description', branch: 'Branch name', status: 'Status',
+    pickup: 'Customers can pick up', delivery: 'Store delivers', showPhone: 'Show phone on the store page', owner: 'Owner’s account', branches: 'Main store and branches', removeAd: 'Remove this ad?',
+    lastOrders: 'Latest orders', danger: 'Danger zone', deleteLead: 'Deleting refunds every open order to its buyer, removes the products, ads and pickup points, and closes the store and its branches for good.',
+    deleteStore: 'Delete store for good', deleteQ: 'Delete {name} for good?', deleteB: 'Open orders are refunded to buyers first. This can’t be undone.', deleted: 'Store deleted',
+    forceT: '{name} still has {amount}', forceB: 'Deleting now refunds their open orders and vouchers, then writes the remaining balance off and freezes the wallet. Every step is recorded in the audit log. This can’t be undone.', forceOk: 'Delete anyway',
+    writtenOff: 'Account deleted · {amount} written off',
+    bankSleeping: 'TalerBank didn’t answer — it sleeps when idle and takes a few seconds to wake. Nothing is wrong with the money.', retry: 'Try again', fAuth: 'Sign-ins', fBank: 'Bank', fAdmin: 'Admin', fWallet: 'Wallet',
+    deviceT: 'Device details', browser: 'Browser', system: 'System', ip: 'Network address', firstSeen: 'Signed in', lastSeen: 'Last active', thisDevice: 'This device', signOutDevice: 'Sign this device out',
+  },
   adm2: { stores: 'Stores of this account', products: 'Products', noProducts: 'No products in this store.', hide: 'Hide', show: 'Show', remove: 'Remove', removeQ: 'Remove “{name}” from the store?', open: 'Open page', suspendStore: 'Suspend store', activateStore: 'Reactivate store', storeQ: 'Change this store’s status?', agent: 'Cash agent', agentStatus: 'Map listing', st: { active: 'Listed', pending: 'Waiting for approval', suspended: 'Hidden' } as Record<string, string>, saveAgent: 'Save agent profile', vouchers: 'Vouchers', cashouts: 'Cash-outs', cancelVoucher: 'Cancel and refund the agent', cancelQ: 'Cancel this voucher?', cancelB: 'The amount goes back to the agent’s wallet.', orders: 'orders', noProfile: 'This agent hasn’t set up a profile yet — you can fill it in for them.' },
   social: { instagram: 'Instagram', tiktok: 'TikTok', facebook: 'Facebook', handlePh: '@yourstore', title: 'Social accounts', follow: 'Follow', shareIg: 'Instagram', shareTt: 'TikTok', copiedFor: 'Link copied — paste it in {app}' },
   navg: { money: 'Money', shop: 'Shopping', people: 'People', work: 'My work', admin: 'Administration', more: 'More', collapse: 'Collapse menu', expand: 'Expand menu', support: 'Support', quick: 'Quick', supportLead: 'We answer every message. Pick what suits you.', chat: 'Chat with support', chatD: 'A real person replies right here in the app.', emailUs: 'E-mail support', emailD: 'Write to us — we reply by e-mail.', helpD: 'Short animated guides to every feature.' },
@@ -269,6 +290,7 @@ const en = {
     } as Record<string, string>,
   },
   errors: {
+    GENERIC: 'Something went wrong. Please try again.',
     NETWORK: 'No connection. Check your internet and try again.', INSUFFICIENT_FUNDS: 'Not enough balance for this.', MFA_REQUIRED: 'Enter your authenticator code to continue.',
     MFA_INVALID: 'That authenticator code is not correct.', INVALID_CREDENTIALS: 'E-mail or password is not correct.', RATE_LIMITED: 'Too many tries. Wait a moment and try again.',
     ACCOUNT_TEMPORARILY_LOCKED: 'Too many failed attempts. Try again later or reset your password.', SESSION_EXPIRED: 'Your session ended. Please sign in again.',
@@ -296,6 +318,27 @@ const ar: Dict = {
   pick: { title: 'نقاط الاستلام', lead: 'أماكن بيستلم منها الزبائن طلباتهم. الزبون بيشوف هالخيار بس إذا ضفت نقطة وحدة على الأقل.', add: 'نقطة استلام جديدة', edit: 'عدّل نقطة الاستلام', name: 'الاسم', namePh: 'مثلًا: كاونتر البلدة القديمة', description: 'وصف للزبائن', descPh: 'كيف يوصلوا، شو يجيبوا معهم…', hours: 'ساعات الدوام', active: 'مفتوحة للاستلام', none: 'ما في نقاط استلام لسا — الاستلام بكون من المتجر.', choose: 'من وين بدك تستلم؟', required: 'اختار نقطة استلام', at: 'الاستلام من', deleteQ: 'تحذف نقطة الاستلام هاي؟', deleteB: 'الزبائن ما رح يقدروا يختاروها بعد هيك.', saved: 'انحفظت نقطة الاستلام', off: 'مسكّرة' },
   crop: { title: 'ظبّط الصورة', lead: 'اسحبها لتحرّكها وكبّرها لتركب. بس اللي جوا الإطار بينحفظ.', save: 'احفظ الصورة', zoom: 'تكبير', zoomIn: 'كبّر', zoomOut: 'صغّر', rotate: 'لفّ', saved: 'انحفظت الصورة' },
   market: { cats: 'تصفّح حسب الفئة', everything: 'كل شي', deals: 'عروض', byStore: 'تسوّق من متجر', results: '{n} منتج', newest: 'الأحدث', cheap: 'الأرخص', pricey: 'الأغلى', az: 'أ–ي', clear: 'امسح الفلاتر' },
+  qr: {
+    matchAgent: 'رمز المطابقة — خلّي الزبون يقرأه من جواله قبل ما يدفع.', matchCustomer: 'رمز المطابقة — لازم يكون نفسه على شاشة الوكيل. إذا مختلف لا تدفع.',
+    forWallet: 'لهالزبون بس', forWalletPh: 'رقم المحفظة أو الإيميل', forWalletHint: 'بتقفل الكود على محفظته — لو حدا صوّره ما بيستفيد منه.',
+    lockedTo: 'لـ {name}', lockedNote: 'مقفولة على {name}. ما حدا غيره بيقدر يصرفها حتى لو صوّر الكود.', bearerNote: 'أول واحد بيمسح الكود بياخد المبلغ. ورجيه لزبونك بس، واستنى لحد ما تصير «انصرفت».',
+    notYours: 'هالقسيمة مقفولة على محفظة ثانية. اطلب من الوكيل يطلعلك وحدة باسمك.',
+  },
+  ctl: {
+    agents: 'وكلاء الصرف', agentsLead: 'الناس اللي طلبوا يصرفوا كاش مقابل S-Taler. الطلبات الجديدة بتستنى هون لحد ما توافق عليها — وبعدها بس بيظهروا على الخريطة.',
+    waiting: 'بستنوا الموافقة', listed: 'ظاهرين عالخريطة', all: 'الكل', noneWaiting: 'ما في طلبات بتستنى — كله تمام.', noProfile: 'ما عمل ملف لسا',
+    approve: 'وافق واعرضه', approved: 'تمت الموافقة — صار ظاهر عالخريطة', pause: 'شيله عن الخريطة', pauseQ: 'تشيل {name} عن الخريطة؟', pauseB: 'الزبائن بطّلوا يشوفوه فورًا. حسابه بضل شغّال.',
+    account: 'الحساب', cashIn: 'إيداع كاش', cashOut: 'سحب كاش', onMap: 'شوفه عالخريطة', balance: 'الرصيد',
+    storesLead: 'كل المتاجر والفروع. افتح أي واحد لتعدّل أي إشي، تدير المنتجات، أو تحذفه.', searchStores: 'دوّر باسم المتجر، الصاحب، الإيميل أو المدينة', closed: 'مسكّر',
+    revenue: 'انصرف للمتجر', inEscrow: 'محجوز بالضمان', orders: 'الطلبات', details: 'تفاصيل المتجر', name: 'اسم المتجر', description: 'الوصف', branch: 'اسم الفرع', status: 'الحالة',
+    pickup: 'الزبون بقدر يستلم', delivery: 'المتجر بوصّل', showPhone: 'اعرض الرقم بصفحة المتجر', owner: 'حساب الصاحب', branches: 'المتجر الرئيسي والفروع', removeAd: 'تشيل هالإعلان؟',
+    lastOrders: 'آخر الطلبات', danger: 'منطقة الخطر', deleteLead: 'الحذف برجّع مصاري كل طلب مفتوح لصاحبه، بشيل المنتجات والإعلانات ونقاط الاستلام، وبسكّر المتجر وفروعه نهائيًا.',
+    deleteStore: 'احذف المتجر نهائيًا', deleteQ: 'تحذف {name} نهائيًا؟', deleteB: 'الطلبات المفتوحة بترجع مصاريها للزبائن أول. ما في تراجع.', deleted: 'انحذف المتجر',
+    forceT: 'حساب {name} لسا فيه {amount}', forceB: 'الحذف هلأ برجّع طلباته وقسائمه المفتوحة، بعدين بشطب الرصيد الباقي وبجمّد المحفظة. كل خطوة بتنسجل بسجل التدقيق. ما في تراجع.', forceOk: 'احذف على كل حال',
+    writtenOff: 'انحذف الحساب · انشطب {amount}',
+    bankSleeping: 'TalerBank ما ردّ — بنام لما ما حدا يستخدمه وبحتاج كم ثانية ليصحى. المصاري ما فيها إشي.', retry: 'جرّب كمان مرة', fAuth: 'الدخول', fBank: 'البنك', fAdmin: 'الإدارة', fWallet: 'المحفظة',
+    deviceT: 'تفاصيل الجهاز', browser: 'المتصفح', system: 'النظام', ip: 'عنوان الشبكة', firstSeen: 'دخل بتاريخ', lastSeen: 'آخر نشاط', thisDevice: 'هاد الجهاز', signOutDevice: 'اطلع من هالجهاز',
+  },
   adm2: { stores: 'متاجر هالحساب', products: 'المنتجات', noProducts: 'ما في منتجات بهالمتجر.', hide: 'إخفاء', show: 'إظهار', remove: 'حذف', removeQ: 'تحذف «{name}» من المتجر؟', open: 'افتح الصفحة', suspendStore: 'أوقف المتجر', activateStore: 'رجّع المتجر', storeQ: 'تغيّر حالة هالمتجر؟', agent: 'وكيل صرف', agentStatus: 'الظهور على الخريطة', st: { active: 'ظاهر', pending: 'بانتظار الموافقة', suspended: 'مخفي' }, saveAgent: 'احفظ ملف الوكيل', vouchers: 'القسائم', cashouts: 'طلبات السحب', cancelVoucher: 'ألغِ ورجّع المبلغ للوكيل', cancelQ: 'تلغي هالقسيمة؟', cancelB: 'المبلغ بيرجع لمحفظة الوكيل.', orders: 'طلب', noProfile: 'هالوكيل ما جهّز ملفه لسا — بتقدر تعبّيه عنه.' },
   social: { instagram: 'إنستغرام', tiktok: 'تيك توك', facebook: 'فيسبوك', handlePh: '@اسم_متجرك', title: 'حسابات السوشال ميديا', follow: 'تابعنا', shareIg: 'إنستغرام', shareTt: 'تيك توك', copiedFor: 'انْسخ الرابط — الصقه في {app}' },
   navg: { money: 'المال', shop: 'التسوّق', people: 'التواصل', work: 'شغلي', admin: 'الإدارة', more: 'المزيد', collapse: 'صغّر القائمة', expand: 'كبّر القائمة', support: 'الدعم', quick: 'سريع', supportLead: 'منرد على كل رسالة. اختار اللي بناسبك.', chat: 'احكي مع الدعم', chatD: 'شخص حقيقي بيرد عليك هون بالتطبيق.', emailUs: 'راسل الدعم بالإيميل', emailD: 'اكتبلنا — ومنرد عليك بالإيميل.', helpD: 'شروحات قصيرة ومتحركة لكل ميزة.' },
@@ -535,6 +578,7 @@ const ar: Dict = {
     },
   },
   errors: {
+    GENERIC: 'صار خلل، جرّب مرة ثانية.',
     NETWORK: 'ما في اتصال. افحص الإنترنت وحاول مجددًا.', INSUFFICIENT_FUNDS: 'رصيدك ما بكفي لهاي العملية.', MFA_REQUIRED: 'أدخل رمز المصادقة للمتابعة.',
     MFA_INVALID: 'رمز المصادقة غير صحيح.', INVALID_CREDENTIALS: 'البريد أو كلمة المرور غير صحيحة.', RATE_LIMITED: 'محاولات كثيرة. استنى شوي وحاول مجددًا.',
     ACCOUNT_TEMPORARILY_LOCKED: 'محاولات فاشلة كثيرة. حاول لاحقًا أو أعد تعيين كلمة المرور.', SESSION_EXPIRED: 'انتهت جلستك. سجّل دخولك من جديد.',
@@ -600,7 +644,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         if (e?.code && t.errors[e.code]) return t.errors[e.code];
         // Validation errors: show the first field message, in Arabic when we have it.
         const msg = Array.isArray(e?.details) && e.details[0]?.message ? e.details[0].message : e?.message;
-        return (lang === 'ar' && serverTextAr(msg)) || msg || t.errors.NETWORK;
+        if (!msg) return t.errors.NETWORK;
+        if (lang === 'ar') return serverTextAr(msg) ?? (/[\u0600-\u06FF]/.test(msg) ? msg : t.errors.GENERIC);
+        return serverTextEn(msg) ?? msg;
       },
     };
   }, [lang, setLang]);

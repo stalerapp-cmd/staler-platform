@@ -402,7 +402,20 @@ export function AdminUserDetail() {
                 <ActionButton
                   icon={<Trash2 className="h-5 w-5" />}
                   tone="danger"
-                  onClick={() => run({ t: Q.deleteT, b: Q.deleteB, ok: Q.deleteOk, danger: true }, () => del(`/api/admin/users/${u.id}`), () => nav('/app/admin/users'))}
+                  onClick={async () => {
+                    const bal = Number(data.wallet?.balance ?? 0);
+                    if (!bal) return run({ t: Q.deleteT, b: Q.deleteB, ok: Q.deleteOk, danger: true }, () => del(`/api/admin/users/${u.id}`), () => nav('/app/admin/users'));
+                    // Money still inside: a second, louder confirmation, then settle and write off.
+                    const amount = money(data.wallet.balance, lang);
+                    if (!(await confirm({ title: fill(t.ctl.forceT, { name: u.full_name, amount }), body: t.ctl.forceB, confirmLabel: t.ctl.forceOk, tone: 'danger' }))) return;
+                    try {
+                      await secure.run((totp) => del(`/api/admin/users/${u.id}`, { force: true, ...(totp ? { totp } : {}) }));
+                      toast(fill(t.ctl.writtenOff, { amount }));
+                      nav('/app/admin/users');
+                    } catch (e) {
+                      toast(err(e), 'error');
+                    }
+                  }}
                 >
                   {t.admin.deleteUser}
                 </ActionButton>

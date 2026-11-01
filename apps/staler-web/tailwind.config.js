@@ -5,6 +5,7 @@ export default {
   darkMode: ['class', '[data-theme="dark"]'],
   theme: {
     extend: {
+      opacity: { 3: '0.03', 6: '0.06', 7: '0.07', 8: '0.08', 12: '0.12', 35: '0.35', 45: '0.45', 55: '0.55', 65: '0.65' },
       colors: {
         bg: v('bg'),
         surface: v('surface'),

@@ -6,10 +6,12 @@ import { hmac, randomToken, safeEqual } from '../lib/crypto.js';
 import { conflict, forbidden, notFound } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { amountSchema } from '../lib/money.js';
-import { uuid, validate } from '../lib/validate.js';
+import { totpCode, uuid, validate } from '../lib/validate.js';
 import { audit } from '../lib/audit.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { moneyLimiter } from '../middleware/security.js';
+import { requireSecondFactor } from './mfa.js';
+import { resolveRecipient } from './wallet.js';
 import { assertDailyLimit, assertMaxTransfer, credit, debit, maskName, notify, notifyBi, walletOfUser, walletToWallet, writeLine } from './walletCore.js';
 
 /**
@@ -28,19 +30,26 @@ exchangeRouter.post(
   '/vouchers',
   requireRole('exchange'),
   moneyLimiter,
-  validate({ body: z.object({ amount: amountSchema, description: z.string().trim().max(140).optional().default('') }).strict() }),
+  validate({
+    body: z
+      .object({ amount: amountSchema, description: z.string().trim().max(140).optional().default(''), forWallet: z.string().trim().max(254).optional().or(z.literal('').transform(() => undefined)) })
+      .strict(),
+  }),
   ah(async (req, res) => {
     const userId = req.auth!.userId;
     const { amount, description } = req.body;
     assertMaxTransfer(amount);
+    // Optional lock: only this wallet can claim it, so a leaked QR is useless to anyone else.
+    const bound = req.body.forWallet ? await resolveRecipient(req.body.forWallet) : null;
+    if (bound && String(bound.user_id) === String(userId)) throw forbidden('You cannot claim your own voucher', 'OWN_VOUCHER');
     const secret = randomToken(24);
     const v = await tx(async (c) => {
       const w = await walletOfUser(userId, c, true);
       const balance = await debit(c, w.id, amount);
       const row = await one<any>(
-        `INSERT INTO ${S}.exchange_vouchers (exchange_user_id, amount, description, secret_hash, status, expires_at)
-         VALUES ($1, $2, $3, $4, 'active', now() + interval '${VOUCHER_TTL_MIN} minutes') RETURNING id, amount, description, status, expires_at, created_at`,
-        [userId, amount, description, hmac(`voucher|${secret}`)],
+        `INSERT INTO ${S}.exchange_vouchers (exchange_user_id, amount, description, secret_hash, status, expires_at, for_user_id, for_label)
+         VALUES ($1, $2, $3, $4, 'active', now() + interval '${VOUCHER_TTL_MIN} minutes', $5, $6) RETURNING id, amount, description, status, expires_at, created_at, for_label`,
+        [userId, amount, description, hmac(`voucher|${secret}`), bound?.user_id ?? null, bound ? maskName(bound.full_name) : null],
         c,
       );
       await writeLine(c, {
@@ -64,7 +73,7 @@ exchangeRouter.get(
   requireRole('exchange'),
   ah(async (req, res) => {
     const r = await pool.query(
-      `SELECT v.id, v.amount, v.description, v.created_at, v.expires_at, v.claimed_at,
+      `SELECT v.id, v.amount, v.description, v.created_at, v.expires_at, v.claimed_at, v.for_label,
               CASE WHEN v.status = 'active' AND v.expires_at < now() THEN 'expired' ELSE v.status END AS status, u.full_name AS claimed_by_name
          FROM ${S}.exchange_vouchers v LEFT JOIN ${S}.users u ON u.id = v.claimed_by
         WHERE v.exchange_user_id = $1 ORDER BY v.created_at DESC LIMIT 50`,
@@ -127,13 +136,19 @@ exchangeRouter.post(
   ah(async (req, res) => {
     const [id] = req.body.voucher.split('.');
     const v = await one<any>(
-      `SELECT v.amount, v.description, v.status, v.expires_at, u.full_name FROM ${S}.exchange_vouchers v JOIN ${S}.users u ON u.id = v.exchange_user_id WHERE v.id = $1`,
+      `SELECT v.amount, v.description, v.status, v.expires_at, v.for_user_id, u.full_name FROM ${S}.exchange_vouchers v JOIN ${S}.users u ON u.id = v.exchange_user_id WHERE v.id = $1`,
       [id],
     );
     if (!v) throw notFound('Voucher not found');
     res.json({
       success: true,
-      data: { amount: v.amount, description: v.description, agent: maskName(v.full_name), status: v.status === 'active' && new Date(v.expires_at) < new Date() ? 'expired' : v.status },
+      data: {
+        amount: v.amount,
+        description: v.description,
+        agent: maskName(v.full_name),
+        status: v.status === 'active' && new Date(v.expires_at) < new Date() ? 'expired' : v.status,
+        notYours: !!v.for_user_id && String(v.for_user_id) !== String(req.auth!.userId),
+      },
     });
   }),
 );
@@ -149,6 +164,7 @@ exchangeRouter.post(
       const v = await one<any>(`SELECT * FROM ${S}.exchange_vouchers WHERE id = $1 FOR UPDATE`, [id], c);
       if (!v || !safeEqual(v.secret_hash, hmac(`voucher|${secret}`))) throw notFound('Voucher not found');
       if (String(v.exchange_user_id) === String(userId)) throw forbidden('You cannot claim your own voucher', 'OWN_VOUCHER');
+      if (v.for_user_id && String(v.for_user_id) !== String(userId)) throw forbidden('This voucher is for another wallet', 'VOUCHER_NOT_YOURS');
       if (v.status !== 'active') throw conflict('VOUCHER_USED', 'This voucher was already used');
       if (new Date(v.expires_at) < new Date()) throw conflict('VOUCHER_EXPIRED', 'This voucher has expired');
       await c.query(`UPDATE ${S}.exchange_vouchers SET status = 'claimed', claimed_by = $2, claimed_at = now() WHERE id = $1`, [v.id, userId]);
@@ -165,7 +181,15 @@ exchangeRouter.post(
         reference: v.id,
         balanceAfter: balance,
       });
-      await notify(c, v.exchange_user_id, 'voucher_claimed', 'Voucher claimed', `${v.amount} ${env.CURRENCY} voucher was redeemed`);
+      const me = await one<any>(`SELECT full_name FROM ${S}.users WHERE id = $1`, [userId], c);
+      await notifyBi(
+        c,
+        v.exchange_user_id,
+        'voucher_claimed',
+        ['Voucher claimed', `${v.amount} ${env.CURRENCY} went to ${maskName(me?.full_name ?? '')}`],
+        ['انصرفت القسيمة', `${v.amount} ${env.CURRENCY} راحت لـ ${maskName(me?.full_name ?? '')}`],
+        { link: '/app/vouchers' },
+      );
       return { amount: v.amount as string, balance };
     });
     await audit({ userId, action: 'exchange.voucher_claimed', entityType: 'voucher', entityId: id }, req);
@@ -237,7 +261,14 @@ exchangeRouter.put(
   requireRole('exchange'),
   validate({ body: agentProfileBody }),
   ah(async (req, res) => {
+    const before = await one<any>(`SELECT status FROM ${S}.agent_profiles WHERE user_id = $1`, [req.auth!.userId]);
     await saveAgentProfile(req.auth!.userId, req.body);
+    if (!before) {
+      // A new listing waits for approval — tell the admins where to find it.
+      const admins = await pool.query(`SELECT id FROM ${S}.users WHERE role = 'admin' AND status = 'active'`);
+      for (const a of admins.rows)
+        await notifyBi(undefined, a.id, 'agent_pending', ['New cash agent to approve', `${req.body.displayName} asked to appear on the agents map.`], ['وكيل صرف جديد بستنى موافقتك', `${req.body.displayName} طلب يظهر على خريطة الوكلاء.`], { link: '/app/admin/agents' });
+    }
     await audit({ userId: req.auth!.userId, action: 'exchange.profile_updated', entityType: 'user', entityId: req.auth!.userId }, req);
     res.json({ success: true, data: { profile: await profileOf(req.auth!.userId) } });
   }),
@@ -270,6 +301,8 @@ exchangeRouter.get(
 
 // --------------------------------------------------------------- cash-out
 const CASHOUT_TTL_MIN = 15;
+/** Two short words of digits both screens show, so agent and customer know they're looking at the same request. */
+export const matchCode = (id: string) => String(parseInt(hmac(`match|${id}`).slice(0, 8), 16) % 1000).padStart(3, '0');
 export const cashoutUri = (id: string, secret: string) => `taler://agent-cashout?c=${id}.${secret}`;
 const cashoutParam = z
   .string()
@@ -292,7 +325,7 @@ exchangeRouter.post(
       [req.auth!.userId, req.body.amount, hmac(`cashout|${secret}`)],
     );
     await audit({ userId: req.auth!.userId, action: 'exchange.cashout_created', entityType: 'cashout', entityId: row.id, details: { amount: row.amount } }, req);
-    res.status(201).json({ success: true, data: { cashout: { ...row, uri: cashoutUri(row.id, secret) } } });
+    res.status(201).json({ success: true, data: { cashout: { ...row, match: matchCode(row.id), uri: cashoutUri(row.id, secret) } } });
   }),
 );
 
@@ -307,7 +340,7 @@ exchangeRouter.get(
         WHERE c.agent_id = $1 ORDER BY c.created_at DESC LIMIT 50`,
       [req.auth!.userId],
     );
-    res.json({ success: true, data: { cashouts: r.rows.map((x) => ({ ...x, paid_by_name: x.paid_by_name ? maskName(x.paid_by_name) : null })) } });
+    res.json({ success: true, data: { cashouts: r.rows.map((x) => ({ ...x, match: matchCode(x.id), paid_by_name: x.paid_by_name ? maskName(x.paid_by_name) : null })) } });
   }),
 );
 
@@ -333,7 +366,7 @@ exchangeRouter.post(
       [id],
     );
     if (!c) throw notFound('Request not found');
-    res.json({ success: true, data: { amount: c.amount, agent: c.agent, status: c.status === 'open' && new Date(c.expires_at) < new Date() ? 'expired' : c.status } });
+    res.json({ success: true, data: { amount: c.amount, agent: c.agent, match: matchCode(id!), status: c.status === 'open' && new Date(c.expires_at) < new Date() ? 'expired' : c.status } });
   }),
 );
 
@@ -342,10 +375,12 @@ exchangeRouter.post(
   '/cashouts/pay',
   requireRole('user', 'merchant', 'exchange'),
   moneyLimiter,
-  validate({ body: z.object({ code: cashoutParam }).strict() }),
+  validate({ body: z.object({ code: cashoutParam, totp: totpCode.optional() }).strict() }),
   ah(async (req, res) => {
     const userId = req.auth!.userId;
     const [id, secret] = req.body.code.split('.') as [string, string];
+    // Money leaves the wallet here: people with 2-step verification confirm with their code.
+    await requireSecondFactor(userId, req.body.totp);
     const out = await tx(async (c) => {
       const co = await one<any>(`SELECT * FROM ${S}.agent_cashouts WHERE id = $1 FOR UPDATE`, [id], c);
       if (!co || !safeEqual(co.secret_hash, hmac(`cashout|${secret}`))) throw notFound('Request not found');

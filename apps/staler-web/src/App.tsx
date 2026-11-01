@@ -31,7 +31,9 @@ const AdminOverview = lazyRetry(() => import('./pages/Admin').then((m) => ({ def
 const AdminUsers = lazyRetry(() => import('./pages/AdminPeople').then((m) => ({ default: m.AdminUsers })));
 const AdminUserDetail = lazyRetry(() => import('./pages/AdminPeople').then((m) => ({ default: m.AdminUserDetail })));
 const AdminAdmins = lazyRetry(() => import('./pages/AdminPeople').then((m) => ({ default: m.AdminAdmins })));
-const AdminStores = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminStores })));
+const AdminStoreList = lazyRetry(() => import('./pages/AdminControl').then((m) => ({ default: m.AdminStoreList })));
+const AdminStoreDetail = lazyRetry(() => import('./pages/AdminControl').then((m) => ({ default: m.AdminStoreDetail })));
+const AdminAgents = lazyRetry(() => import('./pages/AdminControl').then((m) => ({ default: m.AdminAgents })));
 const AdminPending = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminPending })));
 const AdminBankOps = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminBankOps })));
 const AdminAudit = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminAudit })));
@@ -130,7 +132,9 @@ export default function App() {
           <Route path="admin" element={<Private roles={['admin']}>{page(<AdminOverview />)}</Private>} />
           <Route path="admin/users" element={<Private roles={['admin']}>{page(<AdminUsers />)}</Private>} />
           <Route path="admin/users/:id" element={<Private roles={['admin']}>{page(<AdminUserDetail />)}</Private>} />
-          <Route path="admin/stores" element={<Private roles={['admin']}>{page(<AdminStores />)}</Private>} />
+          <Route path="admin/stores" element={<Private roles={['admin']}>{page(<AdminStoreList />)}</Private>} />
+          <Route path="admin/stores/:id" element={<Private roles={['admin']}>{page(<AdminStoreDetail />)}</Private>} />
+          <Route path="admin/agents" element={<Private roles={['admin']}>{page(<AdminAgents />)}</Private>} />
           <Route path="admin/pending" element={<Private roles={['admin']}>{page(<AdminPending />)}</Private>} />
           <Route path="admin/bank" element={<Private roles={['admin']}>{page(<AdminBankOps />)}</Private>} />
           <Route path="admin/audit" element={<Private roles={['admin']}>{page(<AdminAudit />)}</Private>} />

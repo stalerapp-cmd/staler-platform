@@ -153,6 +153,7 @@ function useNav() {
       { to: '/app/admin', label: t.nav.overview, icon: LayoutDashboard, end: true },
       { to: '/app/admin/users', label: t.nav.users, icon: Users, perm: 'users.view' },
       { to: '/app/admin/stores', label: t.nav.stores, icon: Store, perm: 'stores.manage' },
+      { to: '/app/admin/agents', label: t.ctl.agents, icon: HandCoins, perm: 'users.view' },
       { to: '/app/admin/disputes', label: t.nav.disputes, icon: Scale, perm: 'orders.disputes' },
       { to: '/app/admin/pending', label: t.nav.pending, icon: UserPlus, perm: 'pending.manage' },
       { to: '/app/admin/bank', label: t.nav.bankOps, icon: Landmark, perm: 'bank.ops' },
@@ -561,7 +562,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         <Announcement />
         <BioOffer />
         <header className="safe-top sticky top-0 z-30 px-2.5 pt-2 sm:px-5">
-          <div className="hdr-ribbon mx-auto flex h-[60px] max-w-6xl items-center justify-between gap-2 rounded-[22px] bg-surface/90 px-2 shadow-[0_12px_32px_-20px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur-md sm:px-3">
+          <div className="hdr-ribbon flex h-[60px] w-full items-center justify-between gap-2 rounded-[22px] bg-surface/90 px-2 shadow-[0_12px_32px_-20px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur-md sm:px-3">
             <div className="flex min-w-0 items-center gap-1">
               {loc.pathname !== '/app' && <BackButton />}
               <NavLink to="/app/settings" className="group flex min-w-0 items-center gap-2.5 rounded-[16px] py-1 pe-2.5 ps-1 transition hover:bg-sunk/80 active:scale-[0.98]" aria-label={t.nav.settings}>

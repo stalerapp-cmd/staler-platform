@@ -13,7 +13,7 @@ import { bank } from '../lib/bankClient.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { PERMISSIONS, assertCanManage, isSuper, requirePerm } from '../lib/permissions.js';
 import { noticeMail } from '../lib/mailer.js';
-import { notify, notifyBi } from './walletCore.js';
+import { notify, notifyBi, writeLine } from './walletCore.js';
 import { agentProfileBody, refundVoucher, saveAgentProfile } from './exchange.js';
 import { requireSecondFactor } from './mfa.js';
 import { revokeAllSessions } from './sessions.js';
@@ -472,19 +472,58 @@ adminRouter.post(
   }),
 );
 
+/**
+ * Delete an account. With money still in it, `force` (super admin or users.delete)
+ * settles everything first: open orders are refunded, active vouchers returned,
+ * stores closed, then whatever is left in the wallet is written off to the system
+ * — every step on the ledger and in the audit log.
+ */
 adminRouter.delete(
   '/users/:id',
   requirePerm('users.delete'),
-  validate({ params: z.object({ id: idParam }).strict() }),
+  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ force: z.boolean().optional(), reason: z.string().trim().max(300).optional(), totp: totpCode.optional() }).strict().optional() }),
   ah(async (req, res) => {
     const t = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE id = $1`, [req.params.id]);
     if (!t) throw notFound('User not found');
     assertCanManage(req, t);
-    const w = await one(`SELECT 1 FROM ${S}.wallets WHERE user_id = $1 AND balance <> 0`, [req.params.id]);
-    if (w) throw conflict('BALANCE_NOT_ZERO', 'The wallet still holds money');
+    const force = Boolean(req.body?.force);
+    const reason = req.body?.reason ?? 'Account deleted by an administrator';
+    const w = await one<any>(`SELECT balance FROM ${S}.wallets WHERE user_id = $1 AND balance <> 0 LIMIT 1`, [req.params.id]);
+    if (w && !force) throw conflict('BALANCE_NOT_ZERO', 'The wallet still holds money');
+    // Writing money off is the most serious thing an admin can do: it needs their 2-step code when they have one.
+    if (w) await requireSecondFactor(req.auth!.userId, req.body?.totp);
+    let writtenOff = '0.00';
+    if (force) {
+      const held = await pool.query(
+        `SELECT o.id FROM ${S}.orders o LEFT JOIN ${S}.merchants m ON m.id = o.merchant_id
+          WHERE (o.user_id = $1 OR m.user_id = $1) AND o.escrow_status = 'held'`,
+        [t.id],
+      );
+      for (const o of held.rows) await tx((c) => refundOrder(c, o.id, 'account deleted', { actor: 'admin' }));
+      const vouchers = await pool.query(`SELECT id FROM ${S}.exchange_vouchers WHERE exchange_user_id = $1 AND status = 'active'`, [t.id]);
+      for (const v of vouchers.rows) await refundVoucher(v.id, 'cancelled');
+      await pool.query(`UPDATE ${S}.agent_cashouts SET status = 'cancelled' WHERE agent_id = $1 AND status = 'open'`, [t.id]);
+      writtenOff = await tx(async (c) => {
+        const wl = await one<any>(`SELECT id, wallet_id, balance FROM ${S}.wallets WHERE user_id = $1 ORDER BY created_at LIMIT 1 FOR UPDATE`, [t.id], c);
+        if (!wl || Number(wl.balance) === 0) return '0.00';
+        await c.query(`UPDATE ${S}.wallets SET balance = 0, is_frozen = true WHERE id = $1`, [wl.id]);
+        await writeLine(c, {
+          userId: t.id,
+          walletId: wl.wallet_id,
+          type: 'admin_writeoff',
+          amount: `-${wl.balance}`,
+          description: reason,
+          metadata: { by: req.auth!.userId },
+          balanceAfter: '0.00',
+        });
+        return String(wl.balance);
+      });
+    }
+    await pool.query(`UPDATE ${S}.merchants SET status = 'closed', updated_at = now() WHERE user_id = $1`, [t.id]);
+    await pool.query(`UPDATE ${S}.agent_profiles SET status = 'suspended', updated_at = now() WHERE user_id = $1`, [t.id]);
     await anonymiseUser(req.params.id!);
-    await audit({ userId: req.auth!.userId, action: 'admin.user_deleted', entityType: 'user', entityId: req.params.id }, req);
-    res.json({ success: true });
+    await audit({ userId: req.auth!.userId, action: 'admin.user_deleted', entityType: 'user', entityId: req.params.id, details: { force, writtenOff, reason } }, req);
+    res.json({ success: true, data: { writtenOff } });
   }),
 );
 
@@ -561,10 +600,12 @@ adminRouter.get(
   requirePerm('stores.manage'),
   ah(async (_req, res) => {
     const r = await pool.query(
-      `SELECT m.id, m.store_name, m.description, COALESCE(m.status,'active') AS status, m.created_at, u.full_name AS owner, u.email AS owner_email,
+      `SELECT m.id, m.store_name, m.branch_name, m.parent_id, m.slug, m.logo_url, m.accent, m.city, m.description, COALESCE(m.status,'active') AS status, m.created_at,
+              u.id AS owner_id, u.full_name AS owner, u.email AS owner_email,
               (SELECT count(*)::int FROM ${S}.products p WHERE p.merchant_id = m.id AND COALESCE(p.status,'active') = 'active') AS products,
               (SELECT COALESCE(SUM(total_amount),0)::text FROM ${S}.orders o WHERE o.merchant_id = m.id AND o.escrow_status = 'released') AS revenue
-         FROM ${S}.merchants m LEFT JOIN ${S}.users u ON u.id = m.user_id ORDER BY m.created_at DESC NULLS LAST`,
+         FROM ${S}.merchants m LEFT JOIN ${S}.users u ON u.id = m.user_id
+        ORDER BY (COALESCE(m.status,'active') = 'closed'), m.created_at DESC NULLS LAST`,
     );
     res.json({ success: true, data: { stores: r.rows } });
   }),
@@ -803,6 +844,151 @@ adminRouter.delete(
     const v = await refundVoucher(req.params.id!, 'cancelled');
     if (!v) throw conflict('VOUCHER_CLOSED', 'This voucher was already used or cancelled');
     await audit({ userId: req.auth!.userId, action: 'admin.voucher_cancelled', entityType: 'voucher', entityId: req.params.id }, req);
+    res.json({ success: true });
+  }),
+);
+
+// ------------------------------------------------------------- cash agents
+/** Every cash agent with their map listing — pending ones first. */
+adminRouter.get(
+  '/agents',
+  requirePerm('users.view'),
+  ah(async (_req, res) => {
+    const r = await pool.query(
+      `SELECT u.id, u.full_name, u.email, u.status AS account_status, u.profile_image, u.created_at,
+              a.display_name, a.city, a.address, a.phone, a.hours, a.lat, a.lng, a.cash_in, a.cash_out,
+              COALESCE(a.status, 'none') AS status, a.updated_at,
+              (SELECT balance FROM ${S}.wallets w WHERE w.user_id = u.id ORDER BY created_at LIMIT 1) AS balance
+         FROM ${S}.users u LEFT JOIN ${S}.agent_profiles a ON a.user_id = u.id
+        WHERE u.role = 'exchange' AND u.email NOT LIKE 'deleted+%'
+        ORDER BY CASE COALESCE(a.status,'none') WHEN 'pending' THEN 0 WHEN 'none' THEN 1 WHEN 'active' THEN 2 ELSE 3 END, a.updated_at DESC NULLS LAST`,
+    );
+    res.json({ success: true, data: { agents: r.rows } });
+  }),
+);
+
+adminRouter.post(
+  '/agents/:id/status',
+  requirePerm('users.edit'),
+  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ status: z.enum(['active', 'pending', 'suspended']) }).strict() }),
+  ah(async (req, res) => {
+    const r = await pool.query(`UPDATE ${S}.agent_profiles SET status = $2, updated_at = now() WHERE user_id = $1 RETURNING user_id`, [req.params.id, req.body.status]);
+    if (!r.rowCount) throw notFound('User not found');
+    if (req.body.status === 'active') {
+      await notifyBi(undefined, req.params.id!, 'agent_approved', ['You are listed', 'Customers can now find you on the cash agents map.'], ['صرت ظاهر للزبائن', 'الزبائن صاروا يشوفوك على خريطة وكلاء الصرف.'], { link: '/app/agent' });
+    }
+    await audit({ userId: req.auth!.userId, action: 'admin.agent_status', entityType: 'user', entityId: req.params.id, details: req.body }, req);
+    res.json({ success: true });
+  }),
+);
+
+// ------------------------------------------------------- full store control
+adminRouter.get(
+  '/stores/:id',
+  requirePerm('stores.manage'),
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const store = await one<any>(
+      `SELECT m.*, u.full_name AS owner, u.email AS owner_email, u.id AS owner_id FROM ${S}.merchants m LEFT JOIN ${S}.users u ON u.id = m.user_id WHERE m.id = $1`,
+      [req.params.id],
+    );
+    if (!store) throw notFound('Store not found');
+    const mainId = store.parent_id ?? store.id;
+    const branches = await pool.query(
+      `SELECT id, store_name, branch_name, city, address, slug, COALESCE(status,'active') AS status, parent_id,
+              (SELECT count(*)::int FROM ${S}.products p WHERE p.merchant_id = m.id AND COALESCE(p.status,'active') <> 'deleted') AS products
+         FROM ${S}.merchants m WHERE id = $1 OR parent_id = $1 ORDER BY parent_id NULLS FIRST, created_at`,
+      [mainId],
+    );
+    const products = await pool.query(
+      `SELECT id, merchant_id, name, price, stock, image_url, is_digital, category, COALESCE(status,'active') AS status, created_at
+         FROM ${S}.products WHERE merchant_id = $1 AND COALESCE(status,'active') <> 'deleted' ORDER BY created_at DESC LIMIT 300`,
+      [store.id],
+    );
+    const orders = await pool.query(
+      `SELECT o.id, o.total_amount, o.status, o.escrow_status, o.dispute_status, o.created_at, u.full_name AS buyer
+         FROM ${S}.orders o LEFT JOIN ${S}.users u ON u.id = o.user_id WHERE o.merchant_id = $1 ORDER BY o.created_at DESC LIMIT 50`,
+      [store.id],
+    );
+    const ads = await pool.query(`SELECT id, kind, media_url, title, active FROM ${S}.store_ads WHERE merchant_id = $1 ORDER BY created_at DESC`, [store.id]);
+    const pickup = await pool.query(`SELECT id, name, city, active FROM ${S}.pickup_points WHERE merchant_id = $1 ORDER BY sort`, [store.id]);
+    const stats = await one<any>(
+      `SELECT COALESCE(SUM(total_amount) FILTER (WHERE escrow_status = 'released'),0)::text AS revenue,
+              COALESCE(SUM(COALESCE(amount_paid,total_amount)) FILTER (WHERE escrow_status = 'held'),0)::text AS in_escrow,
+              count(*)::int AS orders
+         FROM ${S}.orders WHERE merchant_id = $1`,
+      [store.id],
+    );
+    res.json({ success: true, data: { store, branches: branches.rows, products: products.rows, orders: orders.rows, ads: ads.rows, pickupPoints: pickup.rows, stats } });
+  }),
+);
+
+adminRouter.put(
+  '/stores/:id',
+  requirePerm('stores.manage'),
+  validate({
+    params: z.object({ id: idParam }).strict(),
+    body: z
+      .object({
+        storeName: z.string().trim().min(2).max(60),
+        branchName: z.string().trim().max(60).nullable().optional(),
+        description: z.string().trim().max(500).nullable().optional(),
+        category: z.string().trim().max(30).nullable().optional(),
+        city: z.string().trim().max(60).nullable().optional(),
+        address: z.string().trim().max(200).nullable().optional(),
+        phone: z.string().trim().max(20).nullable().optional(),
+        showPhone: z.boolean().optional(),
+        offersPickup: z.boolean().optional(),
+        offersDelivery: z.boolean().optional(),
+        status: z.enum(['active', 'suspended', 'closed']).optional(),
+      })
+      .strict(),
+  }),
+  ah(async (req, res) => {
+    const b = req.body;
+    const r = await pool.query(
+      `UPDATE ${S}.merchants SET store_name = $2, branch_name = COALESCE($3, branch_name), description = $4, category = COALESCE($5, category), city = $6, address = $7,
+              phone = $8, show_phone = COALESCE($9, show_phone), offers_pickup = COALESCE($10, offers_pickup), offers_delivery = COALESCE($11, offers_delivery),
+              status = COALESCE($12, status), updated_at = now()
+        WHERE id = $1`,
+      [req.params.id, b.storeName, b.branchName ?? null, b.description ?? null, b.category ?? null, b.city ?? null, b.address ?? null, b.phone ?? null,
+        b.showPhone ?? null, b.offersPickup ?? null, b.offersDelivery ?? null, b.status ?? null],
+    );
+    if (!r.rowCount) throw notFound('Store not found');
+    await audit({ userId: req.auth!.userId, action: 'admin.store_updated', entityType: 'store', entityId: req.params.id, details: b }, req);
+    res.json({ success: true });
+  }),
+);
+
+/** Delete a store (and its branches) for good: open orders are refunded first. */
+adminRouter.delete(
+  '/stores/:id',
+  requirePerm('stores.manage'),
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const m = await one<any>(`SELECT id, user_id, store_name FROM ${S}.merchants WHERE id = $1`, [req.params.id]);
+    if (!m) throw notFound('Store not found');
+    const ids = (await pool.query(`SELECT id FROM ${S}.merchants WHERE id = $1 OR parent_id = $1`, [m.id])).rows.map((x) => x.id);
+    const held = await pool.query(`SELECT id FROM ${S}.orders WHERE merchant_id = ANY($1) AND escrow_status = 'held'`, [ids]);
+    for (const o of held.rows) await tx((c) => refundOrder(c, o.id, 'store removed by support', { actor: 'admin' }));
+    await pool.query(`UPDATE ${S}.products SET status = 'deleted', updated_at = now() WHERE merchant_id = ANY($1)`, [ids]);
+    await pool.query(`DELETE FROM ${S}.store_ads WHERE merchant_id = ANY($1)`, [ids]);
+    await pool.query(`DELETE FROM ${S}.pickup_points WHERE merchant_id = ANY($1)`, [ids]);
+    await pool.query(`UPDATE ${S}.merchants SET status = 'closed', updated_at = now() WHERE id = ANY($1)`, [ids]);
+    if (m.user_id)
+      await notifyBi(undefined, m.user_id, 'store_removed', ['Store removed', `Support removed ${m.store_name}. Open orders were refunded.`], ['انشال المتجر', `الدعم شال متجر ${m.store_name}. الطلبات المفتوحة رجعت مصاريها.`]);
+    await audit({ userId: req.auth!.userId, action: 'admin.store_deleted', entityType: 'store', entityId: m.id, details: { refunded: held.rowCount } }, req);
+    res.json({ success: true, data: { refunded: held.rowCount } });
+  }),
+);
+
+adminRouter.delete(
+  '/ads/:id',
+  requirePerm('stores.manage'),
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    await pool.query(`DELETE FROM ${S}.store_ads WHERE id = $1`, [req.params.id]);
+    await audit({ userId: req.auth!.userId, action: 'admin.ad_deleted', entityType: 'ad', entityId: req.params.id }, req);
     res.json({ success: true });
   }),
 );

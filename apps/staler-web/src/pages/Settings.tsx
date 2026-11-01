@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AtSign, Camera, Check, KeyRound, Languages, Laptop, LockKeyhole, LogOut, MonitorSmartphone, Moon, Palette, ShieldAlert, ShieldCheck, Smartphone, Sun, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { AtSign, Camera, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Moon, Palette, ShieldAlert, ShieldCheck, Sun, Trash2, UserRound, type LucideIcon } from 'lucide-react';
 import { applySession, del, patch, post, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
@@ -9,13 +9,13 @@ import { BioToggle } from '../components/AppLock';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/hooks';
-import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { Avatar, Badge, Button, CodeInput, CopyButton, ErrorNote, Field, PasswordStrength, Sheet, cx } from '../components/ui';
 import { StarMotif } from '../components/Tatreez';
 import { ImageCropper } from '../components/ImageCropper';
 import { fill } from '../lib/format';
 import { useConfirm } from '../components/Confirm';
+import { DeviceList } from '../components/Devices';
 
 function Section({ title, children, aside, icon: Icon, tone = 'bg-night text-white' }: { title: string; children: ReactNode; aside?: ReactNode; icon?: LucideIcon; tone?: string }) {
   return (
@@ -477,30 +477,17 @@ export default function Settings() {
           </Button>
         }
       >
-        <ul className="divide-y divide-line">
-          {sessions.data?.sessions.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 py-3">
-              {/mobile|android|iphone/i.test(s.user_agent ?? '') ? <Smartphone className="h-5 w-5 text-muted" /> : <Laptop className="h-5 w-5 text-muted" />}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">{(s.user_agent ?? '—').slice(0, 70)}</p>
-                <p className="text-xs text-muted">
-                  <span className="num">{s.ip_address}</span> · {t.settings.lastUsed} {relative(s.last_used_at ?? s.created_at, lang)}
-                </p>
-              </div>
-              {s.current ? (
-                <Badge tone="info">{t.settings.thisDevice}</Badge>
-              ) : (
-                <Button size="sm" variant="ghost" onClick={async () => {
-                    if (!(await confirm({ title: t.ask.deviceTitle, body: t.ask.deviceBody, confirmLabel: t.ask.deviceOk, tone: 'danger' }))) return;
-                    await del(`/api/auth/me/sessions/${s.id}`);
-                    void sessions.reload();
-                  }}>
-                  {t.settings.revoke}
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <DeviceList
+          sessions={sessions.data?.sessions}
+          thisDevice={t.settings.thisDevice}
+          lastUsed={t.settings.lastUsed}
+          revoke={t.settings.revoke}
+          onRevoke={async (s) => {
+            if (!(await confirm({ title: t.ask.deviceTitle, body: t.ask.deviceBody, confirmLabel: t.ask.deviceOk, tone: 'danger' }))) return;
+            await del(`/api/auth/me/sessions/${s.id}`);
+            void sessions.reload();
+          }}
+        />
       </Section>
       )}
 

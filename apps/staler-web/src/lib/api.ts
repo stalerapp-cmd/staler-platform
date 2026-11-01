@@ -193,7 +193,7 @@ export const get = <T = any>(path: string) => api<T>('GET', path);
 export const post = <T = any>(path: string, body?: unknown, idempotencyKey?: string) => api<T>('POST', path, { body: body ?? {}, idempotencyKey });
 export const put = <T = any>(path: string, body?: unknown) => api<T>('PUT', path, { body: body ?? {} });
 export const patch = <T = any>(path: string, body?: unknown) => api<T>('PATCH', path, { body: body ?? {} });
-export const del = <T = any>(path: string) => api<T>('DELETE', path);
+export const del = <T = any>(path: string, body?: unknown) => api<T>('DELETE', path, body === undefined ? {} : { body });
 export const upload = <T = any>(path: string, form: FormData) => api<T>('POST', path, { form });
 
 /** Downloads a protected file (Authorization header, no token in the URL). */

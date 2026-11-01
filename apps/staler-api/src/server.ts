@@ -28,6 +28,11 @@ async function main() {
     housekeeping().catch((err) => logger.warn({ err }, 'housekeeping failed'));
   }, 10 * 60_000);
   hk.unref();
+  // TalerBank sleeps after a quiet spell on the hosting plan; while S-Taler is awake, keep it awake too.
+  const bankWake = setInterval(() => {
+    fetch(`${env.BANK_API_URL.replace(/\/+$/, '')}/health`, { signal: AbortSignal.timeout(20_000) }).catch(() => undefined);
+  }, 9 * 60_000);
+  bankWake.unref();
 
   const shutdown = (sig: string) => {
     logger.info({ sig }, 'shutting down');

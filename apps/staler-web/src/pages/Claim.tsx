@@ -55,6 +55,7 @@ export default function Claim() {
           </div>
           <p className="num mt-6 font-display text-5xl">{money(state.preview.amount, lang)}</p>
           {state.preview.description && <p className="mt-2 text-muted">{state.preview.description}</p>}
+          {state.preview.notYours && <p className="mt-4 rounded-2xl bg-stitch/10 px-4 py-2.5 text-sm text-stitch">{t.qr.notYours}</p>}
           <ErrorNote>{error}</ErrorNote>
           <Button
             block
@@ -62,7 +63,7 @@ export default function Claim() {
             variant="stitch"
             className="mt-6"
             loading={busy}
-            disabled={state.preview.status !== 'active'}
+            disabled={state.preview.status !== 'active' || state.preview.notYours}
             onClick={async () => {
               setBusy(true);
               setError(null);

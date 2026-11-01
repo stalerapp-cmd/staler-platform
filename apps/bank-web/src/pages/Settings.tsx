@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Laptop, LogOut, ShieldAlert, ShieldCheck, Smartphone, Lock } from 'lucide-react';
+import { LogOut, ShieldAlert, ShieldCheck, Lock } from 'lucide-react';
 import { applySession, del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
@@ -10,10 +10,10 @@ import { useTheme } from '../lib/theme';
 import { ThemePicker } from '../components/ThemePicker';
 import { fill } from '../lib/format';
 import { useData } from '../lib/hooks';
-import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { Avatar, Badge, Button, CodeInput, CopyButton, ErrorNote, Field, PageHeader, PasswordStrength, Segmented, Sheet } from '../components/ui';
 import { useConfirm } from '../components/Confirm';
+import { DeviceList } from '../components/Devices';
 
 function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
@@ -254,30 +254,17 @@ export default function Settings() {
           </Button>
         }
       >
-        <ul className="divide-y divide-line">
-          {sessions.data?.sessions.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 py-3">
-              {/mobile|android|iphone/i.test(s.user_agent ?? '') ? <Smartphone className="h-5 w-5 text-muted" /> : <Laptop className="h-5 w-5 text-muted" />}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">{(s.user_agent ?? '—').slice(0, 70)}</p>
-                <p className="text-xs text-muted">
-                  <span className="num">{s.ip_address}</span> · {t.settings.lastActive} {relative(s.last_used_at ?? s.created_at, lang)}
-                </p>
-              </div>
-              {s.current ? (
-                <Badge tone="info">{t.settings.thisDevice}</Badge>
-              ) : (
-                <Button size="sm" variant="ghost" onClick={async () => {
-                    if (!(await confirm({ title: t.ask.deviceTitle, body: t.ask.deviceBody, confirmLabel: t.ask.deviceOk, tone: 'danger' }))) return;
-                    await del(`/api/auth/me/sessions/${s.id}`);
-                    void sessions.reload();
-                  }}>
-                  {t.common.revoke}
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <DeviceList
+          sessions={sessions.data?.sessions}
+          thisDevice={t.settings.thisDevice}
+          lastUsed={t.settings.lastActive}
+          revoke={t.common.revoke}
+          onRevoke={async (s) => {
+            if (!(await confirm({ title: t.ask.deviceTitle, body: t.ask.deviceBody, confirmLabel: t.ask.deviceOk, tone: 'danger' }))) return;
+            await del(`/api/auth/me/sessions/${s.id}`);
+            void sessions.reload();
+          }}
+        />
       </Section>
 
       {user?.role === 'user' && (

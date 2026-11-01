@@ -11,6 +11,7 @@ import { QRImage } from '../components/QR';
 import { MapView } from '../components/MapView';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
+import { useSecureAction } from '../components/SecureAction';
 import { AmountInput, AnimatedNumber, Avatar, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Sheet, Skeleton, SuccessMark, Toggle, cx } from '../components/ui';
 
 interface Stats {
@@ -196,6 +197,7 @@ export default function AgentDesk() {
                 <motion.div key="qr" exit={{ opacity: 0, scale: 0.95 }}>
                   <QRImage value={show.uri} size={240} label={t.agent.cashOut} />
                   <p className="num mt-5 font-display text-3xl">{money(show.amount, lang)}</p>
+                  {show.match && <MatchCode code={show.match} hint={t.qr.matchAgent} />}
                   <p className="mt-2 flex items-center justify-center gap-2 text-sm text-muted">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-stitch" /> {t.agent.waitingPay}
                   </p>
@@ -386,8 +388,21 @@ export function AgentsMap() {
 }
 
 // ------------------------------------------------------- customer pays
+/** Three digits shown on both phones: if they match, both people are looking at the same request. */
+function MatchCode({ code, hint }: { code: string; hint: string }) {
+  return (
+    <div className="mx-auto mt-4 flex max-w-xs items-center gap-3 rounded-2xl border border-dashed border-sky/40 bg-sky/5 px-4 py-2.5 text-start">
+      <span dir="ltr" className="num font-display text-2xl tracking-[0.3em] text-sky">
+        {code}
+      </span>
+      <span className="text-xs leading-snug text-muted">{hint}</span>
+    </div>
+  );
+}
+
 export function CashOutPay() {
   const { t, lang, err } = useI18n();
+  const secure = useSecureAction();
   const { reload } = useAuth();
   const [params] = useSearchParams();
   const code = params.get('c') ?? '';
@@ -415,6 +430,7 @@ export function CashOutPay() {
     );
   return (
     <div className="mx-auto max-w-md">
+      {secure.element}
       <PageHeader title={t.agent.payTitle} />
       {loadErr ? (
         <ErrorNote>{loadErr}</ErrorNote>
@@ -425,6 +441,7 @@ export function CashOutPay() {
           <p className="text-sm text-muted">{t.agent.payFrom}</p>
           <p className="font-medium">{preview.agent}</p>
           <p className="num mt-6 font-display text-5xl">{money(preview.amount, lang)}</p>
+          {preview.match && <MatchCode code={preview.match} hint={t.qr.matchCustomer} />}
           <p className="mt-3 text-sm text-muted">{t.agent.payLead}</p>
           <ErrorNote>{error}</ErrorNote>
           <Button
@@ -438,7 +455,8 @@ export function CashOutPay() {
               setBusy(true);
               setError(null);
               try {
-                setDone(await post('/api/exchange/cashouts/pay', { code }, newIdempotencyKey()));
+                const key = newIdempotencyKey();
+                setDone(await secure.run((totp) => post('/api/exchange/cashouts/pay', { code, ...(totp ? { totp } : {}) }, key)));
                 void reload();
               } catch (e) {
                 setError(err(e));

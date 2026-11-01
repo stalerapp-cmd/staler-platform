@@ -19,6 +19,7 @@ export default function Vouchers() {
   const list = useData<{ vouchers: any[] }>('/api/exchange/vouchers');
   const [amount, setAmount] = useState('');
   const [desc, setDesc] = useState('');
+  const [forWallet, setForWallet] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [show, setShow] = useState<any>(null);
@@ -39,10 +40,11 @@ export default function Vouchers() {
             setBusy(true);
             setError(null);
             try {
-              const r = await post('/api/exchange/vouchers', { amount, description: desc.trim() }, newIdempotencyKey());
+              const r = await post('/api/exchange/vouchers', { amount, description: desc.trim(), forWallet: forWallet.trim() || undefined }, newIdempotencyKey());
               setShow(r.voucher);
               setAmount('');
               setDesc('');
+              setForWallet('');
               void list.reload();
               void reloadUser();
             } catch (e2) {
@@ -54,6 +56,10 @@ export default function Vouchers() {
         >
           <AmountInput label={t.common.amount} value={amount} onChange={setAmount} />
           <Field label={`${t.common.note} (${t.common.optional})`} value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={140} />
+          <div>
+            <Field label={`${t.qr.forWallet} (${t.common.optional})`} dir="ltr" placeholder={t.qr.forWalletPh} value={forWallet} onChange={(e) => setForWallet(e.target.value)} maxLength={254} autoComplete="off" />
+            <p className="mt-1.5 text-xs text-muted">{t.qr.forWalletHint}</p>
+          </div>
           <ErrorNote>{error}</ErrorNote>
           <Button block size="lg" variant="stitch" loading={busy} icon={<Ticket className="h-5 w-5" />}>
             {t.vouchers.create}
@@ -71,7 +77,7 @@ export default function Vouchers() {
                   <p className="num font-display text-lg">{money(v.amount, lang)}</p>
                   <p className="text-xs text-muted">
                     {v.description || '—'} · {relative(v.created_at, lang)}
-                    {v.claimed_by_name ? ` · ${v.claimed_by_name}` : ''}
+                    {v.claimed_by_name ? ` · ${v.claimed_by_name}` : v.for_label ? ` · ${fill(t.qr.lockedTo, { name: v.for_label })}` : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -117,6 +123,9 @@ export default function Vouchers() {
                 <p className="num mt-5 font-display text-3xl">{money(show.amount, lang)}</p>
                 <p className="mt-1 text-sm text-muted">
                   {t.vouchers.expires} {relative(show.expires_at, lang)}
+                </p>
+                <p className={`mx-auto mt-4 max-w-xs rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${show.for_label ? 'bg-olive/12 text-olive' : 'bg-gold/15'}`}>
+                  {show.for_label ? fill(t.qr.lockedNote, { name: show.for_label }) : t.qr.bearerNote}
                 </p>
               </>
             )}

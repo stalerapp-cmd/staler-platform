@@ -1,4 +1,4 @@
-import { serverTextAr } from './serverText';
+import { serverTextAr, serverTextEn } from './serverText';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 const en = {
@@ -155,6 +155,7 @@ const en = {
     } as Record<string, string>,
   },
   errors: {
+    GENERIC: 'Something went wrong. Please try again.',
     NETWORK: 'No connection. Check your internet and try again.', INSUFFICIENT_FUNDS: 'Insufficient funds.', MFA_REQUIRED: 'Enter your authenticator code to continue.',
     MFA_INVALID: 'That authenticator code is not correct.', INVALID_CREDENTIALS: 'Sign-in details are not correct.', RATE_LIMITED: 'Too many attempts. Please wait a moment.',
     ACCOUNT_TEMPORARILY_LOCKED: 'Too many failed attempts. Try again later or reset your password.', SESSION_EXPIRED: 'Your session ended. Please sign in again.',
@@ -310,6 +311,7 @@ const ar: Dict = {
     },
   },
   errors: {
+    GENERIC: 'صار خلل، جرّب مرة ثانية.',
     NETWORK: 'ما في اتصال. افحص الإنترنت وحاول مجددًا.', INSUFFICIENT_FUNDS: 'الرصيد غير كافٍ.', MFA_REQUIRED: 'أدخل رمز المصادقة للمتابعة.', MFA_INVALID: 'رمز المصادقة غير صحيح.',
     INVALID_CREDENTIALS: 'بيانات الدخول غير صحيحة.', RATE_LIMITED: 'محاولات كثيرة. استنى شوي.', ACCOUNT_TEMPORARILY_LOCKED: 'محاولات فاشلة كثيرة. حاول لاحقًا أو أعد تعيين كلمة المرور.',
     SESSION_EXPIRED: 'انتهت جلستك. سجّل الدخول من جديد.', DAILY_LIMIT: 'وصلت للحد اليومي.', LIMIT_EXCEEDED: 'المبلغ أعلى من الحد المسموح.',
@@ -368,7 +370,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         if (e?.code && t.errors[e.code]) return t.errors[e.code];
         // Validation errors: show the first field message, in Arabic when we have it.
         const msg = Array.isArray(e?.details) && e.details[0]?.message ? e.details[0].message : e?.message;
-        return (lang === 'ar' && serverTextAr(msg)) || msg || t.errors.NETWORK;
+        if (!msg) return t.errors.NETWORK;
+        if (lang === 'ar') return serverTextAr(msg) ?? (/[\u0600-\u06FF]/.test(msg) ? msg : t.errors.GENERIC);
+        return serverTextEn(msg) ?? msg;
       },
     };
   }, [lang, setLang]);

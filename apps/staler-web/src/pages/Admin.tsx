@@ -10,7 +10,7 @@ import { useData } from '../lib/hooks';
 import { money, relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { AreaChart } from '../components/Chart';
-import { Badge, Button, ErrorNote, Field, PageHeader, Segmented, Skeleton, Toggle, cx } from '../components/ui';
+import { Badge, Button, Field, PageHeader, Segmented, Skeleton, Toggle, cx } from '../components/ui';
 
 function Tile({ label, value, tone = 'text-ink', i = 0 }: { label: string; value: string; tone?: string; i?: number }) {
   return (
@@ -114,7 +114,14 @@ export function AdminOverview() {
                 <dt>{t.admin.exchangeAcc}</dt>
                 <dd className="num font-display text-lg">{r.exchangeAccount ? money(r.exchangeAccount.balance, lang) : '—'}</dd>
               </div>
-              {r.bankError && <ErrorNote>{r.bankError}</ErrorNote>}
+              {r.bankError && (
+                <div className="flex items-center gap-3 rounded-xl bg-gold/15 p-3 text-sm">
+                  <span className="min-w-0 flex-1">{t.ctl.bankSleeping}</span>
+                  <Button size="sm" variant="secondary" onClick={() => void rec.reload()}>
+                    {t.ctl.retry}
+                  </Button>
+                </div>
+              )}
             </dl>
           )}
           {d && (
@@ -279,10 +286,10 @@ export function AdminAudit() {
           onChange={setFilter}
           options={[
             { value: '', label: t.common.all },
-            { value: 'auth.', label: 'auth' },
-            { value: 'bank.', label: 'bank' },
-            { value: 'admin.', label: 'admin' },
-            { value: 'wallet.', label: 'wallet' },
+            { value: 'auth.', label: t.ctl.fAuth },
+            { value: 'bank.', label: t.ctl.fBank },
+            { value: 'admin.', label: t.ctl.fAdmin },
+            { value: 'wallet.', label: t.ctl.fWallet },
           ]}
         />
       </div>

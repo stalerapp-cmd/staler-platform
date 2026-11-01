@@ -21,8 +21,26 @@ export class BankUnreachable extends AppError {
 }
 
 const base = env.BANK_API_URL.replace(/\/+$/, '');
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Reads are safe to repeat, so when the bank is waking up (its host answers 502/503/504
+ * or the connection drops) we wait and try again before giving up. Writes are never
+ * repeated here — their outcome is reconciled instead.
+ */
 async function call<T>(method: string, path: string, opts: { token?: string; body?: unknown; timeoutMs?: number } = {}): Promise<T> {
+  const waits = method === 'GET' && process.env.NODE_ENV !== 'test' ? [1500, 4000, 8000] : [];
+  for (let i = 0; ; i++) {
+    try {
+      return await once<T>(method, path, opts);
+    } catch (e) {
+      if (!(e instanceof BankUnreachable) || i >= waits.length || (e as any).retryable === false) throw e;
+      await sleep(waits[i]!);
+    }
+  }
+}
+
+async function once<T>(method: string, path: string, opts: { token?: string; body?: unknown; timeoutMs?: number } = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${base}${path}`, {
@@ -49,6 +67,8 @@ async function call<T>(method: string, path: string, opts: { token?: string; bod
   }
   if (res.status >= 500) {
     logger.warn({ status: res.status, path }, 'bank server error');
+    // 502/503/504 come from the bank's host while it starts up; a 500 is the bank itself.
+    if (res.status >= 502) throw new BankUnreachable('The bank is waking up — try again in a few seconds');
     throw new BankUnreachable('The bank had a problem — your request will be checked automatically');
   }
   if (!res.ok) {
@@ -61,7 +81,7 @@ async function call<T>(method: string, path: string, opts: { token?: string; bod
       }
       if (code === 'UNAUTHORIZED' || code === 'FORBIDDEN') {
         logger.error({ path, code }, 'bank rejected exchange credentials — check EXCHANGE_API_TOKEN');
-        throw new BankUnreachable('Bank integration is misconfigured');
+        throw Object.assign(new BankUnreachable('Bank integration is misconfigured'), { retryable: false });
       }
       throw new BankRejected(res.status === 403 ? 403 : 400, code, message);
     }
