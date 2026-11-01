@@ -23,7 +23,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
   ];
   return (
     <div className="app-ground grid min-h-dvh lg:grid-cols-[1fr_1.05fr]">
-      <div className="flex min-h-dvh flex-col">
+      <div className="flex min-h-dvh flex-col lg:border-s lg:border-line/70 lg:bg-surface">
         {/* Phones: a banknote header the form card rises over */}
         <div className="note note-vault safe-top relative overflow-hidden px-4 pb-16 pt-2 lg:hidden">
           <div className="pointer-events-none absolute -end-20 -top-16 h-64 w-64 opacity-80">
@@ -49,12 +49,12 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </Link>
           </div>
         </div>
-        <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center">
+        <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center lg:px-12 lg:pb-16 lg:pt-6 xl:px-20">
           <motion.div
             initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: 'spring', bounce: 0.25, duration: 0.7 }}
-            className="framed relative w-full max-w-md rounded-[28px] border border-line/70 bg-surface p-6 shadow-card sm:p-8"
+            className="framed relative w-full max-w-md rounded-[28px] border border-line/70 bg-surface p-6 shadow-card sm:p-8 lg:max-w-lg lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:after:hidden"
           >
             {children}
             <AuthPrefs />

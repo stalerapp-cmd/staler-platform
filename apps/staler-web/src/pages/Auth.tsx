@@ -60,7 +60,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         <StitchBand width={80} className="relative h-10 w-full opacity-80" colors={['#E2506A', '#9DBB5F']} />
       </div>
 
-      <div className="flex min-h-dvh flex-col">
+      <div className="flex min-h-dvh flex-col lg:border-s lg:border-line/70 lg:bg-surface">
         {/* Phones: a cloth header the form card rises over */}
         <div className="cloth cloth-night safe-top relative overflow-hidden px-4 pb-16 pt-2 lg:hidden">
           <div className="pointer-events-none absolute -end-12 -top-10 h-52 w-52 opacity-50">
@@ -88,12 +88,12 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </Link>
           </div>
         </div>
-        <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center">
+        <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center lg:px-12 lg:pb-16 lg:pt-6 xl:px-20">
           <motion.div
             initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: 'spring', bounce: 0.25, duration: 0.7 }}
-            className="sewn relative w-full max-w-md rounded-[30px] border border-line/70 bg-surface p-6 shadow-card sm:p-8"
+            className="sewn relative w-full max-w-md rounded-[30px] border border-line/70 bg-surface p-6 shadow-card sm:p-8 lg:max-w-lg lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:after:hidden"
           >
             {children}
             <AuthPrefs />
