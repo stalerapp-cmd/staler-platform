@@ -5,7 +5,7 @@
  *
  *  - android:allowBackup="false"   (tokens never end up in cloud/adb backups)
  *  - android:usesCleartextTraffic="false" + network security config (HTTPS only)
- *  - CAMERA permission for QR scanning, nothing else
+ *  - CAMERA permission for QR scanning; LOCATION for the wallet's cash-agent map ("near me")
  *  - deep links for the app's own scheme (taler:// or talerbank://)
  *  - FLAG_SECURE on the main activity (no screenshots / recents thumbnails of balances)
  */
@@ -41,6 +41,13 @@ if (!m.includes('android.permission.CAMERA')) {
   m = m.replace(
     /(<uses-permission android:name="android.permission.INTERNET"\s*\/>)/,
     `$1\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />`,
+  );
+}
+// The wallet's map can centre on the person ("near me"). Only asked for when they tap that button.
+if (scheme === 'taler' && !m.includes('android.permission.ACCESS_FINE_LOCATION')) {
+  m = m.replace(
+    /(<uses-permission android:name="android.permission.INTERNET"\s*\/>)/,
+    `$1\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />`,
   );
 }
 if (!m.includes(`android:scheme="${scheme}"`)) {

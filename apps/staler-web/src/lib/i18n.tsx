@@ -18,6 +18,13 @@ const en = {
   pick: { title: 'Pickup points', lead: 'Places where buyers collect their orders. Buyers see this choice only when you add at least one.', add: 'New pickup point', edit: 'Edit pickup point', name: 'Name', namePh: 'e.g. Old City counter', description: 'Description for buyers', descPh: 'How to find it, what to bring…', hours: 'Opening hours', active: 'Open for pickups', none: 'No pickup points yet — orders are picked up at the store.', choose: 'Where will you pick it up?', required: 'Choose a pickup point', at: 'Pick up at', deleteQ: 'Delete this pickup point?', deleteB: 'Buyers won’t be able to choose it any more.', saved: 'Pickup point saved', off: 'Closed' },
   crop: { title: 'Adjust your picture', lead: 'Drag to move it, zoom to fit. Only what’s inside the frame is kept.', save: 'Save picture', zoom: 'Zoom', zoomIn: 'Zoom in', zoomOut: 'Zoom out', rotate: 'Turn', saved: 'Picture saved' },
   market: { cats: 'Browse by category', everything: 'Everything', deals: 'Deals', byStore: 'Shop by store', results: '{n} products', newest: 'Newest', cheap: 'Lowest price', pricey: 'Highest price', az: 'A–Z', clear: 'Clear filters' },
+  agentMap: {
+    searchPh: 'Search by name, city, street or phone', nearMe: 'Agents near me', locating: 'Finding you…', refresh: 'Update my location',
+    allServices: 'All services', allCities: 'All cities', count: '{n} agents', countNear: '{n} agents — nearest first', noMatch: 'No agent matches this search.', noPin: 'No map pin yet',
+    m: '{n} m', km: '{n} km', noGeo: 'This device can’t share its location.', denied: 'Location is off for this app. Allow it in your phone or browser settings, then try again.',
+    timeout: 'Your location took too long — move near a window or turn on GPS and try again.', unavailable: 'Couldn’t get your location right now. Try again in a moment.',
+    rough: 'Your location is approximate (about {n} m). Turn on GPS for a precise spot.',
+  },
   qr: {
     matchAgent: 'Match code — ask the customer to read it from their phone before they pay.', matchCustomer: 'Match code — it must be the same on the agent’s screen. If not, don’t pay.',
     forWallet: 'Only for this customer', forWalletPh: 'Wallet ID or e-mail', forWalletHint: 'Locks the QR to their wallet — a photo of it is useless to anyone else.',
@@ -318,6 +325,13 @@ const ar: Dict = {
   pick: { title: 'نقاط الاستلام', lead: 'أماكن بيستلم منها الزبائن طلباتهم. الزبون بيشوف هالخيار بس إذا ضفت نقطة وحدة على الأقل.', add: 'نقطة استلام جديدة', edit: 'عدّل نقطة الاستلام', name: 'الاسم', namePh: 'مثلًا: كاونتر البلدة القديمة', description: 'وصف للزبائن', descPh: 'كيف يوصلوا، شو يجيبوا معهم…', hours: 'ساعات الدوام', active: 'مفتوحة للاستلام', none: 'ما في نقاط استلام لسا — الاستلام بكون من المتجر.', choose: 'من وين بدك تستلم؟', required: 'اختار نقطة استلام', at: 'الاستلام من', deleteQ: 'تحذف نقطة الاستلام هاي؟', deleteB: 'الزبائن ما رح يقدروا يختاروها بعد هيك.', saved: 'انحفظت نقطة الاستلام', off: 'مسكّرة' },
   crop: { title: 'ظبّط الصورة', lead: 'اسحبها لتحرّكها وكبّرها لتركب. بس اللي جوا الإطار بينحفظ.', save: 'احفظ الصورة', zoom: 'تكبير', zoomIn: 'كبّر', zoomOut: 'صغّر', rotate: 'لفّ', saved: 'انحفظت الصورة' },
   market: { cats: 'تصفّح حسب الفئة', everything: 'كل شي', deals: 'عروض', byStore: 'تسوّق من متجر', results: '{n} منتج', newest: 'الأحدث', cheap: 'الأرخص', pricey: 'الأغلى', az: 'أ–ي', clear: 'امسح الفلاتر' },
+  agentMap: {
+    searchPh: 'دوّر بالاسم، المدينة، الشارع أو الرقم', nearMe: 'الوكلاء القريبين مني', locating: 'عم نحدد موقعك…', refresh: 'حدّث موقعي',
+    allServices: 'كل الخدمات', allCities: 'كل المدن', count: '{n} وكيل', countNear: '{n} وكيل — الأقرب أول', noMatch: 'ما في وكيل بطابق البحث.', noPin: 'ما حدد موقعه لسا',
+    m: '{n} م', km: '{n} كم', noGeo: 'هالجهاز ما بقدر يشارك موقعه.', denied: 'الموقع مسكّر لهالتطبيق. افتحه من إعدادات الجوال أو المتصفح وجرّب كمان مرة.',
+    timeout: 'تحديد الموقع طوّل — قرّب من شباك أو شغّل الـ GPS وجرّب كمان مرة.', unavailable: 'ما قدرنا نحدد موقعك هلأ. جرّب بعد شوي.',
+    rough: 'موقعك تقريبي (حوالي {n} م). شغّل الـ GPS لموقع أدق.',
+  },
   qr: {
     matchAgent: 'رمز المطابقة — خلّي الزبون يقرأه من جواله قبل ما يدفع.', matchCustomer: 'رمز المطابقة — لازم يكون نفسه على شاشة الوكيل. إذا مختلف لا تدفع.',
     forWallet: 'لهالزبون بس', forWalletPh: 'رقم المحفظة أو الإيميل', forWalletHint: 'بتقفل الكود على محفظته — لو حدا صوّره ما بيستفيد منه.',

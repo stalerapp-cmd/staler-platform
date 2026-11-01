@@ -8,6 +8,9 @@ import '@fontsource/ibm-plex-sans-arabic/400.css';
 import '@fontsource/ibm-plex-sans-arabic/500.css';
 import '@fontsource/ibm-plex-sans-arabic/600.css';
 import './styles/index.css';
+import { translateValidity } from './lib/validity';
+
+translateValidity();
 import App from './App';
 import { I18nProvider } from './lib/i18n';
 import { ThemeProvider } from './lib/theme';

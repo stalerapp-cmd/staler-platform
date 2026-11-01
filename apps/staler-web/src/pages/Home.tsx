@@ -9,6 +9,7 @@ import { money } from '../lib/format';
 import { BalanceCard, TxDetails, TxRow, type Tx } from '../components/Wallet';
 import { AreaChart } from '../components/Chart';
 import { MoreLink } from '../components/Fun';
+import { ActionDock, type DockAction } from '../components/ActionDock';
 import { Button, EmptyState, Sheet, Skeleton } from '../components/ui';
 
 export default function Home() {
@@ -19,12 +20,12 @@ export default function Home() {
   const link = useData<any>('/api/bank/link');
   const [open, setOpen] = useState<Tx | null>(null);
 
-  const actions = [
-    { to: '/app/send', icon: Send, label: t.nav.send },
-    { to: '/app/receive', icon: QrCode, label: t.nav.receive },
-    { to: '/app/scan', icon: ScanLine, label: t.nav.scan },
-    { to: '/app/bank?action=topup', icon: ArrowDownToLine, label: t.home.topUp },
-    { to: '/app/bank?action=tobank', icon: ArrowUpFromLine, label: t.home.toBank },
+  const actions: DockAction[] = [
+    { to: '/app/send', icon: Send, label: t.nav.send, tone: 'stitch', motion: 'send', primary: true },
+    { to: '/app/receive', icon: QrCode, label: t.nav.receive, tone: 'olive', motion: 'pulse' },
+    { to: '/app/scan', icon: ScanLine, label: t.nav.scan, tone: 'night', motion: 'scan' },
+    { to: '/app/bank?action=topup', icon: ArrowDownToLine, label: t.home.topUp, tone: 'sky', motion: 'in' },
+    { to: '/app/bank?action=tobank', icon: ArrowUpFromLine, label: t.home.toBank, tone: 'gold', motion: 'out' },
   ];
   const w = wallet.data?.wallet;
   const series = wallet.data?.series ?? [];
@@ -32,23 +33,13 @@ export default function Home() {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       <div className="space-y-6">
-        {w ? (
-          <BalanceCard balance={w.balance} walletId={w.walletId} currency={w.currency} name={user?.full_name ?? ''} frozen={w.frozen} />
-        ) : (
-          <Skeleton className="h-56 rounded-3xl" />
-        )}
-
-        <div className="grid grid-cols-5 gap-2 sm:gap-3">
-          {actions.map((a, i) => (
-            <motion.div key={a.to} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 + i * 0.05 }}>
-              <Link to={a.to} className="group flex flex-col items-center gap-2 rounded-2xl p-2 text-center transition hover:bg-surface">
-                <span className="grid h-14 w-14 place-items-center rounded-2xl border border-line bg-surface text-ink shadow-lift transition group-hover:-translate-y-0.5 group-hover:border-stitch/40 group-hover:text-stitch sm:h-16 sm:w-16">
-                  <a.icon className="h-6 w-6" />
-                </span>
-                <span className="text-xs font-medium text-muted sm:text-sm">{a.label}</span>
-              </Link>
-            </motion.div>
-          ))}
+        <div>
+          {w ? (
+            <BalanceCard docked balance={w.balance} walletId={w.walletId} currency={w.currency} name={user?.full_name ?? ''} frozen={w.frozen} />
+          ) : (
+            <Skeleton className="h-64 rounded-3xl" />
+          )}
+          <ActionDock actions={actions} />
         </div>
 
         {user?.role === 'exchange' ? (

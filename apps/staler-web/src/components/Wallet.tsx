@@ -17,7 +17,7 @@ import { AnimatedNumber, Badge, CopyButton, cx } from './ui';
 import { StarMotif } from './Tatreez';
 
 /** The wallet card: night indigo cloth with a stitched star, tilting under the pointer. */
-export function BalanceCard({ balance, walletId, currency, name, frozen }: { balance: string; walletId: string; currency: string; name: string; frozen?: boolean }) {
+export function BalanceCard({ balance, walletId, currency, name, frozen, docked = false }: { balance: string; walletId: string; currency: string; name: string; frozen?: boolean; docked?: boolean }) {
   const { t, lang } = useI18n();
   const reduce = useReducedMotion();
   const mx = useMotionValue(0.5);
@@ -40,7 +40,7 @@ export function BalanceCard({ balance, walletId, currency, name, frozen }: { bal
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', bounce: 0.25, duration: 0.8 }}
-      className="relative isolate overflow-hidden rounded-3xl bg-night p-6 text-white shadow-card sm:p-8"
+      className={cx('relative isolate overflow-hidden rounded-3xl bg-night p-6 text-white shadow-card sm:p-8', docked && 'pb-14 sm:pb-16')}
     >
       <div className="absolute -end-20 -top-20 -z-10 h-72 w-72 opacity-80 [mask-image:radial-gradient(circle_at_70%_30%,black_35%,transparent_72%)] sm:h-80 sm:w-80">
         <StarMotif size={21} cell={14} className="h-full w-full" colors={['#E2506A', '#E9C060']} delay={0.3} strokeWidth={2} />

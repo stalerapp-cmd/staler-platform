@@ -18,7 +18,7 @@ export interface Account {
 }
 
 /** The account plate: vault green, engraved brass rosette, figures set like a banknote. */
-export function AccountCard({ account, holder }: { account: Account; holder: string }) {
+export function AccountCard({ account, holder, docked = false }: { account: Account; holder: string; docked?: boolean }) {
   const { t, lang } = useI18n();
   const reduce = useReducedMotion();
   return (
@@ -26,7 +26,7 @@ export function AccountCard({ account, holder }: { account: Account; holder: str
       initial={reduce ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      className="engraved relative isolate overflow-hidden rounded-3xl border border-gold/25 bg-night p-6 text-[#ECE6D8] shadow-card sm:p-8"
+      className={cx('engraved relative isolate overflow-hidden rounded-3xl border border-gold/25 bg-night p-6 text-[#ECE6D8] shadow-card sm:p-8', docked && 'pb-14 sm:pb-16')}
     >
       <Guilloche className="absolute -end-28 -top-28 -z-10 h-[420px] w-[420px]" />
       <div className="absolute inset-x-6 bottom-0 -z-10 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent" />

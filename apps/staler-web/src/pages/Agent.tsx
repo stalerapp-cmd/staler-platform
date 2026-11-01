@@ -1,14 +1,14 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowDownToLine, ArrowUpFromLine, Banknote, Clock, MapPin, Navigation, Phone, Search, Ticket, XCircle } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Banknote, Clock, LocateFixed, MapPin, Navigation, Phone, Search, Ticket, XCircle } from 'lucide-react';
 import { del, newIdempotencyKey, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useData, usePolling } from '../lib/hooks';
 import { AMOUNT_RE, fill, money, relative } from '../lib/format';
 import { QRImage } from '../components/QR';
-import { MapView } from '../components/MapView';
+import { MapView, type Me } from '../components/MapView';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
 import { useSecureAction } from '../components/SecureAction';
@@ -300,25 +300,203 @@ function AgentProfile() {
 }
 
 // ------------------------------------------------------------- directory
+/** Straight-line distance in metres. */
+function metres(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371e3;
+  const r = (d: number) => (d * Math.PI) / 180;
+  const dLat = r(b.lat - a.lat);
+  const dLng = r(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 export function AgentsMap() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const toast = useToast();
   const data = useData<{ agents: any[] }>('/api/exchange/agents');
   const [q, setQ] = useState('');
-  const [focus, setFocus] = useState<string | null>(null);
-  const agents = useMemo(
-    () => (data.data?.agents ?? []).filter((a) => !q.trim() || `${a.display_name} ${a.city ?? ''} ${a.address ?? ''}`.toLowerCase().includes(q.trim().toLowerCase())),
-    [data.data, q],
+  const [city, setCity] = useState('');
+  const [service, setService] = useState<'all' | 'in' | 'out'>('all');
+  const [sel, setSel] = useState<string | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [fitKey, setFitKey] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
+  const A = t.agentMap;
+
+  const all = data.data?.agents ?? [];
+  const cities = useMemo(() => [...new Set(all.map((a) => (a.city ?? '').trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, lang)), [all, lang]);
+  const agents = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const list = all
+      .filter((a) => !needle || `${a.display_name} ${a.city ?? ''} ${a.address ?? ''} ${a.phone ?? ''}`.toLowerCase().includes(needle))
+      .filter((a) => !city || (a.city ?? '').trim() === city)
+      .filter((a) => service === 'all' || (service === 'in' ? a.cash_in : a.cash_out))
+      .map((a) => ({ ...a, dist: me && a.lat != null ? metres(me, { lat: Number(a.lat), lng: Number(a.lng) }) : null }));
+    return me ? list.sort((x, y) => (x.dist ?? Infinity) - (y.dist ?? Infinity)) : list;
+  }, [all, q, city, service, me]);
+  const pins = useMemo(
+    () => agents.filter((a) => a.lat != null && a.lng != null).map((a) => ({ id: a.id, lat: Number(a.lat), lng: Number(a.lng), kind: 'agent' as const, label: a.display_name })),
+    [agents],
   );
-  const pins = agents.filter((a) => a.lat != null && a.lng != null && (!focus || a.id === focus)).map((a) => ({ lat: a.lat, lng: a.lng, kind: 'store' as const, label: a.display_name }));
+  // Re-frame the map whenever the set of agents shown changes.
+  useEffect(() => {
+    setFitKey((k) => k + 1);
+  }, [pins.length, city, service]);
+  const chosen = agents.find((a) => a.id === sel) ?? null;
+  const fmtDist = (m: number) => (m < 1000 ? fill(A.m, { n: Math.round(m / 10) * 10 }) : fill(A.km, { n: (m / 1000).toFixed(m < 10000 ? 1 : 0) }));
+
+  const locate = () => {
+    if (!navigator.geolocation) return toast(A.noGeo, 'error');
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setLocating(false);
+        setMe({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy });
+        setSel(null);
+        setCity('');
+        if (p.coords.accuracy > 500) toast(fill(A.rough, { n: Math.round(p.coords.accuracy) }));
+      },
+      (e) => {
+        setLocating(false);
+        toast(e.code === 1 ? A.denied : e.code === 3 ? A.timeout : A.unavailable, 'error');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  };
+
+  const choose = (id: string | null) => {
+    setSel(id);
+    if (id) listRef.current?.querySelector(`[data-agent="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  const actions = (a: any, compact = false) => (
+    <div className={cx('flex flex-wrap gap-2', compact ? 'mt-2.5' : 'mt-3')}>
+      {a.lat != null && (
+        <a
+          href={`https://www.google.com/maps/dir/?api=1&destination=${a.lat},${a.lng}${me ? `&origin=${me.lat},${me.lng}` : ''}`}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1.5 rounded-full bg-night px-3 py-1.5 text-sm text-white transition hover:-translate-y-0.5 dark:bg-white/10"
+        >
+          <Navigation className="h-4 w-4" /> {t.agent.directions}
+        </a>
+      )}
+      {a.phone && (
+        <a href={`tel:${a.phone}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1.5 rounded-full bg-sunk px-3 py-1.5 text-sm transition hover:-translate-y-0.5">
+          <Phone className="h-4 w-4" /> <span dir="ltr">{a.phone}</span>
+        </a>
+      )}
+    </div>
+  );
+
   return (
     <div>
       <PageHeader title={t.agent.find} lead={t.agent.findLead} />
-      <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
-        <div className="order-2 lg:order-1">
-          <label className="relative mb-4 block">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+        {/* Map first on phones, on the side on wide screens. */}
+        <div className="lg:order-2">
+          <div className="relative lg:sticky lg:top-24">
+            <MapView
+              className="h-[340px] rounded-3xl shadow-lift sm:h-[440px] lg:h-[calc(100dvh-9rem)] lg:max-h-[720px]"
+              pins={pins}
+              selectedId={sel}
+              onPinClick={(id) => choose(id === sel ? null : id)}
+              me={me}
+              fitKey={fitKey}
+              zoom={9}
+            />
+            {/* Floating controls over the map */}
+            <div dir="ltr" className="pointer-events-none absolute inset-x-3 top-3 z-[500] flex justify-end">
+              <button
+                type="button"
+                onClick={locate}
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-surface/95 px-3.5 py-2 text-sm font-medium shadow-lift ring-1 ring-line backdrop-blur transition hover:-translate-y-0.5 active:scale-95"
+              >
+                {locating ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky border-t-transparent" /> : <LocateFixed className="h-4 w-4 text-sky" />}
+                {locating ? A.locating : me ? A.refresh : A.nearMe}
+              </button>
+            </div>
+            <AnimatePresence>
+              {chosen && (
+                <motion.div
+                  key={chosen.id}
+                  initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 12 }}
+                  transition={{ type: 'spring', bounce: 0.3, duration: 0.45 }}
+                  className="absolute inset-x-3 bottom-3 z-[500] rounded-2xl bg-surface/95 p-3.5 shadow-card ring-1 ring-line backdrop-blur"
+                >
+                  <div className="flex items-start gap-3">
+                    <Avatar name={chosen.display_name} src={chosen.logo_url} size={44} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold">{chosen.display_name}</p>
+                      <p className="truncate text-xs text-muted">{[chosen.city, chosen.address].filter(Boolean).join(' · ') || '—'}</p>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                        {chosen.dist != null && (
+                          <span className="inline-flex items-center gap-1 font-medium text-sky">
+                            <MapPin className="h-3.5 w-3.5" /> {fmtDist(chosen.dist)}
+                          </span>
+                        )}
+                        {chosen.hours && (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" /> {chosen.hours}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => setSel(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted hover:bg-sunk hover:text-ink" aria-label={t.common.close}>
+                      <XCircle className="h-5 w-5" />
+                    </button>
+                  </div>
+                  {actions(chosen, true)}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        <div className="min-w-0 lg:order-1">
+          <label className="relative mb-3 block">
             <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.agent.searchPh} className="field ps-12" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={A.searchPh} className="field ps-12 pe-10" type="search" />
+            {q && (
+              <button type="button" onClick={() => setQ('')} className="absolute end-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-muted hover:bg-sunk" aria-label={t.common.close}>
+                <XCircle className="h-4 w-4" />
+              </button>
+            )}
           </label>
+          <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+            {(
+              [
+                ['all', A.allServices],
+                ['in', t.agent.cashIn],
+                ['out', t.agent.cashOut],
+              ] as const
+            ).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setService(k)} className={cx('shrink-0 rounded-full px-3.5 py-1.5 text-sm transition', service === k ? 'bg-night text-white dark:bg-white/15' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {cities.length > 1 && (
+            <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+              <button type="button" onClick={() => setCity('')} className={cx('shrink-0 rounded-full px-3 py-1 text-xs transition', !city ? 'bg-gold/25 font-semibold text-ink' : 'bg-sunk text-muted hover:text-ink')}>
+                {A.allCities}
+              </button>
+              {cities.map((c) => (
+                <button key={c} type="button" onClick={() => setCity(c === city ? '' : c)} className={cx('shrink-0 rounded-full px-3 py-1 text-xs transition', city === c ? 'bg-gold/25 font-semibold text-ink' : 'bg-sunk text-muted hover:text-ink')}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+          {data.data && (
+            <p className="mb-3 text-sm text-muted">
+              {fill(me ? A.countNear : A.count, { n: agents.length })}
+            </p>
+          )}
           {!data.data ? (
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (
@@ -326,22 +504,27 @@ export function AgentsMap() {
               ))}
             </div>
           ) : !agents.length ? (
-            <EmptyState icon={<MapPin className="h-6 w-6" />} title={t.agent.none} />
+            <EmptyState icon={<MapPin className="h-6 w-6" />} title={q || city || service !== 'all' ? A.noMatch : t.agent.none} />
           ) : (
-            <ul className="space-y-3">
+            <ul ref={listRef} className="space-y-3">
               {agents.map((a, i) => (
                 <motion.li
                   key={a.id}
-                  initial={{ opacity: 0, x: 16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className={cx('card cursor-pointer p-4 transition', focus === a.id && 'ring-2 ring-gold')}
-                  onClick={() => setFocus(focus === a.id ? null : a.id)}
+                  data-agent={a.id}
+                  layout
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i, 8) * 0.04 }}
+                  className={cx('card cursor-pointer p-4 transition hover:-translate-y-0.5', sel === a.id && 'ring-2 ring-stitch')}
+                  onClick={() => choose(sel === a.id ? null : a.id)}
                 >
                   <div className="flex items-start gap-3">
                     <Avatar name={a.display_name} src={a.logo_url} size={52} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{a.display_name}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate font-semibold">{a.display_name}</p>
+                        {a.dist != null && <span className="shrink-0 rounded-full bg-sky/10 px-2 py-0.5 text-xs font-medium text-sky">{fmtDist(a.dist)}</span>}
+                      </div>
                       <p className="truncate text-sm text-muted">{[a.city, a.address].filter(Boolean).join(' · ') || '—'}</p>
                       {a.hours && (
                         <p className="mt-1 flex items-center gap-1.5 text-xs text-muted">
@@ -351,36 +534,15 @@ export function AgentsMap() {
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {a.cash_in && <Badge tone="good">{t.agent.cashIn}</Badge>}
                         {a.cash_out && <Badge tone="info">{t.agent.cashOut}</Badge>}
+                        {a.lat == null && <Badge tone="neutral">{A.noPin}</Badge>}
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    {a.lat != null && (
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${a.lat},${a.lng}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-night px-3 py-1.5 text-sm text-white dark:bg-white/10"
-                      >
-                        <Navigation className="h-4 w-4" /> {t.agent.directions}
-                      </a>
-                    )}
-                    {a.phone && (
-                      <a href={`tel:${a.phone}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1.5 rounded-full bg-sunk px-3 py-1.5 text-sm">
-                        <Phone className="h-4 w-4" /> {t.shop.call}
-                      </a>
-                    )}
-                  </div>
+                  {actions(a)}
                 </motion.li>
               ))}
             </ul>
           )}
-        </div>
-        <div className="order-1 lg:order-2">
-          <div className="lg:sticky lg:top-24">
-            <MapView className="h-[300px] rounded-3xl shadow-lift sm:h-[420px]" pins={pins} zoom={pins.length === 1 ? 15 : 9} />
-          </div>
         </div>
       </div>
     </div>

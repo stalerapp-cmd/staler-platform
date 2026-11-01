@@ -68,25 +68,52 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string | null;
   trailing?: ReactNode;
 }
+/** The line under a field: a hint, or an error that slides in with a small shake. */
+function FieldNote({ id, error, hint }: { id: string; error?: string | null; hint?: ReactNode }) {
+  const reduce = useReducedMotion();
+  return (
+    <AnimatePresence initial={false} mode="wait">
+      {(error || hint) && (
+        <motion.p
+          key={error ? `e:${error}` : 'hint'}
+          id={id}
+          initial={reduce ? false : { opacity: 0, y: -4, height: 0 }}
+          animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0, height: 'auto', x: error ? [0, -5, 4, -2, 0] : 0 }}
+          exit={reduce ? { opacity: 0 } : { opacity: 0, y: -4, height: 0 }}
+          transition={{ duration: 0.28, x: { duration: 0.35, delay: 0.1 } }}
+          className={cx('flex items-start gap-1.5 overflow-hidden pt-1.5 text-sm', error ? 'text-[rgb(var(--fld-bad))]' : 'text-muted')}
+        >
+          {error && <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
+          <span className="min-w-0">{error || hint}</span>
+        </motion.p>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/** Label with a tatreez diamond that pops in while the field is focused. */
+function FieldLabel({ htmlFor, children }: { htmlFor: string; children: ReactNode }) {
+  return (
+    <label htmlFor={htmlFor} className="fld-label mb-1.5 flex items-center text-sm font-medium text-ink/80">
+      <span className="fld-dot" aria-hidden="true" />
+      {children}
+    </label>
+  );
+}
+
 export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field({ label, hint, error, trailing, className, id, ...rest }, ref) {
   const auto = useId();
   const fid = id ?? auto;
   const ltr = rest.dir === 'ltr';
   return (
-    <div className={className}>
-      <label htmlFor={fid} className="mb-1.5 block text-sm font-medium text-ink/80">
-        {label}
-      </label>
-      <div className="relative">
+    <div className={cx('fld', className)}>
+      <FieldLabel htmlFor={fid}>{label}</FieldLabel>
+      <div className="fld-box relative">
         <input ref={ref} id={fid} aria-invalid={error ? true : undefined} aria-describedby={error || hint ? `${fid}-d` : undefined} className={cx('field', trailing ? (ltr ? 'pr-12' : 'pe-12') : undefined)} {...rest} />
         {/* Left-to-right fields (passwords, IBANs, IDs) keep their button on the right, where the text ends. */}
         {trailing && <div className={cx('absolute inset-y-0 flex items-center', ltr ? 'right-0 pr-2' : 'end-0 pe-2')}>{trailing}</div>}
       </div>
-      {(error || hint) && (
-        <p id={`${fid}-d`} className={cx('mt-1.5 text-sm', error ? 'text-stitch' : 'text-muted')}>
-          {error || hint}
-        </p>
-      )}
+      <FieldNote id={`${fid}-d`} error={error} hint={hint} />
     </div>
   );
 });
@@ -94,11 +121,11 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field({ l
 export function TextArea({ label, ...rest }: { label: string } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const id = useId();
   return (
-    <div>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-ink/80">
-        {label}
-      </label>
-      <textarea id={id} className="field min-h-[96px] resize-y" {...rest} />
+    <div className="fld">
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <div className="fld-box relative">
+        <textarea id={id} className="field min-h-[96px] resize-y" {...rest} />
+      </div>
     </div>
   );
 }

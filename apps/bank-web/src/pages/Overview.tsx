@@ -1,7 +1,6 @@
-import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { MoreLink } from '../components/Fun';
-import { Link } from 'react-router-dom';
+import { ActionDock, type DockAction } from '../components/ActionDock';
 import { ArrowRightLeft, BookText, KeyRound, QrCode, Wallet } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -19,28 +18,19 @@ export default function Overview() {
   const detail = useData<any>(primary ? `/api/accounts/${primary.id}` : null, [primary?.id]);
   const txs = useData<{ transactions: BankTx[] }>(primary ? `/api/accounts/${primary.id}/transactions?limit=8` : null, [primary?.id]);
   const [open, setOpen] = useState<BankTx | null>(null);
-  const actions = [
-    { to: '/app/transfer', icon: ArrowRightLeft, label: t.nav.transfer },
-    { to: '/app/wallet', icon: Wallet, label: t.nav.wallet },
-    { to: '/app/requests', icon: QrCode, label: t.nav.requests },
-    { to: '/app/apps', icon: KeyRound, label: t.nav.apps },
+  const actions: DockAction[] = [
+    { to: '/app/transfer', icon: ArrowRightLeft, label: t.dock.transfer, tone: 'gold', motion: 'send', primary: true },
+    { to: '/app/wallet', icon: Wallet, label: t.dock.wallet, tone: 'olive', motion: 'in' },
+    { to: '/app/requests', icon: QrCode, label: t.dock.requests, tone: 'sky', motion: 'pulse' },
+    { to: '/app/apps', icon: KeyRound, label: t.dock.apps, tone: 'night', motion: 'pulse' },
   ];
   const series = detail.data?.series ?? [];
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <div className="min-w-0 space-y-6">
-        {primary ? <AccountCard account={primary} holder={user?.full_name ?? ''} /> : <Skeleton className="h-64 rounded-3xl" />}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {actions.map((a, i) => (
-            <motion.div key={a.to} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.06 }}>
-              <Link to={a.to} className="group flex h-full items-center gap-3 rounded-2xl border border-line bg-surface p-4 transition hover:border-gold/60">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gold/15 text-gold transition group-hover:bg-gold group-hover:text-night">
-                  <a.icon className="h-5 w-5" />
-                </span>
-                <span className="text-sm font-medium leading-tight">{a.label}</span>
-              </Link>
-            </motion.div>
-          ))}
+        <div>
+          {primary ? <AccountCard docked account={primary} holder={user?.full_name ?? ''} /> : <Skeleton className="h-64 rounded-3xl" />}
+          <ActionDock actions={actions} />
         </div>
         <section className="card p-5">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">

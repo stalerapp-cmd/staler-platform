@@ -169,3 +169,18 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
 .hbtn:active { transform: scale(0.88); }
 @keyframes hbtn-wiggle { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-14deg); } 60% { transform: rotate(10deg); } }
 @media (hover: hover) { .hbtn:hover > svg { animation: hbtn-wiggle .5s ease; } }
+
+:root { --fld-accent: var(--brass); --fld-thread: var(--brass); --fld-bad: var(--ruby); }
+/* Fields: on focus the label takes the accent, a tatreez diamond pops in, and a stitched thread draws along the bottom. */
+.fld-label { transition: color 0.25s ease; }
+.fld:focus-within .fld-label { color: rgb(var(--fld-accent)); }
+.fld-dot { display: inline-block; width: 0; height: 7px; margin-inline-end: 0; background: currentColor; transform: rotate(45deg) scale(0); transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.25s ease, margin 0.25s ease; }
+.fld:focus-within .fld-dot { width: 7px; margin-inline-end: 8px; transform: rotate(45deg) scale(1); }
+.fld-box::after { content: ''; position: absolute; inset-inline: 14px; bottom: 5px; height: 2px; border-radius: 2px; pointer-events: none;
+  background: repeating-linear-gradient(90deg, rgb(var(--fld-thread)) 0 7px, transparent 7px 12px);
+  transform: scaleX(0); opacity: 0; transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease; }
+.fld:focus-within .fld-box::after { transform: scaleX(1); opacity: 0.75; }
+.fld:has([aria-invalid='true']) .fld-box::after { background: repeating-linear-gradient(90deg, rgb(var(--fld-bad)) 0 7px, transparent 7px 12px); }
+.fld .field { transition: border-color 0.25s ease, box-shadow 0.3s ease, background-color 0.25s ease; }
+.fld .field:hover:not(:focus) { border-color: rgb(var(--fld-accent) / 0.45); }
+@media (prefers-reduced-motion: reduce) { .fld-dot, .fld-box::after { transition: none; } }
