@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { placeOf } from '../lib/geo.js';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
@@ -11,7 +12,7 @@ import { email, fullName, pageQuery, totpCode, validate } from '../lib/validate.
 import { audit } from '../lib/audit.js';
 import { bank } from '../lib/bankClient.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { PERMISSIONS, assertCanManage, isSuper, requirePerm } from '../lib/permissions.js';
+import { PERMISSIONS, assertCanManage, can, isSuper, requirePerm } from '../lib/permissions.js';
 import { noticeMail } from '../lib/mailer.js';
 import { notify, notifyBi, writeLine } from './walletCore.js';
 import { agentProfileBody, refundVoucher, saveAgentProfile } from './exchange.js';
@@ -187,7 +188,21 @@ adminRouter.get(
       );
       agent = { profile, vouchers: vouchers.rows, cashouts: cashouts.rows };
     }
-    res.json({ success: true, data: { user, wallet, transactions: tr.rows, merchant, bankLink: link, stores: stores.rows, agent } });
+    // Balances, statements and bank details are only for admins allowed to see money.
+    const money = can(req, 'users.money');
+    res.json({
+      success: true,
+      data: {
+        user,
+        wallet: money ? wallet : wallet ? { ...wallet, balance: null } : null,
+        transactions: money ? tr.rows : [],
+        moneyHidden: !money,
+        merchant,
+        bankLink: money ? link : link ? { bank_iban: null, bank_holder: null, created_at: (link as any).created_at } : null,
+        stores: stores.rows,
+        agent,
+      },
+    });
   }),
 );
 
@@ -490,6 +505,7 @@ adminRouter.delete(
     const reason = req.body?.reason ?? 'Account deleted by an administrator';
     const w = await one<any>(`SELECT balance FROM ${S}.wallets WHERE user_id = $1 AND balance <> 0 LIMIT 1`, [req.params.id]);
     if (w && !force) throw conflict('BALANCE_NOT_ZERO', 'The wallet still holds money');
+    if (w && !can(req, 'users.force_delete')) throw forbidden('You do not have permission for this action', 'NO_PERMISSION');
     // Writing money off is the most serious thing an admin can do: it needs their 2-step code when they have one.
     if (w) await requireSecondFactor(req.auth!.userId, req.body?.totp);
     let writtenOff = '0.00';
@@ -852,7 +868,7 @@ adminRouter.delete(
 /** Every cash agent with their map listing — pending ones first. */
 adminRouter.get(
   '/agents',
-  requirePerm('users.view'),
+  requirePerm('agents.manage'),
   ah(async (_req, res) => {
     const r = await pool.query(
       `SELECT u.id, u.full_name, u.email, u.status AS account_status, u.profile_image, u.created_at,
@@ -869,7 +885,7 @@ adminRouter.get(
 
 adminRouter.post(
   '/agents/:id/status',
-  requirePerm('users.edit'),
+  requirePerm('agents.manage'),
   validate({ params: z.object({ id: idParam }).strict(), body: z.object({ status: z.enum(['active', 'pending', 'suspended']) }).strict() }),
   ah(async (req, res) => {
     const r = await pool.query(`UPDATE ${S}.agent_profiles SET status = $2, updated_at = now() WHERE user_id = $1 RETURNING user_id`, [req.params.id, req.body.status]);
@@ -963,7 +979,7 @@ adminRouter.put(
 /** Delete a store (and its branches) for good: open orders are refunded first. */
 adminRouter.delete(
   '/stores/:id',
-  requirePerm('stores.manage'),
+  requirePerm('stores.delete'),
   validate({ params: z.object({ id: idParam }).strict() }),
   ah(async (req, res) => {
     const m = await one<any>(`SELECT id, user_id, store_name FROM ${S}.merchants WHERE id = $1`, [req.params.id]);
@@ -994,10 +1010,14 @@ adminRouter.delete(
 );
 
 // ----------------------------------------------------------- device history
-/** Every device the person ever signed in from (once each), with whether it is signed in right now. */
+/**
+ * Every device the person ever signed in from (once each): whether it is signed in now,
+ * every network address it used with how often, the approximate place of each address,
+ * its recent sign-ins, and a few signals worth a second look.
+ */
 adminRouter.get(
   '/users/:id/devices',
-  requirePerm('users.view'),
+  requirePerm('users.devices'),
   validate({ params: z.object({ id: idParam }).strict() }),
   ah(async (req, res) => {
     const r = await pool.query(
@@ -1008,7 +1028,46 @@ adminRouter.get(
          FROM ${S}.user_devices d WHERE d.user_id = $1 ORDER BY d.last_seen DESC LIMIT 100`,
       [req.params.id],
     );
-    res.json({ success: true, data: { devices: r.rows } });
+    // Fill places not looked up yet (a few per view; the rest fill in on the next).
+    const missing = await pool.query(
+      `SELECT DISTINCT p.ip FROM ${S}.user_device_places p LEFT JOIN ${S}.ip_geo g ON g.ip = p.ip
+        WHERE p.user_id = $1 AND g.ip IS NULL LIMIT 8`,
+      [req.params.id],
+    );
+    await Promise.allSettled(missing.rows.map((x) => placeOf(x.ip)));
+    const places = await pool.query(
+      `SELECT p.device_id, p.ip, p.hits, p.first_seen, p.last_seen,
+              g.city, g.region, g.country, g.country_code, g.lat, g.lng, g.isp, g.org, g.timezone
+         FROM ${S}.user_device_places p LEFT JOIN ${S}.ip_geo g ON g.ip = p.ip AND g.ok
+        WHERE p.user_id = $1 ORDER BY p.last_seen DESC`,
+      [req.params.id],
+    );
+    const signins = await pool.query(
+      `SELECT * FROM (SELECT s.device_id, s.ip, s.at, g.city, g.country, row_number() OVER (PARTITION BY s.device_id ORDER BY s.at DESC) AS n
+                        FROM ${S}.user_signins s LEFT JOIN ${S}.ip_geo g ON g.ip = s.ip AND g.ok WHERE s.user_id = $1) x
+        WHERE n <= 15 ORDER BY at DESC`,
+      [req.params.id],
+    );
+    const by = <T extends { device_id: string }>(rows: T[], id: string) => rows.filter((x) => String(x.device_id) === String(id));
+    const all = places.rows;
+    const countries = [...new Set(all.map((x) => x.country_code).filter(Boolean))];
+    const cities = [...new Set(all.map((x) => x.city).filter(Boolean))];
+    const recent = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.user_signins WHERE user_id = $1 AND at > now() - interval '24 hours'`, [req.params.id]);
+    res.json({
+      success: true,
+      data: {
+        devices: r.rows.map((d) => ({ ...d, places: by(all, d.id), signins: by(signins.rows, d.id) })),
+        summary: {
+          devices: r.rows.length,
+          live: r.rows.filter((d) => d.active_sessions > 0).length,
+          addresses: new Set(all.map((x) => x.ip)).size,
+          cities,
+          countries,
+          signins24h: recent?.n ?? 0,
+          foreign: countries.filter((c) => c !== 'PS' && c !== 'IL').length > 0,
+        },
+      },
+    });
   }),
 );
 

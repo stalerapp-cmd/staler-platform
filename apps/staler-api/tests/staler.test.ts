@@ -738,6 +738,9 @@ describe('device history', () => {
     const android = list.body.data.devices.filter((d: any) => /Android 14/.test(d.user_agent));
     expect(android).toHaveLength(1);
     expect(android[0].sign_ins).toBe(2);
+    expect(android[0].signins.length).toBe(2);
+    expect(android[0].places[0].hits).toBe(2);
+    expect(list.body.data.summary.devices).toBeGreaterThanOrEqual(1);
     const token = phone.body.data.accessToken;
     expect((await request(app).get('/api/wallet').set(auth(token))).status).toBe(200);
     const out = await request(app).post(`/api/admin/users/${u.userId}/devices/${android[0].id}/sign-out`).set(auth(sup));

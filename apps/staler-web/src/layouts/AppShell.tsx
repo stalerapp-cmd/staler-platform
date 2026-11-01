@@ -155,7 +155,7 @@ function useNav() {
       { to: '/app/admin', label: t.nav.overview, icon: LayoutDashboard, end: true },
       { to: '/app/admin/users', label: t.nav.users, icon: Users, perm: 'users.view' },
       { to: '/app/admin/stores', label: t.nav.stores, icon: Store, perm: 'stores.manage' },
-      { to: '/app/admin/agents', label: t.ctl.agents, icon: HandCoins, perm: 'users.view' },
+      { to: '/app/admin/agents', label: t.ctl.agents, icon: HandCoins, perm: 'agents.manage' },
       { to: '/app/admin/disputes', label: t.nav.disputes, icon: Scale, perm: 'orders.disputes' },
       { to: '/app/admin/pending', label: t.nav.pending, icon: UserPlus, perm: 'pending.manage' },
       { to: '/app/admin/bank', label: t.nav.bankOps, icon: Landmark, perm: 'bank.ops' },

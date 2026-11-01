@@ -5,6 +5,7 @@ import { ProductImage } from '../components/Commerce';
 import { StoreLogo } from './Stores';
 import { del, patch, post, put } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { usePerm } from '../lib/perm';
 import { useData } from '../lib/hooks';
 import { date, fill, money } from '../lib/format';
 import { useToast } from '../components/Toast';
@@ -188,6 +189,7 @@ export function AdminStoreList() {
 
 /** One store, fully under the admin's hand: details, branches, products, orders, ads. */
 export function AdminStoreDetail() {
+  const { can } = usePerm();
   const { id } = useParams();
   const nav = useNavigate();
   const { t, lang, err } = useI18n();
@@ -451,6 +453,7 @@ export function AdminStoreDetail() {
           >
             {s.status === 'active' ? t.adm2.suspendStore : t.adm2.activateStore}
           </Button>
+          {can('stores.delete') && (
           <Button
             variant="danger"
             icon={<Trash2 className="h-4 w-4" />}
@@ -467,6 +470,7 @@ export function AdminStoreDetail() {
           >
             {C.deleteStore}
           </Button>
+          )}
         </div>
       </section>
     </div>

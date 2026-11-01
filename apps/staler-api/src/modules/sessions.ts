@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { placeOf } from '../lib/geo.js';
 import crypto from 'node:crypto';
 import { isProd } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
@@ -133,13 +134,25 @@ export function presentedRefreshToken(req: Request): string | null {
 
 /** One row per device (same browser/app on the same machine), updated on each sign-in. */
 export async function rememberDevice(userId: string, ua: string | null, ip: string | null) {
-  await pool.query(
+  const d = await one<{ id: string }>(
     `INSERT INTO ${S}.user_devices (user_id, device_key, user_agent, first_ip, last_ip, ips, sign_ins)
      VALUES ($1, md5(COALESCE($2, '')), $2, $3, $3, CASE WHEN $3::text IS NULL THEN '{}'::text[] ELSE ARRAY[$3::text] END, 1)
      ON CONFLICT (user_id, device_key) DO UPDATE SET
        last_ip = EXCLUDED.last_ip, last_seen = now(), sign_ins = ${S}.user_devices.sign_ins + 1,
        ips = CASE WHEN EXCLUDED.last_ip IS NULL OR EXCLUDED.last_ip = ANY(${S}.user_devices.ips) THEN ${S}.user_devices.ips
-                  ELSE (${S}.user_devices.ips || EXCLUDED.last_ip)[GREATEST(1, cardinality(${S}.user_devices.ips) - 18):] END`,
+                  ELSE (${S}.user_devices.ips || EXCLUDED.last_ip)[GREATEST(1, cardinality(${S}.user_devices.ips) - 18):] END
+     RETURNING id`,
     [userId, ua, ip],
   );
+  if (!d) return;
+  await pool.query(`INSERT INTO ${S}.user_signins (device_id, user_id, ip) VALUES ($1, $2, $3)`, [d.id, userId, ip]);
+  if (ip) {
+    await pool.query(
+      `INSERT INTO ${S}.user_device_places (device_id, user_id, ip) VALUES ($1, $2, $3)
+       ON CONFLICT (device_id, ip) DO UPDATE SET hits = ${S}.user_device_places.hits + 1, last_seen = now()`,
+      [d.id, userId, ip],
+    );
+    // Look the place up in the background; sign-in never waits for it.
+    void placeOf(ip).catch(() => undefined);
+  }
 }

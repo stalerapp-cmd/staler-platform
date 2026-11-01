@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowDownToLine, ArrowUpFromLine, ExternalLink, KeyRound, Landmark, Link2, ScanLine, ShieldCheck, Unlink } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, ExternalLink, KeyRound, Landmark, Link2, ScanLine, ShieldCheck, Unlink, Wallet } from 'lucide-react';
 import { ApiError, del, get, newIdempotencyKey, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -153,7 +153,7 @@ function MoveSheet({ kind, open, onClose, onDone }: { kind: 'topup' | 'tobank'; 
 
 export default function Bank() {
   const { t, lang, err } = useI18n();
-  const { reload } = useAuth();
+  const { reload, user } = useAuth();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const link = useData<any>('/api/bank/link');
@@ -181,6 +181,10 @@ export default function Bank() {
     if ((a === 'topup' || a === 'tobank') && link.data?.linked) setSheet(a);
   }, [params, link.data?.linked]);
 
+  const done = (ops.data?.operations ?? []).filter((o) => o.status === 'completed');
+  const opsIn = done.filter((o) => o.kind !== 'deposit').reduce((a, o) => a + Number(o.amount), 0);
+  const opsOut = done.filter((o) => o.kind === 'deposit').reduce((a, o) => a + Number(o.amount), 0);
+
   const refreshAll = () => {
     void loadBalance();
     void ops.reload();
@@ -189,7 +193,70 @@ export default function Bank() {
 
   return (
     <div>
-      <PageHeader title={t.bank.title} lead={t.bank.pageLead} />
+      {/* --------------------------------------------- TalerBank hero card */}
+      <section className="relative mb-6 overflow-hidden rounded-[2rem] bg-[#0C1A17] text-[#F3E9D2] shadow-card">
+        <Guilloche className="pointer-events-none absolute -end-24 -top-28 h-[420px] w-[420px] opacity-35 sm:opacity-70" />
+        <Guilloche className="pointer-events-none absolute -bottom-40 -start-32 h-[360px] w-[360px] opacity-35" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_80%_at_100%_0%,rgba(201,164,92,0.22),transparent_60%)]" />
+        <div className="absolute inset-x-8 bottom-0 h-px bg-gradient-to-r from-transparent via-[#C9A45C]/70 to-transparent" />
+
+        <div className="relative p-5 sm:p-8">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <motion.span initial={{ rotate: -20, scale: 0.6, opacity: 0 }} animate={{ rotate: 0, scale: 1, opacity: 1 }} transition={{ type: 'spring', bounce: 0.45 }} className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[#E2C27A] to-[#9C7A30] text-[#0C1A17] shadow-lg">
+                <Landmark className="h-7 w-7" strokeWidth={2.2} />
+              </motion.span>
+              <div>
+                <h1 className="font-display text-3xl leading-none sm:text-4xl">TalerBank</h1>
+                <p className="mt-1.5 text-sm text-[#F3E9D2]/70">{t.bank.pageLead}</p>
+              </div>
+            </div>
+            {link.data?.linked && (
+              <span className="hidden shrink-0 items-center gap-1.5 rounded-full bg-[#C9A45C]/15 px-3 py-1.5 text-xs font-semibold text-[#E2C27A] ring-1 ring-[#C9A45C]/40 sm:inline-flex">
+                <ShieldCheck className="h-3.5 w-3.5" /> {link.data.via === 'code' ? t.bank.viaCode : t.bank.viaLogin}
+              </span>
+            )}
+          </div>
+
+          {link.data?.linked && (
+            <>
+              <div className="mt-7 grid gap-5 sm:grid-cols-[1fr_auto] sm:items-end">
+                <div className="min-w-0">
+                  <p className="text-xs text-[#F3E9D2]/60">{t.bank.bankBalance}</p>
+                  {balErr ? (
+                    <p className="mt-1 text-sm text-[#F4A3A3]">{balErr}</p>
+                  ) : bal ? (
+                    <p className="num mt-1 font-display text-4xl tracking-tight text-white sm:text-5xl">{money(bal.balance, lang)}</p>
+                  ) : (
+                    <Skeleton className="mt-2 h-10 w-48 bg-white/10" />
+                  )}
+                  <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#F3E9D2]/80">
+                    <span className="font-medium text-white">{link.data.holder}</span>
+                    <span className="inline-flex min-w-0 items-center gap-1">
+                      <span className="text-[#F3E9D2]/55">{t.bank.iban}</span>
+                      <span className="num truncate" dir="ltr">
+                        {link.data.iban?.replace(/(.{4})/g, '$1 ')}
+                      </span>
+                      <span className="[&_button]:text-[#F3E9D2]/70 [&_button:hover]:bg-white/10 [&_button:hover]:text-white">
+                        <CopyButton text={link.data.iban} />
+                      </span>
+                    </span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5 sm:w-[320px]">
+                  <button type="button" onClick={() => setSheet('topup')} className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-[#E2C27A] to-[#B8913F] font-bold text-[#0C1A17] shadow-lg transition hover:-translate-y-0.5 active:scale-95">
+                    <ArrowDownToLine className="h-5 w-5" /> {t.bank.topUp}
+                  </button>
+                  <button type="button" onClick={() => setSheet('tobank')} className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/10 font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/15 active:scale-95">
+                    <ArrowUpFromLine className="h-5 w-5" /> {t.bank.toBank}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+
       {link.loading && !link.data ? (
         <Skeleton className="h-64 rounded-3xl" />
       ) : !link.data?.linked ? (
@@ -202,80 +269,110 @@ export default function Bank() {
           />
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <div className="space-y-6">
-            <div className="card relative overflow-hidden p-6">
-              <div className="absolute inset-y-0 end-0 w-1.5 bg-[repeating-linear-gradient(180deg,rgb(var(--stitch))_0_6px,transparent_6px_12px)]" />
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm text-muted">{t.bank.linked}</p>
-                  <p className="mt-1 font-display text-2xl">{link.data.holder}</p>
+        <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
+          <div className="min-w-0 space-y-6">
+            {/* Money flowing between the wallet and the bank */}
+            <section className="card relative overflow-hidden p-5">
+              <h2 className="mb-4 text-lg">{t.bank.flowTitle}</h2>
+              <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
+                  <span className="grid h-14 w-14 place-items-center rounded-2xl bg-night text-white shadow-lift">
+                    <Wallet className="h-6 w-6" />
+                  </span>
+                  <p className="text-xs text-muted">S-Taler</p>
+                  <p className="num truncate text-sm font-semibold">{user?.balance != null ? money(user.balance, lang) : '—'}</p>
                 </div>
-                <Badge tone="good">
-                  <ShieldCheck className="h-3.5 w-3.5" /> {link.data.via === 'code' ? t.bank.viaCode : t.bank.viaLogin}
-                </Badge>
+                <div className="relative h-14 flex-[1.4]">
+                  <div className="absolute inset-x-0 top-[38%] h-0.5 bg-[repeating-linear-gradient(90deg,rgb(var(--line))_0_8px,transparent_8px_14px)]" />
+                  <div className="absolute inset-x-0 top-[62%] h-0.5 bg-[repeating-linear-gradient(90deg,rgb(var(--line))_0_8px,transparent_8px_14px)]" />
+                  {[0, 1, 2].map((i) => (
+                    <motion.span key={`a${i}`} className="absolute top-[38%] h-2.5 w-2.5 -translate-y-1/2 rotate-45 rounded-[2px] bg-[#C9A45C]" initial={{ insetInlineStart: '100%', opacity: 0 }} animate={{ insetInlineStart: ['100%', '0%'], opacity: [0, 1, 1, 0] }} transition={{ duration: 2.6, repeat: Infinity, delay: i * 0.85, ease: 'easeInOut' }} />
+                  ))}
+                  {[0, 1, 2].map((i) => (
+                    <motion.span key={`b${i}`} className="absolute top-[62%] h-2.5 w-2.5 -translate-y-1/2 rotate-45 rounded-[2px] bg-stitch" initial={{ insetInlineStart: '0%', opacity: 0 }} animate={{ insetInlineStart: ['0%', '100%'], opacity: [0, 1, 1, 0] }} transition={{ duration: 2.6, repeat: Infinity, delay: 0.4 + i * 0.85, ease: 'easeInOut' }} />
+                  ))}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
+                  <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#0C1A17] text-[#E2C27A] shadow-lift">
+                    <Landmark className="h-6 w-6" />
+                  </span>
+                  <p className="text-xs text-muted">TalerBank</p>
+                  <p className="num truncate text-sm font-semibold">{bal ? money(bal.balance, lang) : '—'}</p>
+                </div>
               </div>
-              <div className="mt-5 flex items-center gap-2">
-                <span className="num text-muted">{t.bank.iban}</span>
-                <span className="num font-medium">{link.data.iban?.replace(/(.{4})/g, '$1 ')}</span>
-                <CopyButton text={link.data.iban} />
+              <div className="mt-5 grid grid-cols-2 gap-2.5">
+                <div className="rounded-2xl bg-[#C9A45C]/12 p-3">
+                  <p className="flex items-center gap-1.5 text-xs text-muted">
+                    <ArrowDownToLine className="h-3.5 w-3.5 text-[#9C7A30] dark:text-[#E2C27A]" /> {t.bank.totalIn}
+                  </p>
+                  <p className="num mt-0.5 font-display text-lg">{money(opsIn, lang)}</p>
+                </div>
+                <div className="rounded-2xl bg-stitch/10 p-3">
+                  <p className="flex items-center gap-1.5 text-xs text-muted">
+                    <ArrowUpFromLine className="h-3.5 w-3.5 text-stitch" /> {t.bank.totalOut}
+                  </p>
+                  <p className="num mt-0.5 font-display text-lg">{money(opsOut, lang)}</p>
+                </div>
               </div>
-              <div className="mt-6 rounded-2xl bg-sunk p-4">
-                <p className="text-sm text-muted">{t.bank.bankBalance}</p>
-                {balErr ? <p className="text-sm text-stitch">{balErr}</p> : bal ? <p className="num font-display text-3xl">{money(bal.balance, lang)}</p> : <Skeleton className="mt-2 h-8 w-40" />}
-              </div>
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <Button size="lg" icon={<ArrowDownToLine className="h-5 w-5" />} onClick={() => setSheet('topup')}>
-                  {t.bank.topUp}
-                </Button>
-                <Button size="lg" variant="secondary" icon={<ArrowUpFromLine className="h-5 w-5" />} onClick={() => setSheet('tobank')}>
-                  {t.bank.toBank}
-                </Button>
-              </div>
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
-                <span>
-                  {t.bank.expires} {link.data.expiresAt ? date(link.data.expiresAt, lang, false) : '—'}
+            </section>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Link to="/app/scan" className="card group flex items-center gap-4 p-5 transition hover:-translate-y-0.5">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/20 text-[rgb(150_105_10)] transition group-hover:rotate-6 dark:text-gold">
+                  <ScanLine className="h-6 w-6" />
                 </span>
-                <button onClick={() => setUnlinkOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-stitch hover:bg-stitch/10">
+                <span className="min-w-0">
+                  <span className="block font-semibold">{t.bank.qrTitle}</span>
+                  <span className="block text-sm text-muted">{t.bank.qrLead}</span>
+                </span>
+              </Link>
+              <div className="card flex flex-col justify-between gap-3 p-5">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-olive/15 text-olive">
+                    <Link2 className="h-6 w-6" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold">{t.bank.linkValid}</p>
+                    <p className="text-sm text-muted">{link.data.expiresAt ? date(link.data.expiresAt, lang, false) : '—'}</p>
+                  </div>
+                </div>
+                <button onClick={() => setUnlinkOpen(true)} className="inline-flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-stitch hover:bg-stitch/10">
                   <Unlink className="h-4 w-4" /> {t.bank.unlink}
                 </button>
               </div>
             </div>
-
-            <div className="card flex flex-wrap items-center gap-4 p-5">
-              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gold/20 text-[rgb(150_105_10)] dark:text-gold">
-                <ScanLine className="h-6 w-6" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{t.bank.qrTitle}</p>
-                <p className="text-sm text-muted">{t.bank.qrLead}</p>
-              </div>
-              <Link to="/app/scan">
-                <Button variant="secondary" size="sm">
-                  {t.nav.scan}
-                </Button>
-              </Link>
-            </div>
           </div>
 
-          <section className="card h-fit p-5">
-            <h2 className="mb-3 text-lg">{t.bank.operations}</h2>
+          <section className="card h-fit overflow-hidden">
+            <h2 className="flex items-center justify-between gap-3 border-b border-line px-5 py-4 text-lg">
+              {t.bank.operations}
+              {ops.data?.operations.length ? <span className="num rounded-full bg-sunk px-2.5 py-0.5 text-xs text-muted">{ops.data.operations.length}</span> : null}
+            </h2>
             {!ops.data?.operations.length ? (
-              <p className="py-6 text-center text-muted">{t.common.empty}</p>
+              <p className="py-10 text-center text-muted">{t.common.empty}</p>
             ) : (
               <ul className="divide-y divide-line">
-                {ops.data.operations.map((o) => (
-                  <li key={o.id} className="flex items-center justify-between gap-3 py-3">
-                    <div>
-                      <p className="font-medium">{t.bank.kinds[o.kind] ?? o.kind}</p>
-                      <p className="text-xs text-muted">{relative(o.created_at, lang)}</p>
-                    </div>
-                    <div className="text-end">
-                      <p className={cx('num font-medium', o.kind === 'deposit' ? '' : 'text-olive')}>{money(o.amount, lang)}</p>
-                      <Badge tone={o.status === 'completed' ? 'good' : o.status === 'pending' ? 'warn' : 'bad'}>{t.bank.opStatus[o.status] ?? o.status}</Badge>
-                    </div>
-                  </li>
-                ))}
+                {ops.data.operations.map((o) => {
+                  const toBank = o.kind === 'deposit';
+                  return (
+                    <li key={o.id} className="flex items-center gap-3 px-5 py-3">
+                      <span className={cx('grid h-10 w-10 shrink-0 place-items-center rounded-xl', toBank ? 'bg-stitch/10 text-stitch' : 'bg-[#C9A45C]/15 text-[#9C7A30] dark:text-[#E2C27A]')}>
+                        {toBank ? <ArrowUpFromLine className="h-[18px] w-[18px]" /> : o.kind === 'qr_withdraw' ? <ScanLine className="h-[18px] w-[18px]" /> : <ArrowDownToLine className="h-[18px] w-[18px]" />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{t.bank.kinds[o.kind] ?? o.kind}</p>
+                        <p className="text-xs text-muted">{relative(o.created_at, lang)}</p>
+                      </div>
+                      <div className="text-end">
+                        <p className={cx('num font-semibold', toBank ? 'text-stitch' : 'text-olive')}>
+                          {toBank ? '−' : '+'}
+                          {money(o.amount, lang)}
+                        </p>
+                        <Badge tone={o.status === 'completed' ? 'good' : o.status === 'pending' ? 'warn' : 'bad'}>{t.bank.opStatus[o.status] ?? o.status}</Badge>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
@@ -310,6 +407,22 @@ export default function Bank() {
         </div>
       </Sheet>
     </div>
+  );
+}
+
+/** Engraved banknote rings in brass — TalerBank's own pattern. */
+function Guilloche({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 200 200" className={className} aria-hidden="true">
+      <g fill="none" stroke="#C9A45C" strokeWidth="0.45">
+        {Array.from({ length: 18 }).map((_, i) => (
+          <ellipse key={i} cx="100" cy="100" rx="92" ry="34" transform={`rotate(${i * 10} 100 100)`} opacity={0.55} />
+        ))}
+        {[22, 40, 58].map((r) => (
+          <circle key={r} cx="100" cy="100" r={r} strokeDasharray="2 3" opacity={0.7} />
+        ))}
+      </g>
+    </svg>
   );
 }
 

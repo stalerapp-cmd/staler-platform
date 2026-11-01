@@ -1,4 +1,5 @@
 import express, { type Express } from 'express';
+import { realIpMiddleware } from './lib/realIp.js';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { pinoHttp } from 'pino-http';
@@ -39,6 +40,8 @@ export function createApp(): Express {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', env.TRUST_PROXY);
+  // The real visitor address (not Render's internal hop) for rate limits, sessions and audit.
+  app.use(realIpMiddleware);
   app.set('etag', false);
 
   app.use(requestId);
