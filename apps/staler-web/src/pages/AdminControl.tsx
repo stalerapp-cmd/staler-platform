@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Check, ExternalLink, Eye, EyeOff, HandCoins, MapPin, Package, Pause, Phone, Play, Search, Store as StoreIcon, Trash2, UserRound } from 'lucide-react';
+import { Check, ExternalLink, Eye, EyeOff, HandCoins, MapPin, Package, PackageCheck, Pause, Phone, Play, Search, Store as StoreIcon, Trash2, Truck, UserRound } from 'lucide-react';
 import { ProductImage } from '../components/Commerce';
 import { StoreLogo } from './Stores';
 import { del, patch, post, put } from '../lib/api';
@@ -9,7 +9,8 @@ import { useData } from '../lib/hooks';
 import { date, fill, money } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
-import { Avatar, Badge, Button, Chips, EmptyState, ErrorNote, Field, PageHeader, Select, Skeleton, TextArea, cx } from '../components/ui';
+import { Avatar, Badge, Button, Chips, EmptyState, ErrorNote, Field, PageHeader, Skeleton, TextArea, cx } from '../components/ui';
+import { ChoicePills, OptionCard } from '../components/Choice';
 
 const tone = (s: string) => (s === 'active' ? 'good' : s === 'pending' ? 'warn' : 'bad') as 'good' | 'warn' | 'bad';
 
@@ -277,30 +278,24 @@ export function AdminStoreDetail() {
             <div className="sm:col-span-2">
               <TextArea label={C.description} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} rows={3} />
             </div>
-            <Select
-              block
+            <ChoicePills
+              className="sm:col-span-2"
               label={C.status}
-              value={f.status}
-              onChange={(v: string) => setF({ ...f, status: v })}
+              value={f.status as 'active' | 'suspended' | 'closed'}
+              onChange={(v) => setF({ ...f, status: v })}
               options={[
-                { value: 'active', label: t.admin.active },
-                { value: 'suspended', label: t.admin.suspended },
-                { value: 'closed', label: C.closed },
+                { value: 'active', label: t.admin.active, tone: 'good' },
+                { value: 'suspended', label: t.admin.suspended, tone: 'warn' },
+                { value: 'closed', label: C.closed, tone: 'bad' },
               ]}
             />
-            <div className="flex flex-col justify-end gap-2 text-sm">
-              {(
-                [
-                  ['offersPickup', C.pickup],
-                  ['offersDelivery', C.delivery],
-                  ['showPhone', C.showPhone],
-                ] as const
-              ).map(([k, l]) => (
-                <label key={k} className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 accent-[rgb(var(--sky))]" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />
-                  {l}
-                </label>
-              ))}
+            <div className="sm:col-span-2">
+              <p className="mb-1.5 text-sm font-medium text-ink/80">{C.services}</p>
+              <div className="grid gap-2">
+                <OptionCard icon={<PackageCheck />} title={C.pickup} description={C.pickupD} checked={f.offersPickup} onChange={(v) => setF({ ...f, offersPickup: v })} />
+                <OptionCard icon={<Truck />} title={C.delivery} description={C.deliveryD} checked={f.offersDelivery} onChange={(v) => setF({ ...f, offersDelivery: v })} />
+                <OptionCard icon={<Phone />} title={C.showPhone} description={C.showPhoneD} checked={f.showPhone} onChange={(v) => setF({ ...f, showPhone: v })} />
+              </div>
             </div>
             <div className="flex flex-wrap gap-2 sm:col-span-2">
               <Button loading={busy}>{t.common.save}</Button>

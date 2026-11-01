@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { BellRing, Crown, Eye, EyeOff, HandCoins, KeyRound, LogOut, Megaphone, Package, Search, ShieldCheck, ShieldOff, Snowflake, Store as StoreIcon, Trash2, UserCog, UserPlus, Users, XCircle } from 'lucide-react';
+import { BellRing, Crown, Eye, EyeOff, HandCoins, KeyRound, LogOut, Megaphone, Package, Search, ShieldCheck, ShieldOff, Snowflake, Store as StoreIcon, Trash2, UserCog, UserRound, UserPlus, Users, XCircle } from 'lucide-react';
 import { ProductImage } from '../components/Commerce';
 import { StoreLogo } from './Stores';
 import { ApiError, del, get, patch, post, put } from '../lib/api';
@@ -10,9 +10,12 @@ import { usePerm } from '../lib/perm';
 import { date, fill, money, relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
+import { CheckMark, ChoicePills } from '../components/Choice';
 import { useSecureAction } from '../components/SecureAction';
 import { TxRow } from '../components/Wallet';
-import { Avatar, Badge, Button, Chips, EmptyState, ErrorNote, Field, PageHeader, PasswordStrength, Select, Sheet, Skeleton, TextArea, cx } from '../components/ui';
+import { Avatar, Badge, Button, Chips, EmptyState, ErrorNote, Field, PageHeader, PasswordStrength, Sheet, Skeleton, TextArea, cx } from '../components/ui';
+
+const ROLE_ICON: Record<string, React.ReactNode> = { user: <UserRound />, merchant: <StoreIcon />, exchange: <HandCoins />, admin: <ShieldCheck /> };
 
 /** Ticked permission list, grouped as the server defines them. */
 export function PermissionPicker({ all, value, onChange }: { all: string[]; value: string[]; onChange: (v: string[]) => void }) {
@@ -35,10 +38,16 @@ export function PermissionPicker({ all, value, onChange }: { all: string[]; valu
           const on = value.includes(p);
           return (
             <li key={p}>
-              <label className={cx('flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition', on ? 'border-sky/50 bg-sky/10' : 'border-line hover:bg-sunk')}>
-                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[rgb(var(--sky))]" checked={on} onChange={() => onChange(on ? value.filter((x) => x !== p) : [...value, p])} />
-                <span>{t.people.perm[p] ?? p}</span>
-              </label>
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={on}
+                onClick={() => onChange(on ? value.filter((x) => x !== p) : [...value, p])}
+                className={cx('flex w-full items-center gap-3 rounded-xl border p-3 text-start text-sm transition', on ? 'border-sky/50 bg-sky/[0.07] font-medium text-ink' : 'border-line text-ink/85 hover:bg-sunk/60')}
+              >
+                <CheckMark on={on} />
+                <span className="min-w-0">{t.people.perm[p] ?? p}</span>
+              </button>
             </li>
           );
         })}
@@ -82,12 +91,11 @@ export function BroadcastCard() {
       >
         <Field label={t.people.title} value={title} onChange={(e) => setTitle(e.target.value)} required minLength={2} maxLength={80} />
         <TextArea label={t.people.message} value={body} onChange={(e) => setBody(e.target.value)} required minLength={2} maxLength={500} rows={3} />
-        <Select
-          block
+        <ChoicePills
           label={t.people.audience}
           value={role}
           onChange={setRole}
-          options={[{ value: 'all', label: t.people.everyone }, ...(['user', 'merchant', 'exchange', 'admin'] as const).map((k) => ({ value: k, label: t.admin.roles[k] }))]}
+          options={[{ value: 'all', label: t.people.everyone, icon: <Users /> }, ...(['user', 'merchant', 'exchange', 'admin'] as const).map((k) => ({ value: k, label: t.admin.roles[k], icon: ROLE_ICON[k] }))]}
         />
         <Button block loading={busy} icon={<BellRing className="h-4 w-4" />}>
           {t.people.send}
@@ -205,7 +213,7 @@ export function AdminUsers() {
             <Field label={t.auth.password} type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} dir="ltr" required autoComplete="new-password" />
             <PasswordStrength value={f.password} />
           </div>
-          <Select block label={t.admin.role} value={f.role} onChange={(v) => setF({ ...f, role: v })} options={(['user', 'merchant', 'exchange'] as const).map((k) => ({ value: k, label: t.admin.roles[k] }))} />
+          <ChoicePills label={t.admin.role} value={f.role} onChange={(v) => setF({ ...f, role: v })} options={(['user', 'merchant', 'exchange'] as const).map((k) => ({ value: k, label: t.admin.roles[k], icon: ROLE_ICON[k] }))} />
           <ErrorNote>{error}</ErrorNote>
           <Button block loading={busy}>
             {t.admin.createUser}
@@ -324,9 +332,9 @@ export function AdminUserDetail() {
               <Field label={t.auth.fullName} value={f.fullName} onChange={(e) => setF({ ...f, fullName: e.target.value })} disabled={!can('users.edit')} />
               <Field label={t.auth.email} type="email" dir="ltr" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} disabled={!can('users.edit')} />
               <Field label={t.people.phone} type="tel" dir="ltr" value={f.phoneNumber} onChange={(e) => setF({ ...f, phoneNumber: e.target.value })} disabled={!can('users.edit')} />
-              <Select block label={t.people.language} value={f.language} onChange={(v) => setF({ ...f, language: v })} options={[{ value: 'ar', label: 'العربية' }, { value: 'en', label: 'English' }]} />
+              <ChoicePills label={t.people.language} value={f.language} onChange={(v) => setF({ ...f, language: v })} options={[{ value: 'ar', label: 'العربية' }, { value: 'en', label: 'English' }]} />
               {u.role !== 'admin' && can('users.role') && (
-                <Select block className="sm:col-span-2" label={t.admin.role} value={f.role} onChange={(v) => setF({ ...f, role: v })} options={(['user', 'merchant', 'exchange'] as const).map((k) => ({ value: k, label: t.admin.roles[k] }))} />
+                <ChoicePills className="sm:col-span-2" label={t.admin.role} value={f.role} onChange={(v) => setF({ ...f, role: v })} options={(['user', 'merchant', 'exchange'] as const).map((k) => ({ value: k, label: t.admin.roles[k], icon: ROLE_ICON[k] }))} />
               )}
               <div className="sm:col-span-2">
                 <Button>{t.people.save}</Button>
@@ -826,7 +834,7 @@ export function AdminAgentPanel({ userId, agent, onChanged }: { userId: string; 
       >
         {!p && <p className="rounded-xl bg-gold/15 px-3 py-2 text-sm sm:col-span-2">{t.adm2.noProfile}</p>}
         <Field label={t.agent.displayName} value={f.displayName} onChange={(e) => setF({ ...f, displayName: e.target.value })} required minLength={2} />
-        <Select block label={t.adm2.agentStatus} value={f.status as any} onChange={(v: string) => setF({ ...f, status: v })} options={(['active', 'pending', 'suspended'] as const).map((k) => ({ value: k, label: t.adm2.st[k] }))} />
+        <ChoicePills label={t.adm2.agentStatus} value={f.status as 'active' | 'pending' | 'suspended'} onChange={(v) => setF({ ...f, status: v })} options={(['active', 'pending', 'suspended'] as const).map((k) => ({ value: k, label: t.adm2.st[k], tone: k === 'active' ? ('good' as const) : k === 'pending' ? ('warn' as const) : ('bad' as const) }))} />
         <Field label={t.mstore.city} value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} />
         <Field label={t.auth.phone} dir="ltr" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
         <Field label={t.mstore.address} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
