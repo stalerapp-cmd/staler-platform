@@ -50,7 +50,7 @@ import { relative } from '../lib/format';
 import { localize, targetOf, type Notice } from '../lib/notifications';
 import { useToast } from '../components/Toast';
 import { Logo, StitchBand } from '../components/Tatreez';
-import { StitchCorner, StitchRing } from '../components/HeaderStitch';
+import { StitchRing } from '../components/HeaderStitch';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 import { useConfirm } from '../components/Confirm';
@@ -575,7 +575,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           <div className="hdr-lux relative flex h-[62px] w-full items-stretch justify-between overflow-hidden rounded-[22px] bg-surface/95 shadow-[0_12px_32px_-20px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur-md lg:h-16 lg:rounded-none lg:ring-0">
             <div className="flex min-w-0 items-stretch">
               {/* Name side: a dark embroidered cuff */}
-              <NavLink to="/app/settings" className="hdr-cuff group relative flex min-w-0 items-center gap-2.5 bg-night pe-10 ps-1.5 text-white transition active:brightness-110 sm:ps-3 lg:ps-6" aria-label={t.nav.settings}>
+              <NavLink to="/app/settings" className="hdr-cuff group relative flex min-w-0 items-center gap-2.5 bg-night pe-[84px] ps-1.5 text-white transition active:brightness-110 sm:ps-3 lg:ps-6" aria-label={t.nav.settings}>
                 <StitchRing size={48}>
                   <span className="relative">
                     <Avatar name={user?.full_name} src={user?.profile_image} size={36} />
@@ -594,9 +594,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                 </span>
               )}
             </div>
-            <div className="relative flex shrink-0 items-center gap-1 pe-6 ps-2 lg:pe-8">
-              <StitchCorner className="pointer-events-none absolute end-2 top-2 ltr:-scale-x-100" />
-              <StitchCorner className="pointer-events-none absolute bottom-2.5 end-2 -scale-y-100 ltr:scale-x-[-1] ltr:-scale-y-100" />
+            <div className="relative flex shrink-0 items-center gap-1 pe-2.5 ps-2 sm:pe-4 lg:pe-6">
               <div className="hidden sm:block">
                 <PrefsPill bare />
               </div>
