@@ -19,3 +19,16 @@ export function StitchRing({ children, size = 48, count = 16 }: { children: Reac
     </span>
   );
 }
+
+/** Small L-shaped tatreez corner, like the corner of an embroidered panel. */
+export function StitchCorner({ className }: { className?: string }) {
+  const cells: [number, number, string][] = [[0, 0, '#C8344A'], [1, 0, '#C8344A'], [2, 0, '#C8344A'], [3, 0, '#D9A73A'], [0, 1, '#C8344A'], [0, 2, '#C8344A'], [0, 3, '#D9A73A'], [2, 2, '#D9A73A']];
+  const c = 3.2;
+  return (
+    <svg aria-hidden="true" width={c * 4} height={c * 4} viewBox={`0 0 ${c * 4} ${c * 4}`} className={className}>
+      {cells.map(([x, y, col]) => (
+        <path key={`${x}${y}`} d={`M${x * c + 0.9} ${y * c + 0.9}L${x * c + c - 0.9} ${y * c + c - 0.9}M${x * c + c - 0.9} ${y * c + 0.9}L${x * c + 0.9} ${y * c + c - 0.9}`} stroke={col} strokeWidth="1.1" strokeLinecap="round" />
+      ))}
+    </svg>
+  );
+}
