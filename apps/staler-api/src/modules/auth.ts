@@ -24,6 +24,7 @@ import { checkSecondFactor, newRecoveryCodes, requireSecondFactor, totpIssuer } 
 import { clearRefreshCookie, issueSession, presentedRefreshToken, revokeAllSessions, revokeFamilyByToken, rotate } from './sessions.js';
 import { createWallet } from './walletCore.js';
 
+import { revokeSessionNow } from '../lib/authCache.js';
 export const authRouter = Router();
 
 const CODE_TTL_MIN = 15;
@@ -622,6 +623,7 @@ authRouter.delete(
       req.params.id,
       req.auth!.userId,
     ]);
+    revokeSessionNow(req.params.id!);
     res.json({ success: true });
   }),
 );

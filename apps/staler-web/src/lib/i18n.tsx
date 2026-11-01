@@ -18,6 +18,12 @@ const en = {
   pick: { title: 'Pickup points', lead: 'Places where buyers collect their orders. Buyers see this choice only when you add at least one.', add: 'New pickup point', edit: 'Edit pickup point', name: 'Name', namePh: 'e.g. Old City counter', description: 'Description for buyers', descPh: 'How to find it, what to bring…', hours: 'Opening hours', active: 'Open for pickups', none: 'No pickup points yet — orders are picked up at the store.', choose: 'Where will you pick it up?', required: 'Choose a pickup point', at: 'Pick up at', deleteQ: 'Delete this pickup point?', deleteB: 'Buyers won’t be able to choose it any more.', saved: 'Pickup point saved', off: 'Closed' },
   crop: { title: 'Adjust your picture', lead: 'Drag to move it, zoom to fit. Only what’s inside the frame is kept.', save: 'Save picture', zoom: 'Zoom', zoomIn: 'Zoom in', zoomOut: 'Zoom out', rotate: 'Turn', saved: 'Picture saved' },
   market: { cats: 'Browse by category', everything: 'Everything', deals: 'Deals', byStore: 'Shop by store', results: '{n} products', newest: 'Newest', cheap: 'Lowest price', pricey: 'Highest price', az: 'A–Z', clear: 'Clear filters' },
+  devs: {
+    title: 'Devices used', none: 'No sign-ins recorded yet.', live: 'Signed in', liveN: 'Signed in · {n} session(s)', ended: 'Signed out', app: 'App', detail: 'Device details',
+    kind: 'Device', kinds: { phone: 'Phone', tablet: 'Tablet', computer: 'Computer' } as Record<string, string>, browser: 'Browser', system: 'System', signIns: 'Sign-ins from it',
+    first: 'First seen', last: 'Last seen', firstIp: 'First network address', lastIp: 'Last network address', allIps: 'Network addresses used', raw: 'Technical details',
+    out: 'Sign out of this device', outQ: 'Sign out of this device only?', outB: '{device} is signed out right away. Their other devices stay signed in.', outDone: 'Signed out ({n} session(s) closed)',
+  },
   agentMap: {
     searchPh: 'Search by name, city, street or phone', nearMe: 'Agents near me', locating: 'Finding you…', refresh: 'Update my location',
     allServices: 'All services', allCities: 'All cities', count: '{n} agents', countNear: '{n} agents — nearest first', noMatch: 'No agent matches this search.', noPin: 'No map pin yet',
@@ -325,6 +331,12 @@ const ar: Dict = {
   pick: { title: 'نقاط الاستلام', lead: 'أماكن بيستلم منها الزبائن طلباتهم. الزبون بيشوف هالخيار بس إذا ضفت نقطة وحدة على الأقل.', add: 'نقطة استلام جديدة', edit: 'عدّل نقطة الاستلام', name: 'الاسم', namePh: 'مثلًا: كاونتر البلدة القديمة', description: 'وصف للزبائن', descPh: 'كيف يوصلوا، شو يجيبوا معهم…', hours: 'ساعات الدوام', active: 'مفتوحة للاستلام', none: 'ما في نقاط استلام لسا — الاستلام بكون من المتجر.', choose: 'من وين بدك تستلم؟', required: 'اختار نقطة استلام', at: 'الاستلام من', deleteQ: 'تحذف نقطة الاستلام هاي؟', deleteB: 'الزبائن ما رح يقدروا يختاروها بعد هيك.', saved: 'انحفظت نقطة الاستلام', off: 'مسكّرة' },
   crop: { title: 'ظبّط الصورة', lead: 'اسحبها لتحرّكها وكبّرها لتركب. بس اللي جوا الإطار بينحفظ.', save: 'احفظ الصورة', zoom: 'تكبير', zoomIn: 'كبّر', zoomOut: 'صغّر', rotate: 'لفّ', saved: 'انحفظت الصورة' },
   market: { cats: 'تصفّح حسب الفئة', everything: 'كل شي', deals: 'عروض', byStore: 'تسوّق من متجر', results: '{n} منتج', newest: 'الأحدث', cheap: 'الأرخص', pricey: 'الأغلى', az: 'أ–ي', clear: 'امسح الفلاتر' },
+  devs: {
+    title: 'الأجهزة المستخدمة', none: 'ما في دخول مسجّل لسا.', live: 'داخل هلأ', liveN: 'داخل هلأ · {n} جلسة', ended: 'طالع', app: 'التطبيق', detail: 'تفاصيل الجهاز',
+    kind: 'نوع الجهاز', kinds: { phone: 'جوال', tablet: 'تابلت', computer: 'كمبيوتر' } as Record<string, string>, browser: 'المتصفح', system: 'النظام', signIns: 'مرات الدخول منه',
+    first: 'أول مرة', last: 'آخر مرة', firstIp: 'أول عنوان شبكة', lastIp: 'آخر عنوان شبكة', allIps: 'عناوين الشبكة اللي استخدمها', raw: 'تفاصيل تقنية',
+    out: 'طلّعه من هالجهاز', outQ: 'تطلّعه من هالجهاز بس؟', outB: '{device} بيطلع فورًا. باقي أجهزته بتضل داخلة.', outDone: 'انطلع ({n} جلسة انسكّرت)',
+  },
   agentMap: {
     searchPh: 'دوّر بالاسم، المدينة، الشارع أو الرقم', nearMe: 'الوكلاء القريبين مني', locating: 'عم نحدد موقعك…', refresh: 'حدّث موقعي',
     allServices: 'كل الخدمات', allCities: 'كل المدن', count: '{n} وكيل', countNear: '{n} وكيل — الأقرب أول', noMatch: 'ما في وكيل بطابق البحث.', noPin: 'ما حدد موقعه لسا',

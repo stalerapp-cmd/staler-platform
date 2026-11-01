@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { BellRing, Crown, Eye, EyeOff, HandCoins, KeyRound, LogOut, Megaphone, Package, Search, ShieldCheck, ShieldOff, Snowflake, Store as StoreIcon, Trash2, UserCog, UserRound, UserPlus, Users, XCircle } from 'lucide-react';
+import { BellRing, Crown, Laptop, MonitorSmartphone, Smartphone, Tablet, Eye, EyeOff, HandCoins, KeyRound, LogOut, Megaphone, Package, Search, ShieldCheck, ShieldOff, Snowflake, Store as StoreIcon, Trash2, UserCog, UserRound, UserPlus, Users, XCircle } from 'lucide-react';
 import { ProductImage } from '../components/Commerce';
 import { StoreLogo } from './Stores';
 import { ApiError, del, get, patch, post, put } from '../lib/api';
@@ -10,6 +10,7 @@ import { usePerm } from '../lib/perm';
 import { date, fill, money, relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
+import { parseDevice } from '../lib/device';
 import { CheckMark, ChoicePills } from '../components/Choice';
 import { useSecureAction } from '../components/SecureAction';
 import { TxRow } from '../components/Wallet';
@@ -431,6 +432,7 @@ export function AdminUserDetail() {
             </div>
           </section>
         )}
+        {can('users.view') && <AdminDevicesPanel userId={u.id} canSignOut={can('users.security') && !protectedAcc} />}
         <section className="card p-3">
           <h2 className="px-3 pt-2 text-lg">{t.home.recent}</h2>
           {data.transactions.length ? (
@@ -897,6 +899,135 @@ export function AdminAgentPanel({ userId, agent, onChanged }: { userId: string; 
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+// ------------------------------------------------------- device history
+function AdminDevicesPanel({ userId, canSignOut }: { userId: string; canSignOut: boolean }) {
+  const { t, lang, err } = useI18n();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const { data, reload } = useData<{ devices: any[] }>(`/api/admin/users/${userId}/devices`, [userId]);
+  const [open, setOpen] = useState<any>(null);
+  const D = t.devs;
+  const full = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(lang === 'ar' ? 'ar-PS' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+  const signOut = async (d: any) => {
+    const p = parseDevice(d.user_agent);
+    if (!(await confirm({ title: D.outQ, body: fill(D.outB, { device: `${p.browser} · ${p.os}` }), confirmLabel: D.out, tone: 'danger' }))) return;
+    try {
+      const r = await post(`/api/admin/users/${userId}/devices/${d.id}/sign-out`);
+      toast(fill(D.outDone, { n: r.sessions }));
+      setOpen(null);
+      void reload();
+    } catch (e) {
+      toast(err(e), 'error');
+    }
+  };
+  const Icon = ({ kind, className }: { kind: string; className?: string }) => (kind === 'phone' ? <Smartphone className={className} /> : kind === 'tablet' ? <Tablet className={className} /> : <Laptop className={className} />);
+  const od = open ? parseDevice(open.user_agent) : null;
+  return (
+    <section className="card overflow-hidden">
+      <h2 className="flex items-center gap-2 border-b border-line px-5 py-4 text-lg">
+        <MonitorSmartphone className="h-5 w-5 text-sky" /> {D.title}
+        {data && <span className="num text-sm text-muted">({data.devices.length})</span>}
+      </h2>
+      {!data ? (
+        <Skeleton className="m-4 h-16" />
+      ) : !data.devices.length ? (
+        <p className="p-6 text-center text-sm text-muted">{D.none}</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {data.devices.map((d) => {
+            const p = parseDevice(d.user_agent);
+            const live = d.active_sessions > 0;
+            return (
+              <li key={d.id}>
+                <button type="button" onClick={() => setOpen(d)} className="flex w-full items-center gap-3 px-5 py-3 text-start transition hover:bg-sunk/60">
+                  <span className={cx('relative grid h-10 w-10 shrink-0 place-items-center rounded-xl', live ? 'bg-olive/15 text-olive' : 'bg-sunk text-muted')}>
+                    <Icon kind={p.kind} className="h-5 w-5" />
+                    {live && <span className="absolute -end-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-olive ring-2 ring-surface" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      {p.app ? D.app : p.browser} · {p.os}
+                    </span>
+                    <span className="block truncate text-xs text-muted">
+                      {D.last} {relative(d.last_seen, lang)} · <span dir="ltr">{d.last_ip ?? '—'}</span>
+                    </span>
+                  </span>
+                  {live ? <Badge tone="good">{D.live}</Badge> : <Badge tone="neutral">{D.ended}</Badge>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <Sheet
+        open={!!open}
+        onClose={() => setOpen(null)}
+        title={D.detail}
+        footer={
+          open && canSignOut && open.active_sessions > 0 ? (
+            <Button className="w-full" variant="danger" icon={<LogOut className="h-4 w-4 flip-rtl" />} onClick={() => signOut(open)}>
+              {D.out}
+            </Button>
+          ) : undefined
+        }
+      >
+        {open && od && (
+          <div>
+            <div className="mb-5 flex items-center gap-4">
+              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-sky/10 text-sky">
+                <Icon kind={od.kind} className="h-7 w-7" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-display text-lg">
+                  {od.app ? D.app : od.browser} · {od.os}
+                </p>
+                {open.active_sessions > 0 ? <Badge tone="good">{fill(D.liveN, { n: open.active_sessions })}</Badge> : <Badge tone="neutral">{D.ended}</Badge>}
+              </div>
+            </div>
+            <dl className="divide-y divide-line rounded-2xl bg-sunk/60 px-4 text-sm">
+              {(
+                [
+                  [D.kind, D.kinds[od.kind]],
+                  [D.browser, od.app ? D.app : od.browser],
+                  [D.system, od.os],
+                  [D.signIns, String(open.sign_ins)],
+                  [D.first, full(open.first_seen)],
+                  [D.last, full(open.last_seen)],
+                  [D.firstIp, <span dir="ltr" className="num">{open.first_ip ?? '—'}</span>],
+                  [D.lastIp, <span dir="ltr" className="num">{open.last_ip ?? '—'}</span>],
+                ] as const
+              ).map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between gap-4 py-2.5">
+                  <dt className="shrink-0 text-muted">{k}</dt>
+                  <dd className="min-w-0 truncate text-end">{v}</dd>
+                </div>
+              ))}
+            </dl>
+            {open.ips?.length > 1 && (
+              <div className="mt-4">
+                <p className="mb-2 text-sm font-medium">{D.allIps}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {open.ips.map((ip: string) => (
+                    <span key={ip} dir="ltr" className="num rounded-full bg-sunk px-2.5 py-1 text-xs">
+                      {ip}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <details className="mt-4 text-xs text-muted">
+              <summary className="cursor-pointer select-none">{D.raw}</summary>
+              <p dir="ltr" className="mt-2 break-all rounded-xl bg-sunk p-3 font-mono">
+                {open.user_agent ?? '—'}
+              </p>
+            </details>
+          </div>
+        )}
+      </Sheet>
     </section>
   );
 }

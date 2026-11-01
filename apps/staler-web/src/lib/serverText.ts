@@ -129,6 +129,7 @@ const AR: Record<string, string> = {
   'No bank account found': 'ما في حساب بنكي',
   'Account not found': 'الحساب مش موجود',
   'Customer not found': 'ما لقينا الزبون',
+  'Device not found': 'ما لقينا الجهاز',
   'Write a message': 'اكتب رسالة',
   'Choose a customer account': 'اختار حساب عميل',
   'Source and destination are the same account': 'الحساب المرسِل والمستلِم نفس الحساب',

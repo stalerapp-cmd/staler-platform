@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { one, S } from '../lib/db.js';
 import { forbidden, unauthorized } from '../lib/errors.js';
 import { verifyToken } from '../lib/jwt.js';
-import { cachedUser, rememberUser } from '../lib/authCache.js';
+import { cachedUser, isSessionRevoked, rememberUser } from '../lib/authCache.js';
 
 export type Role = 'user' | 'merchant' | 'exchange' | 'admin';
 export interface AuthContext {
@@ -48,7 +48,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       u = (await one<Row>(`SELECT role, status, token_version, admin_level, admin_permissions FROM ${S}.users WHERE id = $1`, [claims.sub])) ?? undefined;
       if (u) rememberUser(claims.sub, u);
     }
-    if (!u || u.token_version !== claims.tv) throw unauthorized('Session revoked', 'SESSION_REVOKED');
+    if (!u || u.token_version !== claims.tv || isSessionRevoked(claims.sid)) throw unauthorized('Session revoked', 'SESSION_REVOKED');
     if (u.status !== 'active') throw forbidden('Account is suspended', 'ACCOUNT_SUSPENDED');
     req.auth = { userId: claims.sub, role: u.role, adminLevel: u.admin_level, permissions: u.admin_permissions ?? [], sid: claims.sid };
     next();

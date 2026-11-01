@@ -706,6 +706,26 @@ describe('account deletion', () => {
   });
 });
 
+describe('device history', () => {
+  it('lists each device once and signs one device out immediately', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const u = await walletUser(app, 'Two Devices');
+    const phone = await request(app).post('/api/auth/login').set('User-Agent', 'Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile').send({ email: u.email, password: STRONG });
+    await request(app).post('/api/auth/login').set('User-Agent', 'Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile').send({ email: u.email, password: STRONG });
+    const list = await request(app).get(`/api/admin/users/${u.userId}/devices`).set(auth(sup));
+    expect(list.status).toBe(200);
+    const android = list.body.data.devices.filter((d: any) => /Android 14/.test(d.user_agent));
+    expect(android).toHaveLength(1);
+    expect(android[0].sign_ins).toBe(2);
+    const token = phone.body.data.accessToken;
+    expect((await request(app).get('/api/wallet').set(auth(token))).status).toBe(200);
+    const out = await request(app).post(`/api/admin/users/${u.userId}/devices/${android[0].id}/sign-out`).set(auth(sup));
+    expect(out.status).toBe(200);
+    expect((await request(app).get('/api/wallet').set(auth(token))).status).toBe(401);
+    expect((await request(app).get('/api/wallet').set(auth(u.token))).status).toBe(200);
+  });
+});
+
 describe('admin force delete', () => {
   it('refuses a funded account without force, then settles and deletes it with force', async () => {
     const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');

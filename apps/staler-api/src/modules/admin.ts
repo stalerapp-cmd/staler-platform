@@ -21,7 +21,7 @@ import { anonymiseUser } from './auth.js';
 import { createWallet } from './walletCore.js';
 import { addEvent, idParam, refundOrder, releaseEscrow } from './commerce.js';
 import { reconcilePending } from './bank.js';
-import { forgetUser } from '../lib/authCache.js';
+import { forgetUser, revokeSessionNow } from '../lib/authCache.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth, requireRole('admin'));
@@ -990,5 +990,47 @@ adminRouter.delete(
     await pool.query(`DELETE FROM ${S}.store_ads WHERE id = $1`, [req.params.id]);
     await audit({ userId: req.auth!.userId, action: 'admin.ad_deleted', entityType: 'ad', entityId: req.params.id }, req);
     res.json({ success: true });
+  }),
+);
+
+// ----------------------------------------------------------- device history
+/** Every device the person ever signed in from (once each), with whether it is signed in right now. */
+adminRouter.get(
+  '/users/:id/devices',
+  requirePerm('users.view'),
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const r = await pool.query(
+      `SELECT d.id, d.user_agent, d.first_ip, d.last_ip, d.ips, d.sign_ins, d.first_seen, d.last_seen,
+              (SELECT count(DISTINCT t.family_id)::int FROM ${S}.refresh_tokens t
+                WHERE t.user_id = d.user_id AND md5(COALESCE(t.user_agent, '')) = d.device_key
+                  AND t.revoked_at IS NULL AND t.expires_at > now() AND t.family_expires_at > now()) AS active_sessions
+         FROM ${S}.user_devices d WHERE d.user_id = $1 ORDER BY d.last_seen DESC LIMIT 100`,
+      [req.params.id],
+    );
+    res.json({ success: true, data: { devices: r.rows } });
+  }),
+);
+
+/** Sign the person out of one device only (every live session from it), effective immediately. */
+adminRouter.post(
+  '/users/:id/devices/:deviceId/sign-out',
+  requirePerm('users.security'),
+  validate({ params: z.object({ id: idParam, deviceId: idParam }).strict() }),
+  ah(async (req, res) => {
+    const t = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE id = $1`, [req.params.id]);
+    if (!t) throw notFound('User not found');
+    assertCanManage(req, t);
+    const d = await one<any>(`SELECT device_key, user_agent FROM ${S}.user_devices WHERE id = $1 AND user_id = $2`, [req.params.deviceId, t.id]);
+    if (!d) throw notFound('Device not found');
+    const r = await pool.query(
+      `UPDATE ${S}.refresh_tokens SET revoked_at = now()
+        WHERE user_id = $1 AND md5(COALESCE(user_agent, '')) = $2 AND revoked_at IS NULL RETURNING family_id`,
+      [t.id, d.device_key],
+    );
+    for (const f of new Set(r.rows.map((x) => String(x.family_id)))) revokeSessionNow(f);
+    await notifyBi(undefined, t.id, 'activity:auth_device_out', ['Signed out of a device', 'Support signed your account out of one device. If that wasn’t expected, change your password.'], ['انطلعت من جهاز', 'الدعم طلّع حسابك من جهاز واحد. إذا مش متوقع، غيّر كلمة المرور.']);
+    await audit({ userId: req.auth!.userId, action: 'admin.device_signed_out', entityType: 'user', entityId: t.id, details: { device: d.user_agent?.slice(0, 160), sessions: r.rowCount } }, req);
+    res.json({ success: true, data: { sessions: new Set(r.rows.map((x) => x.family_id)).size } });
   }),
 );
