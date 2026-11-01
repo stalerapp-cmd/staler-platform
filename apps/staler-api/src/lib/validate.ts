@@ -36,8 +36,24 @@ export const fullName = z
   .max(80, 'Name is too long')
   // Letters in any language, digits, spaces and common name punctuation (Exchange2026, Ali & Sons, O'Brien).
   .regex(/^[\p{L}\p{M}\p{N}' .&_()-]+$/u, 'Use letters, numbers, spaces and . - \' & _ only');
-export const otpCode = z.string().trim().regex(/^\d{6}$/, 'Code must be 6 digits');
-export const totpCode = z.string().trim().regex(/^(\d{6}|[A-Z0-9]{4}-[A-Z0-9]{4})$/i, 'Invalid authenticator code');
+/**
+ * Codes typed on a phone: an Arabic keyboard sends ٠-٩ (or Persian ۰-۹), authenticator
+ * apps show "123 456", and copy-paste brings invisible marks. Turn all of that into plain digits.
+ */
+export function cleanCode(v: unknown): unknown {
+  if (typeof v !== 'string') return v;
+  let s = v
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+    .trim();
+  // "123 456" / "123-456" → "123456"; recovery codes keep their single dash.
+  if (/^[\d\s.-]+$/.test(s) && s.replace(/\D/g, '').length === 6) s = s.replace(/\D/g, '');
+  else s = s.replace(/\s+/g, '');
+  return s;
+}
+export const otpCode = z.preprocess(cleanCode, z.string().regex(/^\d{6}$/, 'Code must be 6 digits'));
+export const totpCode = z.preprocess(cleanCode, z.string().regex(/^(\d{6}|[A-Z0-9]{4}-[A-Z0-9]{4})$/i, 'Invalid authenticator code'));
 export const username = z
   .string()
   .trim()

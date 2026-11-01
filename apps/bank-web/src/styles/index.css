@@ -184,3 +184,8 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
 .fld .field { transition: border-color 0.25s ease, box-shadow 0.3s ease, background-color 0.25s ease; }
 .fld .field:hover:not(:focus) { border-color: rgb(var(--fld-accent) / 0.45); }
 @media (prefers-reduced-motion: reduce) { .fld-dot, .fld-box::after { transition: none; } }
+
+/* The scroll cue: a quiet "there's more below". */
+@keyframes cue-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+.cue-bob { animation: cue-bob 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .cue-bob { animation: none; } }

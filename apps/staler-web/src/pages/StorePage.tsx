@@ -171,7 +171,7 @@ export default function StorePage() {
           <Skeleton className="h-24 rounded-2xl" />
         </div>
       ) : (
-        <>
+        <div className="store-luxe">
           {/* ---------------------------------------------------- storefront */}
           <section ref={heroRef} className="relative -mx-4 overflow-hidden text-white shadow-card sm:mx-0 sm:rounded-[2rem]" style={{ background: accent }}>
             <motion.div className="absolute inset-0" style={{ y: coverY, scale: coverScale }}>
@@ -269,7 +269,7 @@ export default function StorePage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, type: 'spring', bounce: 0.25 }}
-            className="relative z-10 mx-1 -mt-7 overflow-hidden rounded-[1.6rem] bg-surface shadow-[0_22px_48px_-30px_rgb(var(--night)/0.6)] ring-1 ring-line/70 sm:mx-8"
+            className="luxe-sheen relative z-10 mx-1 -mt-7 overflow-hidden rounded-[1.6rem] bg-surface shadow-[0_22px_48px_-30px_rgb(var(--night)/0.6)] ring-1 ring-line/70 sm:mx-8"
           >
             <dl className="grid grid-cols-2 divide-line sm:grid-cols-4 sm:divide-x rtl:sm:divide-x-reverse [&>div]:border-line max-sm:[&>div:nth-child(-n+2)]:border-b max-sm:[&>div:nth-child(odd)]:border-e">
               {[
@@ -424,7 +424,7 @@ export default function StorePage() {
               <EmptyState icon={<Package className="h-6 w-6" />} title={t.store.noProducts} />
             )}
           </section>
-        </>
+        </div>
       )}
 
       {/* floating cart */}

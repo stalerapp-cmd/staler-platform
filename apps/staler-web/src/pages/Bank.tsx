@@ -14,7 +14,7 @@ import { StitchBand } from '../components/Tatreez';
 import { useConfirm } from '../components/Confirm';
 import { fill } from '../lib/format';
 
-function LinkPanel({ onLinked }: { onLinked: () => void }) {
+function LinkPanel({ onLinked, bare = false }: { onLinked: () => void; bare?: boolean }) {
   const { t, err } = useI18n();
   const [mode, setMode] = useState<'code' | 'login'>('code');
   const [code, setCode] = useState('');
@@ -41,13 +41,19 @@ function LinkPanel({ onLinked }: { onLinked: () => void }) {
     }
   };
   return (
-    <div className="card overflow-hidden">
-      <div className="relative bg-night p-6 text-white">
-        <Landmark className="h-8 w-8 text-gold" />
-        <h2 className="mt-3 text-2xl">{t.bank.linkTitle}</h2>
-        <p className="mt-1 max-w-md text-white/70">{t.bank.linkLead}</p>
-        <StitchBand width={60} className="absolute inset-x-0 bottom-0 h-5 w-full opacity-60" colors={['#E2506A', '#E9C060']} />
-      </div>
+    <motion.div initial={bare ? { opacity: 0, y: 16 } : false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, type: 'spring', bounce: 0.3 }} className={cx('card overflow-hidden', bare && 'border-t-4 border-t-[#C9A45C]')}>
+      {bare ? (
+        <div className="px-6 pt-6">
+          <h2 className="text-2xl">{t.bank.linkTitle}</h2>
+        </div>
+      ) : (
+        <div className="relative bg-night p-6 text-white">
+          <Landmark className="h-8 w-8 text-gold" />
+          <h2 className="mt-3 text-2xl">{t.bank.linkTitle}</h2>
+          <p className="mt-1 max-w-md text-white/70">{t.bank.linkLead}</p>
+          <StitchBand width={60} className="absolute inset-x-0 bottom-0 h-5 w-full opacity-60" colors={['#E2506A', '#E9C060']} />
+        </div>
+      )}
       <form onSubmit={submit} className="space-y-5 p-6">
         <Segmented
           value={mode}
@@ -78,7 +84,7 @@ function LinkPanel({ onLinked }: { onLinked: () => void }) {
           {t.bank.link}
         </Button>
       </form>
-    </div>
+    </motion.div>
   );
 }
 
@@ -194,6 +200,7 @@ export default function Bank() {
   return (
     <div>
       {/* --------------------------------------------- TalerBank hero card */}
+      {link.data?.linked && (
       <section className="relative mb-6 overflow-hidden rounded-[2rem] bg-[#0C1A17] text-[#F3E9D2] shadow-card">
         <Guilloche className="pointer-events-none absolute -end-24 -top-28 h-[420px] w-[420px] opacity-35 sm:opacity-70" />
         <Guilloche className="pointer-events-none absolute -bottom-40 -start-32 h-[360px] w-[360px] opacity-35" />
@@ -206,10 +213,10 @@ export default function Bank() {
               <motion.span initial={{ rotate: -20, scale: 0.6, opacity: 0 }} animate={{ rotate: 0, scale: 1, opacity: 1 }} transition={{ type: 'spring', bounce: 0.45 }} className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[#E2C27A] to-[#9C7A30] text-[#0C1A17] shadow-lg">
                 <Landmark className="h-7 w-7" strokeWidth={2.2} />
               </motion.span>
-              <div>
+              <a href={BANK_SITE} target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-2" title={t.bank.openBank}>
                 <h1 className="font-display text-3xl leading-none sm:text-4xl">TalerBank</h1>
-                <p className="mt-1.5 text-sm text-[#F3E9D2]/70">{t.bank.pageLead}</p>
-              </div>
+                <ExternalLink className="h-4 w-4 text-[#E2C27A] opacity-60 transition group-hover:-translate-y-0.5 group-hover:opacity-100" />
+              </a>
             </div>
             {link.data?.linked && (
               <span className="hidden shrink-0 items-center gap-1.5 rounded-full bg-[#C9A45C]/15 px-3 py-1.5 text-xs font-semibold text-[#E2C27A] ring-1 ring-[#C9A45C]/40 sm:inline-flex">
@@ -256,17 +263,55 @@ export default function Bank() {
           )}
         </div>
       </section>
+      )}
 
       {link.loading && !link.data ? (
         <Skeleton className="h-64 rounded-3xl" />
       ) : !link.data?.linked ? (
-        <div className="mx-auto max-w-xl">
-          <LinkPanel
-            onLinked={() => {
-              toast(t.bank.linked);
-              void link.reload();
-            }}
-          />
+        <div className="relative mx-auto max-w-5xl py-2">
+          <BankDecor />
+          <div className="relative grid items-stretch gap-5 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+            {/* The bank itself: tap to open TalerBank */}
+            <motion.a
+              href={BANK_SITE}
+              target="_blank"
+              rel="noopener noreferrer"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -4 }}
+              transition={{ type: 'spring', bounce: 0.3 }}
+              className="group relative flex min-h-[300px] flex-col justify-between overflow-hidden rounded-[2rem] bg-[#0C1A17] p-6 text-[#F3E9D2] shadow-card"
+            >
+              <Guilloche className="pointer-events-none absolute -end-24 -top-24 h-[340px] w-[340px] opacity-60 transition duration-700 group-hover:rotate-12" />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_70%_at_100%_0%,rgba(201,164,92,0.22),transparent_60%)]" />
+              <div className="relative flex items-center justify-between">
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#E2C27A] to-[#9C7A30] text-[#0C1A17] shadow-lg">
+                  <Landmark className="h-6 w-6" strokeWidth={2.2} />
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/20 transition group-hover:bg-[#C9A45C] group-hover:text-[#0C1A17]">
+                  {t.bank.openBank} <ExternalLink className="h-3.5 w-3.5" />
+                </span>
+              </div>
+              <div className="relative">
+                <p className="font-display text-4xl leading-none text-white">TalerBank</p>
+                <ul className="mt-5 space-y-2.5 text-sm text-[#F3E9D2]/85">
+                  {[t.bank.why1, t.bank.why2, t.bank.why3].map((w) => (
+                    <li key={w} className="flex items-start gap-2.5">
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rotate-45 bg-[#C9A45C]" />
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </motion.a>
+            <LinkPanel
+              bare
+              onLinked={() => {
+                toast(t.bank.linked);
+                void link.reload();
+              }}
+            />
+          </div>
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
@@ -406,6 +451,32 @@ export default function Bank() {
           </Button>
         </div>
       </Sheet>
+    </div>
+  );
+}
+
+const BANK_SITE = 'https://talerbank.onrender.com';
+
+/** Brass shapes drifting slowly at the edges of the page. */
+function BankDecor() {
+  const items = [
+    { c: 'top-2 -start-10', s: 'h-16 w-16', d: 0, k: 'ring' },
+    { c: 'top-24 -end-8', s: 'h-6 w-6', d: 0.6, k: 'gem' },
+    { c: 'bottom-16 -start-6', s: 'h-5 w-5', d: 1.1, k: 'gem' },
+    { c: 'bottom-0 -end-10', s: 'h-24 w-24', d: 0.3, k: 'ring' },
+    { c: 'top-1/2 -start-16', s: 'h-3 w-3', d: 1.6, k: 'dot' },
+    { c: 'top-8 end-1/3', s: 'h-3 w-3', d: 0.9, k: 'dot' },
+  ];
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute -inset-y-6 inset-x-0 hidden overflow-hidden sm:block">
+      {items.map((x, i) => (
+        <motion.span
+          key={i}
+          className={cx('absolute', x.c, x.s, x.k === 'ring' ? 'rounded-full border-2 border-dashed border-[#C9A45C]/40' : x.k === 'gem' ? 'rotate-45 rounded-[3px] bg-[#C9A45C]/50' : 'rounded-full bg-stitch/40')}
+          animate={{ y: [0, -10, 0], rotate: x.k === 'ring' ? [0, 90, 0] : x.k === 'gem' ? [45, 90, 45] : 0 }}
+          transition={{ duration: 7 + i, repeat: Infinity, ease: 'easeInOut', delay: x.d }}
+        />
+      ))}
     </div>
   );
 }

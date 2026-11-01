@@ -285,3 +285,30 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
 @keyframes cue-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
 .cue-bob { animation: cue-bob 1.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .cue-bob { animation: none; } }
+
+@keyframes row-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-3px); } }
+[dir='ltr'] .row-nudge { animation-direction: reverse; }
+.row-nudge { animation: row-nudge 1.2s ease-in-out infinite; }
+@media (hover: hover) { .row-nudge { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .row-nudge { animation: none; } }
+
+/* ------------------------------------------------- store page: warm pearl
+   Softer, warmer whites with a gold hairline instead of stark white cards. */
+:root:not([data-theme='dark']) .store-luxe {
+  --surface: 255 252 246;
+  --sunk: 246 240 228;
+  --line: 233 222 198;
+}
+.store-luxe .shadow-card, .store-luxe .shadow-lift { box-shadow: 0 18px 40px -26px rgb(120 86 20 / 0.35), 0 0 0 1px rgb(var(--gold) / 0.14); }
+.luxe-sheen::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(110deg, transparent 35%, rgb(var(--gold) / 0.16) 50%, transparent 65%);
+  background-size: 250% 100%; animation: luxe-sheen 7s ease-in-out infinite;
+}
+.luxe-sheen::before {
+  content: ''; position: absolute; inset-inline: 18%; top: 0; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgb(var(--gold)), transparent); opacity: 0.8;
+}
+@keyframes luxe-sheen { 0%, 60% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
+.store-luxe a:has(> img), .store-luxe [data-product] { transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s; }
+@media (prefers-reduced-motion: reduce) { .luxe-sheen::after { animation: none; } }

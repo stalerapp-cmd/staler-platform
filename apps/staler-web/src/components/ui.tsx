@@ -491,6 +491,47 @@ export function Toggle({ checked, onChange, label, description }: { checked: boo
 
 // ----------------------------------------------------------------- Sheet
 /** Bottom sheet on phones, centred dialog on larger screens. Escape and backdrop close it. */
+/** A sheet's scrolling body: when more waits below, the bottom fades and a small arrow nudges. */
+function SheetBody({ children, padBottom }: { children: ReactNode; padBottom: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 24);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    el.addEventListener('scroll', check, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener('scroll', check);
+    };
+  }, []);
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={ref} className={cx('min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6', padBottom)}>
+        <div>{children}</div>
+      </div>
+      <AnimatePresence>
+        {more && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pointer-events-none absolute inset-x-0 bottom-0 flex h-14 items-end justify-center bg-gradient-to-t from-surface via-surface/80 to-transparent pb-1.5">
+            <button
+              type="button"
+              onClick={() => ref.current?.scrollBy({ top: ref.current.clientHeight * 0.7, behavior: 'smooth' })}
+              className="cue-bob pointer-events-auto grid h-7 w-7 place-items-center rounded-full bg-night/85 text-white shadow-md"
+              aria-label="↓"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export function Sheet({ open, onClose, title, children, wide, footer }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
@@ -562,7 +603,7 @@ export function Sheet({ open, onClose, title, children, wide, footer }: { open: 
                 </button>
               </div>
             </div>
-            <div className={cx('min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6', footer ? 'pb-4' : 'pb-[max(env(safe-area-inset-bottom),1.25rem)] sm:pb-6')}>{children}</div>
+            <SheetBody padBottom={footer ? 'pb-4' : 'pb-[max(env(safe-area-inset-bottom),1.25rem)] sm:pb-6'}>{children}</SheetBody>
             {footer && <div className="shrink-0 border-t border-line/80 bg-surface/95 px-5 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 backdrop-blur sm:px-6 sm:pb-5">{footer}</div>}
           </motion.div>
         </motion.div>

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Banknote, Eye, Headset, Landmark, Megaphone, ShieldAlert, Sparkles, Store, Users, Wrench, type LucideIcon } from 'lucide-react';
+import { Banknote, Eye, Headset, Link2, Landmark, Megaphone, ShieldAlert, Sparkles, Store, Users, Wrench, type LucideIcon } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { CheckMark } from './Choice';
 import { cx } from './ui';
@@ -153,9 +153,20 @@ export function PermissionEditor({ all, value, onChange }: { all: string[]; valu
                 const checked = has.has(p);
                 const risk = RISK[p] ?? 'mid';
                 const needs = (NEEDS[p] ?? []).filter((n) => all.includes(n));
+                const missing = needs.filter((n) => !has.has(n));
+                // Shown under its base permission when that base lives in the same group.
+                const child = needs.some((n) => g.perms.includes(n));
                 return (
-                  <li key={p}>
-                    <button type="button" role="checkbox" aria-checked={checked} onClick={() => toggle(p)} className={cx('flex w-full items-start gap-3 px-3.5 py-3 text-start transition', checked ? 'bg-sky/[0.05]' : 'hover:bg-sunk/50')}>
+                  <li key={p} className="relative">
+                    {child && <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 start-[1.55rem] w-px bg-line" />}
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={checked}
+                      onClick={() => toggle(p)}
+                      className={cx('relative flex w-full items-start gap-3 py-3 pe-3.5 text-start transition', child ? 'ps-11' : 'ps-3.5', checked ? 'bg-sky/[0.05]' : 'hover:bg-sunk/50')}
+                    >
+                      {child && <span aria-hidden="true" className="absolute start-[1.55rem] top-[1.45rem] h-px w-3.5 bg-line" />}
                       <span className="pt-0.5">
                         <CheckMark on={checked} />
                       </span>
@@ -165,9 +176,9 @@ export function PermissionEditor({ all, value, onChange }: { all: string[]; valu
                           {risk !== 'low' && <span className={cx('rounded-full px-2 py-0.5 text-[10px] font-bold', risk === 'high' ? 'bg-stitch/12 text-stitch' : 'bg-gold/20 text-[rgb(150_105_10)] dark:text-gold')}>{P.risk[risk]}</span>}
                         </span>
                         {P.permD[p] && <span className="mt-0.5 block text-xs leading-relaxed text-muted">{P.permD[p]}</span>}
-                        {needs.length > 0 && (
-                          <span className="mt-1 block text-[11px] text-muted/90">
-                            {P.needs} {needs.map((n) => t.people.perm[n] ?? n).join('، ')}
+                        {!checked && missing.length > 0 && (
+                          <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-sunk px-2 py-0.5 text-[11px] text-muted">
+                            <Link2 className="h-3 w-3" /> {P.needs} {missing.map((n) => t.people.perm[n] ?? n).join('، ')}
                           </span>
                         )}
                       </span>

@@ -84,6 +84,7 @@ function Market() {
   const [cats, setCats] = useState<string[]>([]);
   const [places, setPlaces] = useState<string[]>([]);
   const [pickPlace, setPickPlace] = useState(false);
+  const fromFilters = useRef(false);
   const [items, setItems] = useState<Product[] | null>(null);
   const [stores, setStores] = useState<StoreSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -369,7 +370,15 @@ function Market() {
         <div className="space-y-6">
           <section>
             <h3 className="mb-2.5 text-sm font-semibold text-ink/80">{t.shop.pickPlace}</h3>
-            <button type="button" onClick={() => setPickPlace(true)} className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface p-3 text-start transition hover:bg-sunk/60">
+            <button
+              type="button"
+              onClick={() => {
+                // One sheet at a time: close Filters, open the place picker, come back after.
+                fromFilters.current = true;
+                setFilters(false);
+                setTimeout(() => setPickPlace(true), 260);
+              }}
+              className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface p-3 text-start transition hover:bg-sunk/60">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-stitch/10 text-stitch">
                 <MapPin className="h-5 w-5" />
               </span>
@@ -432,7 +441,18 @@ function Market() {
         </div>
       </Sheet>
 
-      <PlacePicker open={pickPlace} onClose={() => setPickPlace(false)} value={places} onChange={setPlaces} />
+      <PlacePicker
+        open={pickPlace}
+        onClose={() => {
+          setPickPlace(false);
+          if (fromFilters.current) {
+            fromFilters.current = false;
+            setTimeout(() => setFilters(true), 260);
+          }
+        }}
+        value={places}
+        onChange={setPlaces}
+      />
       <ProductSheet product={open} onClose={() => setOpen(null)} onAdded={() => setCartOpen(true)} />
       <CartSheet
         open={cartOpen}

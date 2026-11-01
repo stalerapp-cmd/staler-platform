@@ -90,7 +90,7 @@ export function ScrollRow({ children, className, innerClassName, label, nudgeKey
       >
         {children}
       </div>
-      {/* Arrows for mouse users; hidden on touch, where swiping is natural. */}
+      {/* Arrows: full buttons for a mouse; on touch a small arrow that drifts toward where more items wait. */}
       {(['start', 'end'] as const).map((side) =>
         edge[side] ? (
           <button
@@ -98,13 +98,15 @@ export function ScrollRow({ children, className, innerClassName, label, nudgeKey
             type="button"
             onClick={() => go(side === 'end' ? 1 : -1)}
             className={cx(
-              'absolute top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-surface text-ink shadow-card ring-1 ring-line transition hover:scale-105 [@media(hover:hover)]:grid',
-              side === 'start' ? 'start-0 sm:-start-3' : 'end-0 sm:-end-3',
-              'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100',
+              'absolute top-1/2 z-10 -translate-y-1/2 place-items-center rounded-full bg-surface text-ink shadow-card ring-1 ring-line transition',
+              // touch: small, only toward the end, gently moving
+              side === 'end' ? 'grid h-8 w-8 [@media(hover:hover)]:h-10 [@media(hover:hover)]:w-10' : 'hidden h-10 w-10 [@media(hover:hover)]:grid',
+              side === 'start' ? 'start-0 sm:-start-3' : 'end-1 sm:-end-3',
+              '[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/row:opacity-100 focus-visible:opacity-100',
             )}
             aria-label={side === 'end' ? 'Next' : 'Previous'}
           >
-            {side === 'end' ? <ChevronLeft className="h-5 w-5 ltr:rotate-180" /> : <ChevronRight className="h-5 w-5 ltr:rotate-180" />}
+            {side === 'end' ? <ChevronLeft className="row-nudge h-4 w-4 ltr:rotate-180 [@media(hover:hover)]:h-5 [@media(hover:hover)]:w-5" /> : <ChevronRight className="h-5 w-5 ltr:rotate-180" />}
           </button>
         ) : null,
       )}

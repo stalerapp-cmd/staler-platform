@@ -20,7 +20,7 @@ const en = {
   market: { cats: 'Browse by category', everything: 'Everything', deals: 'Deals', byStore: 'Shop by store', results: '{n} products', newest: 'Newest', cheap: 'Lowest price', pricey: 'Highest price', az: 'A–Z', clear: 'Clear filters', filters: 'Filters', sortBy: 'Sort', type: 'What kind', showN: 'Show {n} products', kicker: 'From Palestinian stores, paid safely from your wallet', allStoresN: 'All {n} stores', everywhere: 'All of Palestine', see: 'See all', swipe: 'Swipe for more' },
   permx: {
     count: '{n} of {all} permissions', none: 'Nothing chosen yet — this admin can only sign in.', noHigh: 'No sensitive actions.', highN: '{n} sensitive action(s) — give these only to people you trust fully.',
-    presets: 'Start from a role', clearAll: 'Clear all', groupAll: 'All', groupNone: 'None', needs: 'Also turns on:',
+    presets: 'Start from a role', clearAll: 'Clear all', groupAll: 'All', groupNone: 'None', needs: 'Turning it on also adds:',
     preset: { readonly: 'Read only', support: 'Support', moderator: 'Moderator', finance: 'Finance', all: 'Everything' } as Record<string, string>,
     risk: { mid: 'Sensitive', high: 'High risk' } as Record<string, string>,
     group: { people: 'People and accounts', danger: 'Irreversible actions', commerce: 'Stores and agents', comms: 'Messages and sign-ups', system: 'Bank and system', other: 'Other' } as Record<string, string>,
@@ -210,7 +210,7 @@ const en = {
     voucherFrom: 'Voucher from', claim: 'Claim voucher', claimed: 'Voucher claimed', paid: 'Payment sent',
   },
   bank: {
-    title: 'TalerBank', pageLead: 'Your bank account, linked to your wallet — top up or send money back in one tap.', flowTitle: 'Between your wallet and your bank', totalIn: 'Topped up', totalOut: 'Sent to bank', linkValid: 'Link valid until', linkTitle: 'Link your bank account', linkLead: 'Link once, then top up or send money back to your bank in one tap.',
+    title: 'TalerBank', pageLead: 'Your bank account, linked to your wallet — top up or send money back in one tap.', flowTitle: 'Between your wallet and your bank', why1: 'Link once — no bank details typed again', why2: 'Top up or send money back in one tap', why3: 'Your bank password never leaves the bank', totalIn: 'Topped up', totalOut: 'Sent to bank', linkValid: 'Link valid until', linkTitle: 'Link your bank account', linkLead: 'Link once, then top up or send money back to your bank in one tap.',
     viaCode: 'With a link code', viaCodeD: 'Recommended. Create a code in TalerBank → Linked apps. Your bank password never leaves the bank.',
     viaLogin: 'With bank sign-in', viaLoginD: 'Your credentials go straight to TalerBank once and are never stored here.',
     code: 'Link code', codePh: 'ABCD-EFGH', login: 'Bank e-mail or username', link: 'Link account', linked: 'Linked account',
@@ -362,7 +362,7 @@ const ar: Dict = {
   market: { cats: 'تصفّح حسب الفئة', everything: 'كل شي', deals: 'عروض', byStore: 'تسوّق من متجر', results: '{n} منتج', newest: 'الأحدث', cheap: 'الأرخص', pricey: 'الأغلى', az: 'أ–ي', clear: 'امسح الفلاتر', filters: 'الفلاتر', sortBy: 'الترتيب', type: 'نوع المنتج', showN: 'اعرض {n} منتج', kicker: 'من متاجر فلسطينية، والدفع بأمان من محفظتك', allStoresN: 'كل المتاجر ({n})', everywhere: 'كل فلسطين', see: 'شوف الكل', swipe: 'اسحب لتشوف أكثر' },
   permx: {
     count: '{n} من {all} صلاحية', none: 'ما اخترت إشي لسا — هالأدمن بقدر يدخل بس.', noHigh: 'ما في صلاحيات حساسة.', highN: '{n} صلاحية خطيرة — أعطيها بس لناس بتثقي فيهم تمامًا.',
-    presets: 'ابدأ من دور جاهز', clearAll: 'امسح الكل', groupAll: 'الكل', groupNone: 'ولا إشي', needs: 'بتشغّل معها:',
+    presets: 'ابدأ من دور جاهز', clearAll: 'امسح الكل', groupAll: 'الكل', groupNone: 'ولا إشي', needs: 'تفعيلها بيضيف معها:',
     preset: { readonly: 'مشاهدة بس', support: 'الدعم', moderator: 'مشرف', finance: 'المالية', all: 'كل إشي' } as Record<string, string>,
     risk: { mid: 'حساسة', high: 'خطيرة' } as Record<string, string>,
     group: { people: 'الأشخاص والحسابات', danger: 'إجراءات ما بترجع', commerce: 'المتاجر والوكلاء', comms: 'الرسائل والتسجيلات', system: 'البنك والنظام', other: 'غير ذلك' } as Record<string, string>,
@@ -545,7 +545,7 @@ const ar: Dict = {
     payTitle: 'تأكيد الدفع', payTo: 'الدفع إلى', voucherTitle: 'استلام قسيمة نقدية', voucherFrom: 'قسيمة من', claim: 'استلم القسيمة', claimed: 'تم استلام القسيمة', paid: 'تم الدفع',
   },
   bank: {
-    title: 'TalerBank', pageLead: 'حسابك البنكي مربوط بمحفظتك — اشحن أو رجّع المصاري للبنك بضغطة.', flowTitle: 'بين محفظتك وبنكك', totalIn: 'انشحن من البنك', totalOut: 'انبعت للبنك', linkValid: 'الربط صالح لحد', linkTitle: 'اربط حسابك البنكي', linkLead: 'اربط مرة وحدة، وبعدها اشحن أو رجّع المصاري لبنكك بضغطة.',
+    title: 'TalerBank', pageLead: 'حسابك البنكي مربوط بمحفظتك — اشحن أو رجّع المصاري للبنك بضغطة.', flowTitle: 'بين محفظتك وبنكك', why1: 'اربط مرة وحدة — ما بتعيد تكتب بيانات البنك', why2: 'اشحن أو رجّع المصاري بضغطة', why3: 'كلمة سر البنك ما بتطلع من البنك أبدًا', totalIn: 'انشحن من البنك', totalOut: 'انبعت للبنك', linkValid: 'الربط صالح لحد', linkTitle: 'اربط حسابك البنكي', linkLead: 'اربط مرة وحدة، وبعدها اشحن أو رجّع المصاري لبنكك بضغطة.',
     viaCode: 'برمز ربط', viaCodeD: 'الطريقة الموصى بها. أنشئ رمزًا من TalerBank ← التطبيقات المرتبطة. كلمة سر البنك ما بتطلع من البنك أبدًا.',
     viaLogin: 'بتسجيل دخول البنك', viaLoginD: 'بياناتك بتروح مباشرة لـ TalerBank مرة وحدة وما بتنحفظ هون.', code: 'رمز الربط', codePh: 'ABCD-EFGH',
     login: 'بريد البنك أو اسم المستخدم', link: 'ربط الحساب', linked: 'الحساب المربوط', holder: 'صاحب الحساب', iban: 'IBAN', bankBalance: 'رصيد البنك', unlink: 'فك الربط',
