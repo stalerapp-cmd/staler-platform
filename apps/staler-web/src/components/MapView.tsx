@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useI18n } from '../lib/i18n';
 import { cx } from './ui';
+import { isNative } from '../lib/api';
 
 export interface Pin {
   lat: number;
@@ -21,15 +22,15 @@ export interface Me {
 const COLORS: Record<NonNullable<Pin['kind']>, string> = { store: '#141B3D', home: '#5E7A2E', track: '#9AA3B5', now: '#E2506A', agent: '#C99A2E' };
 
 /**
- * Map tiles, best first. If one provider fails to deliver tiles (blocked
- * network, rate limit, app WebView refused), the map moves on to the next
- * instead of staying blank.
+ * Map tiles, best first. If a provider fails to deliver tiles, the map moves on
+ * to the next instead of staying blank. OpenStreetMap's own servers refuse
+ * requests from app WebViews, so the installed app starts with Esri.
+ * (No provider that needs an API key: those answer with "key required" pictures
+ * that look like successful tiles.)
  */
-const PROVIDERS = [
-  { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', opts: { subdomains: 'abcd', maxZoom: 20, attribution: '© OpenStreetMap · © CARTO' } },
-  { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opts: { maxZoom: 19, attribution: '© OpenStreetMap' } },
-  { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', opts: { maxZoom: 19, attribution: '© Esri · OpenStreetMap' } },
-];
+const OSM = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opts: { maxZoom: 19, attribution: '© OpenStreetMap contributors' } };
+const ESRI = { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', opts: { maxZoom: 19, attribution: 'Tiles © Esri — Esri, HERE, Garmin, OpenStreetMap contributors' } };
+const PROVIDERS = isNative ? [ESRI, OSM] : [OSM, ESRI];
 
 const pinHtml = (color: string, size: number, pulse: boolean, selected: boolean) =>
   `<span style="position:relative;display:block;width:${size}px;height:${size}px">` +

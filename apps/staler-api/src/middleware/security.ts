@@ -19,7 +19,7 @@ export const securityHeaders = helmet({
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
       // Product photos and avatars live in Supabase Storage.
       // + OpenStreetMap tiles for order tracking maps.
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.supabase.co', 'https://tile.openstreetmap.org', 'https://*.tile.openstreetmap.org', 'https://*.basemaps.cartocdn.com', 'https://server.arcgisonline.com'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.supabase.co', 'https://tile.openstreetmap.org', 'https://*.tile.openstreetmap.org', 'https://server.arcgisonline.com'],
       connectSrc: ["'self'", ...GOOGLE],
       mediaSrc: ["'self'", 'blob:', 'https://*.supabase.co'],
       workerSrc: ["'self'", 'blob:'],
