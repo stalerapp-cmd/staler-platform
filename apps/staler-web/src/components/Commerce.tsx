@@ -142,44 +142,57 @@ export function ProductCard({ p, onOpen, index, showStore = true }: { p: Product
   const off = p.compare_at_price && Number(p.compare_at_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.compare_at_price)) * 100) : 0;
   return (
     <motion.button
-      initial={{ opacity: 0, y: 24, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ delay: Math.min(index, 12) * 0.04, type: 'spring', bounce: 0.25 }}
+      initial={{ opacity: 0, y: 22 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-30px' }}
+      transition={{ delay: Math.min(index % 8, 7) * 0.04, type: 'spring', bounce: 0.22 }}
       whileTap={{ scale: 0.97 }}
       onClick={onOpen}
       className={cx(
-        'group relative flex flex-col overflow-hidden rounded-[1.4rem] border border-line bg-surface text-start transition duration-300 hover:-translate-y-1 hover:shadow-card',
+        'group relative flex min-w-0 flex-col rounded-[1.6rem] bg-surface p-1.5 text-start shadow-[0_1px_0_rgb(var(--line)),0_14px_34px_-26px_rgb(var(--night)/0.55)] ring-1 ring-line/60 transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_44px_-26px_rgb(var(--night)/0.6)]',
         soldOut && 'opacity-80',
       )}
     >
-      <div className="relative aspect-[4/5] overflow-hidden">
-        <ProductImage p={p} className={cx('transition duration-700 group-hover:scale-110', soldOut && 'grayscale')} />
+      {/* The photo sits in its own rounded frame, like a print in a mount. */}
+      <div className="relative aspect-[4/5] overflow-hidden rounded-[1.25rem] bg-sunk">
+        <ProductImage p={p} className={cx('transition duration-700 ease-out group-hover:scale-[1.06]', soldOut && 'grayscale')} />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/35 to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
         <div className="absolute inset-x-2 top-2 flex flex-wrap gap-1.5">
+          {!soldOut && off > 0 && <span className="rounded-full bg-stitch px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">−{off}%</span>}
           {p.is_digital && (
-            <Badge tone="info">
+            <span className="flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-night shadow-sm backdrop-blur">
               {p.digital_mode === 'view' ? <BookOpen className="h-3 w-3" /> : <FileDown className="h-3 w-3" />}
               {p.digital_mode === 'view' ? t.shop.viewOnly : t.store.digital}
-            </Badge>
+            </span>
           )}
-          {!soldOut && (p.deposit_percent ?? 0) > 0 && <Badge tone="warn">{fill(t.shop.deposit, { p: p.deposit_percent ?? 0 })}</Badge>}
-          {!soldOut && off > 0 && <Badge tone="bad">{fill(t.shop.save, { p: off })}</Badge>}
+          {!soldOut && (p.deposit_percent ?? 0) > 0 && <span className="rounded-full bg-gold px-2 py-0.5 text-[11px] font-semibold text-night shadow-sm">{fill(t.shop.deposit, { p: p.deposit_percent ?? 0 })}</span>}
         </div>
         {soldOut && (
           <div className="absolute inset-0 grid place-items-center bg-night/45 backdrop-blur-[1px]">
             <span className="-rotate-12 rounded-xl border-2 border-white/90 px-4 py-1.5 font-display text-xl tracking-wide text-white shadow-lg">{t.store.soldOut}</span>
           </div>
         )}
-        {few && <span className="absolute bottom-2 start-2 rounded-full bg-night/75 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">{fill(t.shop.fewLeft, { n: p.stock })}</span>}
+        {few && <span className="absolute bottom-2 start-2 rounded-full bg-night/80 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">{fill(t.shop.fewLeft, { n: p.stock })}</span>}
+        {/* A quiet "open" mark that wakes on hover — tells people the card opens. */}
+        {!soldOut && (
+          <span className="absolute bottom-2 end-2 grid h-9 w-9 place-items-center rounded-full bg-white/95 text-night shadow-md transition duration-300 group-hover:scale-110 group-hover:bg-stitch group-hover:text-white">
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+          </span>
+        )}
       </div>
-      <div className="flex flex-1 flex-col p-3.5">
-        <p className="line-clamp-2 font-medium leading-snug">{p.name}</p>
-        {showStore && <p className="mt-0.5 truncate text-xs text-muted">{p.branch_name ? `${p.store_name} · ${p.branch_name}` : p.store_name}</p>}
-        <div className="mt-auto flex items-baseline gap-2 pt-3">
-          <p className="num font-display text-lg">{money(p.price, lang)}</p>
+      <div className="flex min-w-0 flex-1 flex-col px-2 pb-2 pt-2.5">
+        {showStore && (
+          <p className="mb-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+            <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-gold" />
+            <span className="truncate">{p.branch_name ? `${p.store_name} · ${p.branch_name}` : p.store_name}</span>
+          </p>
+        )}
+        <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{p.name}</p>
+        <div className="mt-auto flex flex-wrap items-baseline gap-x-2 pt-2.5">
+          <p className="num font-display text-lg leading-none">{money(p.price, lang)}</p>
           {off > 0 && <p className="num text-xs text-muted line-through">{money(p.compare_at_price!, lang)}</p>}
         </div>
       </div>
-      <span className="pointer-events-none absolute inset-0 rounded-[1.4rem] border-2 border-dashed border-stitch/0 transition group-hover:border-stitch/40" />
     </motion.button>
   );
 }

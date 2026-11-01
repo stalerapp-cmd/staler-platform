@@ -8,6 +8,7 @@
  *  - CAMERA permission for QR scanning; LOCATION for the wallet's cash-agent map ("near me")
  *  - deep links for the app's own scheme (taler:// or talerbank://)
  *  - FLAG_SECURE on the main activity (no screenshots / recents thumbnails of balances)
+ *  - text zoom capped at 110% so a huge system font can't break the layout
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -91,6 +92,10 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         // Balances and codes must not leak into screenshots or the recents screen.
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+        // The phone's font-size setting scales every word in the WebView. Let it grow a little for
+        // readability (up to 110%), never so much that screens break; smaller settings stay at 100%.
+        android.webkit.WebSettings ws = getBridge().getWebView().getSettings();
+        ws.setTextZoom(Math.max(100, Math.min(ws.getTextZoom(), 110)));
     }
 }
 `,

@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { ScrollCue } from '../components/ScrollCue';
 import { Link } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { useAuth } from '../lib/auth';
@@ -16,7 +17,8 @@ export function PublicShell({ children, onCart, brand, className }: { children: 
   const { user } = useAuth();
   const { t } = useI18n();
   return (
-    <div className="min-h-dvh bg-bg">
+    <div className="shop-ground min-h-dvh">
+      <ScrollCue bottom="calc(env(safe-area-inset-bottom) + 24px)" />
       <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-bg/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-1">

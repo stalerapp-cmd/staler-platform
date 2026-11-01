@@ -55,6 +55,7 @@ import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 import { useConfirm } from '../components/Confirm';
 import { usePublicConfig } from '../lib/config';
 import { PrefsPill } from '../components/Fun';
+import { ScrollCue } from '../components/ScrollCue';
 
 interface NavItem {
   to: string;
@@ -537,7 +538,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
 
   return (
     <div
-      className={cx('app-ground safe-x min-h-dvh lg:grid lg:transition-[grid-template-columns] lg:duration-300', rail ? 'lg:grid-cols-[84px_1fr]' : 'lg:grid-cols-[272px_1fr]')}
+      className={cx(/^\/app\/(store|stores)(\/|$)/.test(loc.pathname) ? 'shop-ground' : 'app-ground', 'safe-x min-h-dvh lg:grid lg:transition-[grid-template-columns] lg:duration-300', rail ? 'lg:grid-cols-[84px_1fr]' : 'lg:grid-cols-[272px_1fr]')}
     >
       <aside className="sticky top-0 hidden h-dvh flex-col border-e border-line bg-surface/80 py-5 backdrop-blur lg:flex">
         <div className={cx('mb-5 flex items-center', rail ? 'flex-col gap-3 px-2' : 'justify-between px-5')}>
@@ -561,6 +562,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       <div className="min-w-0">
         <Announcement />
         <BioOffer />
+        <ScrollCue />
         <header className="safe-top sticky top-0 z-30 px-2.5 pt-2 sm:px-5 lg:px-0 lg:pt-0">
           <div className="hdr-ribbon flex h-[60px] w-full items-center justify-between gap-2 rounded-[22px] bg-surface/90 px-2 shadow-[0_12px_32px_-20px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur-md sm:px-3 lg:h-16 lg:rounded-none lg:px-6 lg:shadow-[0_10px_30px_-24px_rgb(var(--night)/0.6)] lg:ring-0">
             <div className="flex min-w-0 items-center gap-1">

@@ -34,7 +34,8 @@
 }
 
 @layer base {
-  html { -webkit-tap-highlight-color: transparent; text-size-adjust: 100%; }
+  /* A bigger system/browser font may grow text a little (accessibility), but never enough to break layouts. */
+  html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; font-size: clamp(14px, 100%, 17.5px); }
   body {
     @apply bg-bg text-ink font-body antialiased;
     font-size: 15.5px;
@@ -252,3 +253,21 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
 .fld .field { transition: border-color 0.25s ease, box-shadow 0.3s ease, background-color 0.25s ease; }
 .fld .field:hover:not(:focus) { border-color: rgb(var(--fld-accent) / 0.45); }
 @media (prefers-reduced-motion: reduce) { .fld-dot, .fld-box::after { transition: none; } }
+
+/* Horizontal rails fade toward the reading end. */
+.row-scroll { --row-end: right; }
+[dir='rtl'] .row-scroll { --row-end: left; }
+
+/* Shopping pages: a calm, solid ground with soft light from the corners — no dots, no "empty paper" feel. */
+.shop-ground {
+  background-color: rgb(var(--bg));
+  background-image:
+    radial-gradient(1100px 520px at 100% -8%, rgb(var(--gold) / 0.13), transparent 62%),
+    radial-gradient(900px 480px at -10% 4%, rgb(var(--stitch) / 0.07), transparent 58%);
+  background-attachment: fixed;
+}
+
+/* The scroll cue: a quiet "there's more below" for people who don't think to scroll. */
+@keyframes cue-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+.cue-bob { animation: cue-bob 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .cue-bob { animation: none; } }

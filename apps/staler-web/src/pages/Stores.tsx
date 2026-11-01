@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { ScrollRow } from '../components/ScrollRow';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, FileDown, GitBranch, LayoutGrid, MapPin, Megaphone, Package, Scissors, Search, Shirt, Smartphone, Sofa, Sparkles, Store as StoreIcon, UtensilsCrossed, Wrench } from 'lucide-react';
@@ -74,14 +75,17 @@ function StoreCard({ s, i }: { s: StoreSummary; i: number }) {
   const Icon = CATEGORY_ICONS[s.category ?? 'other'] ?? LayoutGrid;
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30, rotate: i % 2 ? 1.2 : -1.2 }}
-      whileInView={{ opacity: 1, y: 0, rotate: 0 }}
+      initial={{ opacity: 0, y: 26 }}
+      whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
       transition={{ type: 'spring', bounce: 0.3, delay: (i % 6) * 0.05 }}
     >
-      <Link to={`/s/${s.slug}`} className="group block overflow-hidden rounded-[1.6rem] border border-line bg-surface transition duration-300 hover:-translate-y-1.5 hover:shadow-card">
-        <div className="relative">
-          <StoreCover s={s} className="h-32 transition duration-700 group-hover:scale-[1.04]" />
+      <Link
+        to={`/s/${s.slug}`}
+        className="group block h-full rounded-[1.75rem] bg-surface p-1.5 shadow-[0_1px_0_rgb(var(--line)),0_18px_40px_-28px_rgb(var(--night)/0.6)] ring-1 ring-line/60 transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_50px_-28px_rgb(var(--night)/0.65)]"
+      >
+        <div className="relative overflow-hidden rounded-[1.35rem]">
+          <StoreCover s={s} className="h-40 transition duration-700 ease-out group-hover:scale-[1.05]" />
           {s.ads > 0 && (
             <span className="absolute end-3 top-3 flex items-center gap-1 rounded-full bg-stitch px-2.5 py-1 text-[11px] font-semibold text-white shadow">
               <span className="relative flex h-2 w-2">
@@ -95,8 +99,8 @@ function StoreCard({ s, i }: { s: StoreSummary; i: number }) {
             <Icon className="h-3.5 w-3.5" /> {t.shop.cat[s.category ?? 'other'] ?? s.category}
           </span>
         </div>
-        <div className="relative px-4 pb-4">
-          <div className="-mt-8 flex items-end gap-3">
+        <div className="relative px-3 pb-3">
+          <div className="-mt-9 flex items-end gap-3">
             <motion.span whileHover={{ rotate: -6, scale: 1.05 }}>
               <StoreLogo s={s} size={64} />
             </motion.span>
@@ -153,7 +157,8 @@ export function StoresDirectory() {
 
   return (
     <div>
-      <section className="relative mb-6 overflow-hidden rounded-[2rem] bg-night px-5 py-10 text-white sm:px-10 sm:py-14">
+      <section className="relative mb-6 overflow-hidden rounded-[2rem] bg-night px-5 py-9 text-white shadow-card sm:px-10 sm:py-14">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_70%_at_0%_100%,rgba(94,122,46,0.35),transparent_60%)]" />
         <motion.div
           className="pointer-events-none absolute -end-16 -top-16 h-72 w-72 opacity-60"
           animate={{ rotate: 360 }}
@@ -170,11 +175,11 @@ export function StoresDirectory() {
         <label className="relative mt-6 block max-w-xl">
           <span className="sr-only">{t.common.search}</span>
           <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.shop.searchStores} type="search" className="field h-14 rounded-2xl ps-12 text-base text-ink" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.shop.searchStores} type="search" className="h-14 w-full rounded-2xl border-0 bg-white pe-4 ps-12 text-base text-ink shadow-lg outline-none ring-2 ring-transparent transition placeholder:text-muted/80 focus:ring-gold/70" />
         </label>
       </section>
 
-      <div className="-mx-4 mb-6 flex snap-x gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:px-0" role="radiogroup" aria-label={t.mstore.category}>
+      <ScrollRow nudgeKey="stores-cats" label={t.mstore.category} className="mb-6" innerClassName="gap-2">
         {['', ...CATEGORIES].map((c) => {
           const Icon = c ? CATEGORY_ICONS[c]! : StoreIcon;
           const on = cat === c;
@@ -184,15 +189,15 @@ export function StoresDirectory() {
               role="radio"
               aria-checked={on}
               onClick={() => setCat(c)}
-              className={cx('relative flex shrink-0 snap-start items-center gap-2 rounded-full border px-4 py-2 text-sm transition', on ? 'border-transparent text-white' : 'border-line bg-surface text-muted hover:text-ink')}
+              className={cx('relative flex shrink-0 snap-start items-center gap-2 rounded-full px-4 py-2.5 text-sm transition', on ? 'text-white shadow-lift' : 'bg-surface text-ink/80 ring-1 ring-line/70 hover:-translate-y-0.5 hover:text-ink')}
             >
               {on && <motion.span layoutId="cat-pill" className="absolute inset-0 rounded-full bg-night" transition={{ type: 'spring', bounce: 0.25, duration: 0.45 }} />}
               <Icon className="relative h-4 w-4" />
-              <span className="relative">{c ? t.shop.cat[c] : t.shop.allStores}</span>
+              <span className="relative whitespace-nowrap">{c ? t.shop.cat[c] : t.shop.allStores}</span>
             </button>
           );
         })}
-      </div>
+      </ScrollRow>
 
       <ErrorNote>{error}</ErrorNote>
       {!stores ? (
@@ -202,7 +207,7 @@ export function StoresDirectory() {
           ))}
         </div>
       ) : stores.length ? (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
           {stores.map((s, i) => (
             <StoreCard key={s.id} s={s} i={i} />
           ))}

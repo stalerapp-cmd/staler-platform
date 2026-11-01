@@ -1,4 +1,6 @@
 import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
+import { ScrollRow } from '../components/ScrollRow';
+import { fill } from '../lib/format';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Bike, ClipboardList, Map as MapIcon, MapPin, Package, Phone, Search, Share2, ShoppingBag, Store as StoreIcon } from 'lucide-react';
@@ -8,7 +10,7 @@ import { useI18n } from '../lib/i18n';
 import { CartSheet, ProductCard, ProductSheet, useCart, type Product } from '../components/Commerce';
 import { ShareSheet } from '../components/Share';
 import { MapView } from '../components/MapView';
-import { Button, Chips, EmptyState, Skeleton, cx } from '../components/ui';
+import { Button, EmptyState, Skeleton, cx } from '../components/ui';
 import { PublicShell } from '../layouts/PublicShell';
 import { CATEGORY_ICONS, StoreCover, StoreLogo, accentOf } from './Stores';
 
@@ -168,12 +170,12 @@ export default function StorePage() {
           {/* ---------------------------------------------------------- hero */}
           <section ref={heroRef} className="relative -mx-4 overflow-hidden sm:mx-0 sm:rounded-[2rem]" style={{ background: accent }}>
             <motion.div style={{ y: coverY, scale: coverScale }}>
-              <StoreCover s={s.main ?? s} className="h-56 sm:h-72" />
+              <StoreCover s={s.main ?? s} className="h-60 sm:h-80" />
             </motion.div>
           </section>
-          <div className="relative px-1 sm:px-6">
-            <motion.div className="-mt-12 inline-block" initial={{ scale: 0.6, rotate: -12, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: 'spring', bounce: 0.45 }}>
-              <StoreLogo s={s.main ?? s} size={96} />
+          <div className="relative -mt-16 rounded-[1.75rem] bg-surface/95 p-5 shadow-card ring-1 ring-line/60 backdrop-blur sm:mx-6 sm:-mt-24 sm:p-7">
+            <motion.div className="-mt-14 inline-block sm:-mt-16" initial={{ scale: 0.6, rotate: -12, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: 'spring', bounce: 0.45 }}>
+              <StoreLogo s={s.main ?? s} size={92} />
             </motion.div>
             <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3 font-display text-3xl leading-tight sm:text-4xl">
               {s.store_name}
@@ -259,7 +261,7 @@ export default function StorePage() {
           {data!.ads.length > 0 && (
             <section className="mt-8">
               <h2 className="mb-3 px-1 text-xl">{t.shop.ads}</h2>
-              <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
+              <ScrollRow nudgeKey={`ads-${slug}`} label={t.shop.ads}>
                 {data!.ads.map((ad, i) => (
                   <AdCard
                     key={ad.id}
@@ -270,17 +272,17 @@ export default function StorePage() {
                     }}
                   />
                 ))}
-              </div>
+              </ScrollRow>
             </section>
           )}
 
           {/* ------------------------------------------------ pickup points */}
           {!!data!.pickupPoints?.length && (
-            <section className="mb-6">
-              <h2 className="mb-3 flex items-center gap-2 text-lg">
+            <section className="mt-8">
+              <h2 className="mb-3 flex items-center gap-2 text-xl">
                 <MapPin className="h-5 w-5 text-stitch" /> {t.pick.title}
               </h2>
-              <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+              <ScrollRow label={t.pick.title}>
                 {data!.pickupPoints.map((x: any, i: number) => (
                   <motion.div
                     key={x.id}
@@ -295,14 +297,14 @@ export default function StorePage() {
                     {x.hours && <p className="mt-2 text-xs text-muted">{x.hours}</p>}
                   </motion.div>
                 ))}
-              </div>
+              </ScrollRow>
             </section>
           )}
 
           {/* ----------------------------------------------------- branches */}
           {data!.branches.length > 1 && (
             <section className="mt-6">
-              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+              <ScrollRow label={t.shop.branches} innerClassName="gap-2">
                 {data!.branches.map((b) => {
                   const on = b.slug === slug;
                   return (
@@ -317,29 +319,41 @@ export default function StorePage() {
                     </button>
                   );
                 })}
-              </div>
+              </ScrollRow>
             </section>
           )}
 
           {/* ----------------------------------------------------- products */}
-          <section className="mt-6">
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <label className="relative min-w-[200px] flex-1">
+          <section className="mt-8">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <h2 className="text-2xl">{t.merchant.products}</h2>
+              {products && <span className="num text-sm text-muted">{fill(t.market.results, { n: products.length })}</span>}
+            </div>
+            <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-4 mb-4 space-y-2.5 bg-bg/85 px-4 py-2.5 backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:px-3">
+              <label className="relative block">
                 <span className="sr-only">{t.common.search}</span>
-                <Search className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.store.search} className="field h-12 ps-10" type="search" />
+                <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.store.search} className="field h-12 rounded-2xl ps-12" type="search" />
               </label>
-              <Chips
-                label={t.tx.filter}
-                value={type as any}
-                onChange={(v: string) => setType(v)}
-                options={[
+              <ScrollRow label={t.tx.filter} innerClassName="gap-2 pb-0.5" bleed={false}>
+                {[
                   { value: 'all', label: t.common.all },
                   { value: 'physical', label: t.store.physical },
                   { value: 'digital', label: t.store.digital },
                   { value: 'deposit', label: t.mstore.deposit },
-                ]}
-              />
+                ].map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setType(o.value)}
+                    aria-pressed={type === o.value}
+                    className={cx('relative shrink-0 rounded-full px-4 py-2 text-sm transition', type === o.value ? 'text-white' : 'bg-surface text-ink/80 ring-1 ring-line hover:text-ink')}
+                  >
+                    {type === o.value && <motion.span layoutId="sp-type" className="absolute inset-0 rounded-full" style={{ background: accent }} transition={{ type: 'spring', bounce: 0.25, duration: 0.4 }} />}
+                    <span className="relative whitespace-nowrap">{o.label}</span>
+                  </button>
+                ))}
+              </ScrollRow>
             </div>
             {!products ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -348,7 +362,7 @@ export default function StorePage() {
                 ))}
               </div>
             ) : products.length ? (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
                 {products.map((p, i) => (
                   <ProductCard key={p.id} p={p} index={i} showStore={false} onOpen={() => setParams({ p: p.id }, { replace: true })} />
                 ))}

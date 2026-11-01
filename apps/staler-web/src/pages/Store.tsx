@@ -34,6 +34,8 @@ import {
   TrendingUp,
   Flame,
   ArrowLeft,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import { ApiError, downloadFile, get, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -49,7 +51,9 @@ import { MapView, type Pin } from '../components/MapView';
 import { QRImage } from '../components/QR';
 import { SecureReader } from '../components/Reader';
 import { PublicShell } from '../layouts/PublicShell';
-import { StoreLogo, accentOf, type StoreSummary } from './Stores';
+import { StoreCover, StoreLogo, type StoreSummary } from './Stores';
+import { ScrollRow } from '../components/ScrollRow';
+import { CheckMark } from '../components/Choice';
 import { StarMotif } from '../components/Tatreez';
 
 export { CartProvider, useCart } from '../components/Commerce';
@@ -81,11 +85,13 @@ function Market() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [filters, setFilters] = useState(false);
   const seq = useRef(0);
+  const M = t.market;
 
   useEffect(() => {
     get<{ stores: StoreSummary[] }>('/api/store/stores')
-      .then((d) => setStores(d.stores.slice(0, 14)))
+      .then((d) => setStores(d.stores))
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -110,172 +116,256 @@ function Market() {
   }, [params]);
 
   const sorts = [
-    { v: 'new', label: t.market.newest, icon: Sparkles },
-    { v: 'price_asc', label: t.market.cheap, icon: TrendingDown },
-    { v: 'price_desc', label: t.market.pricey, icon: TrendingUp },
-    { v: 'name', label: t.market.az, icon: ArrowDownUp },
+    { v: 'new', label: M.newest, icon: Sparkles },
+    { v: 'price_asc', label: M.cheap, icon: TrendingDown },
+    { v: 'price_desc', label: M.pricey, icon: TrendingUp },
+    { v: 'name', label: M.az, icon: ArrowDownUp },
   ];
   const types = [
-    { v: 'all', label: t.market.everything },
-    { v: 'deals', label: t.market.deals },
+    { v: 'all', label: M.everything },
+    { v: 'deals', label: M.deals },
     { v: 'physical', label: t.store.physical },
     { v: 'digital', label: t.store.digital },
     { v: 'deposit', label: t.mstore.deposit },
   ];
-  const filtered = q.trim() || type !== 'all' || cat !== 'all';
+  const allCats = [{ k: 'all', icon: LayoutGrid, c: '#141B3D' }, ...CATS];
+  const catLabel = (k: string) => (k === 'all' ? M.everything : t.shop.cat[k]);
+  const active = (cat !== 'all' ? 1 : 0) + (type !== 'all' ? 1 : 0) + (sort !== 'new' ? 1 : 0);
+  const clear = () => {
+    setQ('');
+    setType('all');
+    setCat('all');
+    setSort('new');
+  };
 
   return (
     <div>
-      <PageHeader title={t.store.title} lead={t.store.lead} actions={<CartButton onClick={() => setCartOpen(true)} className="bg-white text-night shadow-lift" />} />
+      {/* ------------------------------------------------------------ hero */}
+      <section className="relative mb-6 overflow-hidden rounded-[2rem] bg-night px-5 pb-5 pt-7 text-white shadow-card sm:px-9 sm:pb-8 sm:pt-10">
+        <div className="pointer-events-none absolute -end-20 -top-24 h-80 w-80 opacity-50 [mask-image:radial-gradient(circle,black_40%,transparent_72%)]">
+          <StarMotif size={21} cell={14} className="h-full w-full" colors={['#E2506A', '#E9C060']} animate={false} />
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_70%_at_0%_100%,rgba(94,122,46,0.35),transparent_60%)]" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm text-white/70">
+              <span className="h-1.5 w-1.5 rotate-45 bg-gold" /> {M.kicker}
+            </p>
+            <h1 className="mt-2 font-display text-4xl leading-tight sm:text-5xl">{t.store.title}</h1>
+          </div>
+          <CartButton onClick={() => setCartOpen(true)} className="shrink-0 bg-white text-night shadow-lift" />
+        </div>
+        <div className="relative mt-5 flex gap-2 sm:mt-7">
+          <label className="relative min-w-0 flex-1">
+            <span className="sr-only">{t.common.search}</span>
+            <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.store.search} className="h-14 w-full rounded-2xl border-0 bg-white pe-4 ps-12 text-base text-ink shadow-lg outline-none ring-2 ring-transparent transition placeholder:text-muted/80 focus:ring-gold/70" type="search" />
+          </label>
+          <button
+            type="button"
+            onClick={() => setFilters(true)}
+            className="relative flex h-14 shrink-0 items-center gap-2 rounded-2xl bg-white/12 px-4 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/20 active:scale-95"
+            aria-label={M.filters}
+          >
+            <SlidersHorizontal className="h-5 w-5" />
+            <span className="hidden sm:inline">{M.filters}</span>
+            {active > 0 && <span className="num absolute -end-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-stitch px-1 text-[11px] text-white ring-2 ring-night">{active}</span>}
+          </button>
+        </div>
+      </section>
 
-      {/* Categories: big round tiles that bounce when picked */}
-      <section className="mb-5">
-        <h2 className="mb-3 text-lg">{t.market.cats}</h2>
-        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 pt-1.5 sm:mx-0 sm:px-1">
-          {[{ k: 'all', icon: LayoutGrid, c: '#141B3D' }, ...CATS].map((x, i) => {
+      {/* ------------------------------------------------------ categories */}
+      <section className="mb-7">
+        <div className="mb-2.5 flex items-end justify-between gap-3">
+          <h2 className="text-xl">{M.cats}</h2>
+          <span className="text-xs text-muted sm:hidden">{M.swipe}</span>
+        </div>
+        <ScrollRow nudgeKey="market-cats" label={M.cats} innerClassName="gap-2.5">
+          {allCats.map((x) => {
             const on = cat === x.k;
             return (
               <motion.button
                 key={x.k}
                 type="button"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.035, type: 'spring', bounce: 0.4 }}
-                whileTap={{ scale: 0.9 }}
+                whileTap={{ scale: 0.94 }}
                 onClick={() => setCat(x.k)}
-                className="group flex w-[74px] shrink-0 flex-col items-center gap-1.5 text-center"
                 aria-pressed={on}
+                className={cx(
+                  'relative flex shrink-0 snap-start items-center gap-2.5 rounded-2xl py-2 pe-4 ps-2 text-sm transition',
+                  on ? 'text-white shadow-lift' : 'bg-surface text-ink/85 ring-1 ring-line/70 hover:-translate-y-0.5 hover:ring-ink/15',
+                )}
               >
-                <motion.span
-                  animate={on ? { rotate: [0, -8, 6, 0], scale: 1.06 } : { rotate: 0, scale: 1 }}
-                  transition={{ duration: 0.45 }}
-                  className="relative grid h-[62px] w-[62px] place-items-center rounded-[22px] text-white shadow-lift transition group-hover:-translate-y-1"
-                  style={{ background: on ? x.c : `${x.c}1f`, color: on ? '#fff' : x.c }}
-                >
-                  {on && <motion.span layoutId="cat-ring" className="absolute -inset-1 rounded-[25px] border-2 border-dashed" style={{ borderColor: x.c }} />}
-                  <x.icon className="h-6 w-6" strokeWidth={1.9} />
-                </motion.span>
-                <span className={cx('w-full truncate text-xs', on ? 'font-semibold text-ink' : 'text-muted')}>{x.k === 'all' ? t.market.everything : t.shop.cat[x.k]}</span>
+                {on && <motion.span layoutId="cat-on" className="absolute inset-0 rounded-2xl" style={{ background: x.c }} transition={{ type: 'spring', bounce: 0.25, duration: 0.45 }} />}
+                <span className="relative grid h-9 w-9 place-items-center rounded-xl transition-colors" style={{ background: on ? 'rgba(255,255,255,0.18)' : `${x.c}1a`, color: on ? '#fff' : x.c }}>
+                  <x.icon className="h-[18px] w-[18px]" strokeWidth={2} />
+                </span>
+                <span className={cx('relative whitespace-nowrap', on && 'font-semibold')}>{catLabel(x.k)}</span>
               </motion.button>
             );
           })}
-        </div>
+        </ScrollRow>
       </section>
 
+      {/* -------------------------------------------------- shop by store */}
       {stores.length > 0 && cat === 'all' && !q.trim() && (
-        <section className="mb-6">
-          <h2 className="mb-3 flex items-center gap-2 text-lg">
-            <StoreIcon className="h-5 w-5 text-stitch" /> {t.market.byStore}
-          </h2>
-          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-3 pt-1 sm:mx-0 sm:px-1">
-            {stores.map((s, i) => (
-              <motion.div
-                key={s.id}
-                initial={{ opacity: 0, y: 16, rotate: i % 2 ? 2 : -2 }}
-                animate={{ opacity: 1, y: 0, rotate: 0 }}
-                transition={{ delay: i * 0.05, type: 'spring', bounce: 0.4 }}
-                whileHover={{ y: -4, rotate: i % 2 ? 1.5 : -1.5 }}
-                whileTap={{ scale: 0.95 }}
-                className="shrink-0 snap-start"
-              >
-                <Link to={`/s/${s.slug}`} className="block w-[128px] overflow-hidden rounded-[22px] bg-surface text-center shadow-lift ring-1 ring-line/70">
-                  <div className="relative h-12 overflow-hidden" style={{ background: accentOf(s) }}>
-                    <StarMotif size={9} cell={10} className="absolute -end-3 -top-4 h-16 w-16 opacity-40" colors={['#FFFFFF', '#E9C060']} animate={false} />
-                  </div>
-                  <div className="relative -mt-8 flex justify-center">
-                    <span className="rounded-[18px] bg-surface p-1 shadow-sm">
-                      <StoreLogo s={s} size={56} />
-                    </span>
-                  </div>
-                  <p className="mt-1.5 line-clamp-1 px-2 text-sm font-semibold">{s.store_name}</p>
-                  <p className="mb-3 mt-1 inline-flex items-center gap-1 rounded-full bg-sunk px-2 py-0.5 text-[11px] text-muted">
-                    <Package className="h-3 w-3" /> <span className="num">{s.products}</span>
-                  </p>
-                </Link>
-              </motion.div>
-            ))}
-            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: stores.length * 0.05 }} whileHover={{ y: -4 }} whileTap={{ scale: 0.95 }} className="shrink-0 snap-start">
-              <Link
-                to="/app/stores"
-                className="group flex h-full min-h-[150px] w-[128px] flex-col items-center justify-center gap-2.5 rounded-[22px] border-2 border-dashed border-stitch/40 bg-stitch/5 text-center text-stitch transition hover:bg-stitch/10"
-              >
-                <span className="relative grid h-14 w-14 place-items-center rounded-full bg-stitch text-white shadow-md shadow-stitch/30">
-                  <span className="absolute -inset-1.5 rounded-full border-2 border-dashed border-stitch/50 motion-safe:animate-[spin_12s_linear_infinite]" />
-                  <ArrowLeft className="h-6 w-6 transition group-hover:-translate-x-0.5 ltr:rotate-180" />
-                </span>
-                <span className="text-sm font-semibold">{t.shop.allStores}</span>
-              </Link>
-            </motion.div>
+        <section className="mb-8">
+          <div className="mb-2.5 flex items-end justify-between gap-3">
+            <h2 className="text-xl">{M.byStore}</h2>
+            <Link to="/app/stores" className="flex items-center gap-1 text-sm font-medium text-stitch hover:underline">
+              {fill(M.allStoresN, { n: stores.length })} <ArrowLeft className="h-4 w-4 ltr:rotate-180" />
+            </Link>
           </div>
+          <ScrollRow nudgeKey="market-stores" label={M.byStore} innerClassName="gap-3.5">
+            {stores.slice(0, 14).map((s) => (
+              <Link
+                key={s.id}
+                to={`/s/${s.slug}`}
+                className="group w-[230px] shrink-0 snap-start overflow-hidden rounded-[1.5rem] bg-surface shadow-[0_14px_34px_-26px_rgb(var(--night)/0.55)] ring-1 ring-line/60 transition duration-300 hover:-translate-y-1"
+              >
+                <StoreCover s={s} className="h-24 transition duration-700 group-hover:scale-[1.04]" />
+                <div className="relative px-3.5 pb-3.5">
+                  <div className="-mt-7">
+                    <StoreLogo s={s} size={52} />
+                  </div>
+                  <p className="mt-1.5 truncate font-display text-lg leading-tight">{s.store_name}</p>
+                  <p className="mt-1 flex items-center gap-3 text-xs text-muted">
+                    <span className="inline-flex items-center gap-1">
+                      <Package className="h-3.5 w-3.5" /> <span className="num">{s.products}</span>
+                    </span>
+                    {s.city && (
+                      <span className="inline-flex min-w-0 items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{s.city}</span>
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </ScrollRow>
         </section>
       )}
 
-      {/* Search, sort and type: one tidy bar */}
-      <div className="sticky top-16 z-20 -mx-4 mb-5 space-y-3 bg-bg/85 px-4 py-3 backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:px-3">
-        <label className="relative block">
-          <span className="sr-only">{t.common.search}</span>
-          <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.store.search} className="field h-12 rounded-2xl ps-12" type="search" />
-        </label>
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
-          {types.map((x) => (
-            <button
-              key={x.v}
-              onClick={() => setType(x.v)}
-              className={cx('relative shrink-0 rounded-full px-3.5 py-1.5 text-sm transition', type === x.v ? 'text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}
-            >
-              {type === x.v && <motion.span layoutId="type-pill" className="absolute inset-0 rounded-full bg-stitch" transition={{ type: 'spring', bounce: 0.25, duration: 0.4 }} />}
-              <span className="relative flex items-center gap-1.5">
-                {x.v === 'deals' && <Flame className="h-3.5 w-3.5" />}
-                {x.label}
-              </span>
-            </button>
-          ))}
-          <span className="mx-1 hidden w-px self-stretch bg-line sm:block" />
-          {sorts.map((x) => (
-            <button
-              key={x.v}
-              onClick={() => setSort(x.v)}
-              className={cx('flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition', sort === x.v ? 'bg-night text-white dark:bg-white/15' : 'text-muted hover:bg-sunk hover:text-ink')}
-            >
-              <x.icon className="h-3.5 w-3.5" />
-              {x.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mb-3 flex items-center justify-between text-sm text-muted">
-        <span>{items ? fill(t.market.results, { n: items.length }) : ' '}</span>
-        {filtered && (
-          <button
-            className="text-stitch hover:underline"
-            onClick={() => {
-              setQ('');
-              setType('all');
-              setCat('all');
-            }}
-          >
-            {t.market.clear}
+      {/* ------------------------------------- results bar + active filters */}
+      <div className="sticky top-[calc(env(safe-area-inset-top)+4.5rem)] z-20 -mx-4 mb-4 bg-bg/80 px-4 py-2.5 backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:px-3 lg:top-[4.75rem]">
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 flex-1 truncate text-sm font-medium">{items ? fill(M.results, { n: items.length }) : '…'}</p>
+          <button type="button" onClick={() => setFilters(true)} className="flex shrink-0 items-center gap-1.5 rounded-full bg-surface px-3.5 py-2 text-sm ring-1 ring-line transition hover:ring-ink/20">
+            <SlidersHorizontal className="h-4 w-4" /> {M.filters}
+            {active > 0 && <span className="num grid h-5 min-w-5 place-items-center rounded-full bg-stitch px-1 text-[11px] text-white">{active}</span>}
           </button>
+        </div>
+        {(active > 0 || q.trim()) && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {q.trim() && <Pill onClear={() => setQ('')}>“{q.trim()}”</Pill>}
+            {cat !== 'all' && <Pill onClear={() => setCat('all')}>{catLabel(cat)}</Pill>}
+            {type !== 'all' && <Pill onClear={() => setType('all')}>{types.find((x) => x.v === type)?.label}</Pill>}
+            {sort !== 'new' && <Pill onClear={() => setSort('new')}>{sorts.find((x) => x.v === sort)?.label}</Pill>}
+            <button type="button" onClick={clear} className="px-2 text-xs font-medium text-stitch hover:underline">
+              {M.clear}
+            </button>
+          </div>
         )}
       </div>
+
       <ErrorNote>{error}</ErrorNote>
       {!items ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[4/6] rounded-[1.4rem]" />
+            <Skeleton key={i} className="aspect-[4/6] rounded-[1.6rem]" />
           ))}
         </div>
       ) : items.length ? (
-        <motion.div layout className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
           {items.map((p, i) => (
             <ProductCard key={p.id} p={p} index={i} onOpen={() => setOpen(p)} />
           ))}
-        </motion.div>
+        </div>
       ) : (
-        <EmptyState icon={<Package className="h-6 w-6" />} title={t.store.noProducts} />
+        <EmptyState
+          icon={<Package className="h-6 w-6" />}
+          title={t.store.noProducts}
+          action={
+            active > 0 || q.trim() ? (
+              <Button variant="secondary" onClick={clear}>
+                {M.clear}
+              </Button>
+            ) : undefined
+          }
+        />
       )}
+
+      {/* ---------------------------------------------------- filter sheet */}
+      <Sheet
+        open={filters}
+        onClose={() => setFilters(false)}
+        title={M.filters}
+        footer={
+          <div className="flex gap-2.5">
+            <Button variant="secondary" onClick={clear} className="shrink-0">
+              {M.clear}
+            </Button>
+            <Button className="flex-1" onClick={() => setFilters(false)}>
+              {items ? fill(M.showN, { n: items.length }) : M.filters}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-6">
+          <section>
+            <h3 className="mb-2.5 text-sm font-semibold text-ink/80">{M.cats}</h3>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {allCats.map((x) => {
+                const on = cat === x.k;
+                return (
+                  <button
+                    key={x.k}
+                    type="button"
+                    onClick={() => setCat(x.k)}
+                    aria-pressed={on}
+                    className={cx('flex min-w-0 flex-col items-center gap-1.5 rounded-2xl border p-2.5 text-center text-xs transition', on ? 'border-transparent text-white shadow-lift' : 'border-line bg-surface text-ink/85 hover:bg-sunk/60')}
+                    style={on ? { background: x.c } : undefined}
+                  >
+                    <span className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: on ? 'rgba(255,255,255,0.2)' : `${x.c}1a`, color: on ? '#fff' : x.c }}>
+                      <x.icon className="h-[18px] w-[18px]" />
+                    </span>
+                    <span className="w-full truncate font-medium">{catLabel(x.k)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+          <section>
+            <h3 className="mb-2.5 text-sm font-semibold text-ink/80">{M.type}</h3>
+            <div className="flex flex-wrap gap-2">
+              {types.map((x) => (
+                <button
+                  key={x.v}
+                  type="button"
+                  onClick={() => setType(x.v)}
+                  aria-pressed={type === x.v}
+                  className={cx('flex items-center gap-1.5 rounded-full px-4 py-2 text-sm transition', type === x.v ? 'bg-stitch font-semibold text-white' : 'bg-sunk text-ink/80 hover:text-ink')}
+                >
+                  {x.v === 'deals' && <Flame className="h-4 w-4" />}
+                  {x.label}
+                </button>
+              ))}
+            </div>
+          </section>
+          <section>
+            <h3 className="mb-2.5 text-sm font-semibold text-ink/80">{M.sortBy}</h3>
+            <div className="overflow-hidden rounded-2xl ring-1 ring-line">
+              {sorts.map((x) => (
+                <button key={x.v} type="button" onClick={() => setSort(x.v)} className={cx('flex w-full items-center gap-3 border-b border-line px-4 py-3 text-start text-sm transition last:border-b-0', sort === x.v ? 'bg-sky/[0.06] font-semibold' : 'hover:bg-sunk/60')}>
+                  <x.icon className="h-4 w-4 text-muted" />
+                  <span className="flex-1">{x.label}</span>
+                  <CheckMark on={sort === x.v} />
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      </Sheet>
+
       <ProductSheet product={open} onClose={() => setOpen(null)} onAdded={() => setCartOpen(true)} />
       <CartSheet
         open={cartOpen}
@@ -285,6 +375,18 @@ function Market() {
         }}
       />
     </div>
+  );
+}
+
+/** One active filter, removable with its own ✕. */
+function Pill({ children, onClear }: { children: React.ReactNode; onClear: () => void }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-night py-1 pe-1 ps-3 text-xs font-medium text-white dark:bg-white/15">
+      <span className="truncate">{children}</span>
+      <button type="button" onClick={onClear} className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/15 transition hover:bg-white/30" aria-label="✕">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
   );
 }
 
