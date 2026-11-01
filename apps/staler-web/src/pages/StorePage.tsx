@@ -1,9 +1,11 @@
 import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
 import { ScrollRow } from '../components/ScrollRow';
 import { CountChip } from './Store';
+import { cityWithGov } from './Stores';
+import { fill } from '../lib/format';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Bike, ClipboardList, Map as MapIcon, MapPin, Package, Phone, Search, Share2, ShoppingBag, Store as StoreIcon } from 'lucide-react';
+import { Bike, ClipboardList, Map as MapIcon, MapPin, MessageCircle, Package, Phone, Search, Share2, ShoppingBag, Store as StoreIcon } from 'lucide-react';
 import { assetUrl, get, PUBLIC_ORIGIN } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -63,11 +65,14 @@ function AdCard({ ad, onOpen, i }: { ad: Ad; onOpen: () => void; i: number }) {
   );
 }
 
+/** Secondary store actions: equal tiles, icon and word. */
+const ACT = 'inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl bg-surface px-3 text-sm font-medium text-ink ring-1 ring-line transition hover:-translate-y-0.5 hover:ring-ink/20 [&>span]:truncate';
+
 export default function StorePage() {
   const { slug } = useParams();
   const [params, setParams] = useSearchParams();
   const nav = useNavigate();
-  const { t, err } = useI18n();
+  const { t, err, lang } = useI18n();
   const { user } = useAuth();
   const { count } = useCart();
   const [data, setData] = useState<{ store: any; branches: Branch[]; ads: Ad[]; pickupPoints?: any[] } | null>(null);
@@ -189,69 +194,73 @@ export default function StorePage() {
                 </p>
               </div>
             </div>
-            {s.description && <p className="mt-4 max-w-2xl leading-relaxed text-ink/80">{s.description}</p>}
-            <div className="mt-4 flex flex-wrap gap-2 text-sm">
-              <span className="flex items-center gap-1.5 rounded-full bg-sunk px-3 py-1.5">
-                <CatIcon className="h-4 w-4" /> {t.shop.cat[s.main?.category ?? s.category ?? 'other']}
-              </span>
-              {(s.city || s.main?.city) && (
-                <span className="flex items-center gap-1.5 rounded-full bg-sunk px-3 py-1.5">
-                  <MapPin className="h-4 w-4" /> {s.city ?? s.main?.city}
-                </span>
-              )}
-              {s.offers_delivery && (
-                <span className="flex items-center gap-1.5 rounded-full bg-olive/15 px-3 py-1.5 text-olive">
-                  <Bike className="h-4 w-4" /> {t.shop.delivery}
-                </span>
-              )}
-              {s.offers_pickup && (
-                <span className="flex items-center gap-1.5 rounded-full bg-sky/15 px-3 py-1.5 text-sky">
-                  <ShoppingBag className="h-4 w-4" /> {t.shop.pickup}
-                </span>
-              )}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button variant="stitch" icon={<Share2 className="h-4 w-4" />} onClick={() => setShare(true)}>
-                {t.shop.shareStore}
-              </Button>
-              {s.phone && (
-                <a href={`tel:${s.phone}`}>
-                  <Button variant="secondary" icon={<Phone className="h-4 w-4" />}>
-                    {t.shop.call}
-                  </Button>
-                </a>
-              )}
-              {waPhone && (
-                <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noopener noreferrer">
-                  <Button variant="secondary">{t.shop.whatsapp}</Button>
-                </a>
-              )}
-              {(['instagram', 'tiktok', 'facebook'] as const)
-                .filter((k) => s[k])
-                .map((k) => (
-                  <a
-                    key={k}
-                    href={k === 'tiktok' ? `https://www.tiktok.com/@${s[k]}` : `https://www.${k}.com/${s[k]}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-11 items-center gap-2 rounded-xl px-3.5 text-sm font-medium text-white transition hover:-translate-y-0.5"
-                    style={{ background: k === 'instagram' ? 'linear-gradient(45deg,#F58529,#DD2A7B 55%,#8134AF)' : k === 'tiktok' ? '#111' : '#1877F2' }}
-                  >
-                    {t.social[k]}
-                  </a>
-                ))}
-              {pins.length > 0 && (
-                <Button variant="secondary" icon={<MapIcon className="h-4 w-4" />} onClick={() => setShowMap((v) => !v)}>
-                  {t.ord.map}
+            {/* About on one side, what you can do on the other. */}
+            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:items-start lg:gap-8">
+              <div className="min-w-0">
+                {s.description && <p className="max-w-2xl leading-relaxed text-ink/80">{s.description}</p>}
+                <div className={cx('flex flex-wrap gap-2 text-sm', s.description && 'mt-4')}>
+                  <span className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 ring-1 ring-line/70">
+                    <CatIcon className="h-4 w-4 text-muted" /> {t.shop.cat[s.main?.category ?? s.category ?? 'other']}
+                  </span>
+                  {(s.city || s.main?.city) && (
+                    <span className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 ring-1 ring-line/70">
+                      <MapPin className="h-4 w-4 text-stitch" /> {cityWithGov(s.city ?? s.main?.city, lang)}
+                    </span>
+                  )}
+                  {s.offers_delivery && (
+                    <span className="flex items-center gap-1.5 rounded-full bg-olive/12 px-3 py-1.5 text-olive">
+                      <Bike className="h-4 w-4" /> {t.shop.delivery}
+                    </span>
+                  )}
+                  {s.offers_pickup && (
+                    <span className="flex items-center gap-1.5 rounded-full bg-sky/12 px-3 py-1.5 text-sky">
+                      <ShoppingBag className="h-4 w-4" /> {t.shop.pickup}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[1.4rem] bg-surface/80 p-2 shadow-[0_14px_34px_-26px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur">
+                <Button variant="stitch" className="w-full" icon={<Share2 className="h-4 w-4" />} onClick={() => setShare(true)}>
+                  {t.shop.shareStore}
                 </Button>
-              )}
-              {user && (
-                <Link to="/app/orders">
-                  <Button variant="secondary" icon={<ClipboardList className="h-4 w-4" />}>
-                    {t.shop.yourOrders}
-                  </Button>
-                </Link>
-              )}
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {s.phone && (
+                    <a href={`tel:${s.phone}`} className={ACT}>
+                      <Phone className="h-4 w-4 text-sky" /> {t.shop.call}
+                    </a>
+                  )}
+                  {waPhone && (
+                    <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noopener noreferrer" className={ACT}>
+                      <MessageCircle className="h-4 w-4 text-[#25D366]" /> {t.shop.whatsapp}
+                    </a>
+                  )}
+                  {pins.length > 0 && (
+                    <button type="button" onClick={() => setShowMap((v) => !v)} className={cx(ACT, showMap && 'bg-night text-white ring-night dark:bg-white/15')}>
+                      <MapIcon className="h-4 w-4" /> {t.ord.map}
+                    </button>
+                  )}
+                  {user && (
+                    <Link to="/app/orders" className={ACT}>
+                      <ClipboardList className="h-4 w-4 text-gold" /> {t.shop.yourOrders}
+                    </Link>
+                  )}
+                  {(['instagram', 'tiktok', 'facebook'] as const)
+                    .filter((k) => s[k])
+                    .map((k) => (
+                      <a
+                        key={k}
+                        href={k === 'tiktok' ? `https://www.tiktok.com/@${s[k]}` : `https://www.${k}.com/${s[k]}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-white transition hover:-translate-y-0.5"
+                        style={{ background: k === 'instagram' ? 'linear-gradient(45deg,#F58529,#DD2A7B 55%,#8134AF)' : k === 'tiktok' ? '#111' : '#1877F2' }}
+                      >
+                        <span className="truncate">{t.social[k]}</span>
+                      </a>
+                    ))}
+                </div>
+              </div>
             </div>
             <AnimatePresence>
               {showMap && (
@@ -338,7 +347,7 @@ export default function StorePage() {
               <label className="relative block">
                 <span className="sr-only">{t.common.search}</span>
                 <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.store.search} className="field h-12 rounded-2xl ps-12" type="search" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={fill(t.shop.searchIn, { store: s.store_name })} className="field h-12 rounded-2xl ps-12" type="search" />
               </label>
               <ScrollRow label={t.tx.filter} innerClassName="gap-2 pb-0.5" bleed={false}>
                 {[

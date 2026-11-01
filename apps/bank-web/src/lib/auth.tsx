@@ -12,6 +12,7 @@ export interface User {
   role: 'user' | 'admin' | 'exchange';
   status: string;
   language: 'en' | 'ar' | null;
+  theme?: 'light' | 'dark' | null;
   phone: string | null;
   totp_enabled: boolean;
   created_at: string;

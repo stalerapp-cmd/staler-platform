@@ -706,6 +706,25 @@ describe('account deletion', () => {
   });
 });
 
+describe('preferences and filters', () => {
+  it('remembers language and theme on the account', async () => {
+    const u = await walletUser(app, 'Pref Person');
+    expect((await request(app).patch('/api/auth/me').set(auth(u.token)).send({ language: 'en', theme: 'dark' })).status).toBe(200);
+    const me = await request(app).get('/api/auth/me').set(auth(u.token));
+    expect(me.body.data.user.language).toBe('en');
+    expect(me.body.data.user.theme).toBe('dark');
+    expect((await request(app).patch('/api/auth/me').set(auth(u.token)).send({ theme: 'neon' })).status).toBe(400);
+  });
+
+  it('filters by several categories and by places', async () => {
+    expect((await request(app).get('/api/store/products?storeCategory=books,food,nonsense')).status).toBe(200);
+    expect((await request(app).get('/api/store/stores?category=books,food')).status).toBe(200);
+    const r = await request(app).get(`/api/store/stores?cities=${encodeURIComponent('رام الله,نابلس')}`);
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body.data.stores)).toBe(true);
+  });
+});
+
 describe('device history', () => {
   it('lists each device once and signs one device out immediately', async () => {
     const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');

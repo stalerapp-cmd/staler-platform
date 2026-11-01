@@ -837,7 +837,7 @@ export function AdminAgentPanel({ userId, agent, onChanged }: { userId: string; 
         {!p && <p className="rounded-xl bg-gold/15 px-3 py-2 text-sm sm:col-span-2">{t.adm2.noProfile}</p>}
         <Field label={t.agent.displayName} value={f.displayName} onChange={(e) => setF({ ...f, displayName: e.target.value })} required minLength={2} />
         <ChoicePills label={t.adm2.agentStatus} value={f.status as 'active' | 'pending' | 'suspended'} onChange={(v) => setF({ ...f, status: v })} options={(['active', 'pending', 'suspended'] as const).map((k) => ({ value: k, label: t.adm2.st[k], tone: k === 'active' ? ('good' as const) : k === 'pending' ? ('warn' as const) : ('bad' as const) }))} />
-        <Field label={t.mstore.city} value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} />
+        <Field list="ps-places" autoComplete="off" label={t.mstore.city} value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} />
         <Field label={t.auth.phone} dir="ltr" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
         <Field label={t.mstore.address} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
         <Field label={t.agent.hours} value={f.hours} onChange={(e) => setF({ ...f, hours: e.target.value })} />

@@ -12,6 +12,7 @@ export interface User {
   profile_image: string | null;
   phone_number: string | null;
   language: 'en' | 'ar' | null;
+  theme?: 'light' | 'dark' | null;
   totp_enabled: boolean;
   wallet_id: string;
   balance: string;

@@ -268,7 +268,7 @@ function AgentProfile() {
         <div className="space-y-4">
           <Field label={t.agent.displayName} value={f.displayName} onChange={set('displayName')} required minLength={2} maxLength={60} />
           <div className="grid grid-cols-2 gap-3">
-            <Field label={t.mstore.city} value={f.city} onChange={set('city')} maxLength={60} />
+            <Field list="ps-places" autoComplete="off" label={t.mstore.city} value={f.city} onChange={set('city')} maxLength={60} />
             <Field label={t.auth.phone} value={f.phone} onChange={set('phone')} dir="ltr" type="tel" />
           </div>
           <Field label={t.mstore.address} value={f.address} onChange={set('address')} maxLength={160} />

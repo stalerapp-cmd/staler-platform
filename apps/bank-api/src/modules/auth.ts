@@ -40,7 +40,7 @@ const lang = z.enum(['en', 'ar']).default('en');
 
 export async function publicUser(userId: string) {
   return one(
-    `SELECT u.id, u.full_name, u.email, u.username, u.role, u.admin_level, u.admin_permissions, u.status, u.language, u.phone, u.email_verified,
+    `SELECT u.id, u.full_name, u.email, u.username, u.role, u.admin_level, u.admin_permissions, u.status, u.language, u.theme, u.phone, u.email_verified,
             u.totp_enabled, u.created_at, u.last_login_at,
             COALESCE(cardinality(u.totp_recovery_hashes), 0) AS recovery_codes_left
        FROM ${S}.users u WHERE u.id = $1`,
@@ -483,16 +483,17 @@ authRouter.patch(
       .object({
         fullName: fullName.optional(),
         language: z.enum(['en', 'ar']).optional(),
+        theme: z.enum(['light', 'dark']).optional(),
         phone: z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, 'Invalid phone number').optional().nullable(),
       })
       .strict(),
   }),
   ah(async (req, res) => {
-    const { fullName: name, language, phone } = req.body;
+    const { fullName: name, language, theme, phone } = req.body;
     await pool.query(
-      `UPDATE ${S}.users SET full_name = COALESCE($2, full_name), language = COALESCE($3, language),
+      `UPDATE ${S}.users SET full_name = COALESCE($2, full_name), language = COALESCE($3, language), theme = COALESCE($6, theme),
               phone = CASE WHEN $5 THEN $4 ELSE phone END WHERE id = $1`,
-      [req.auth!.userId, name ?? null, language ?? null, phone ?? null, phone !== undefined],
+      [req.auth!.userId, name ?? null, language ?? null, phone ?? null, phone !== undefined, theme ?? null],
     );
     res.json({ success: true, data: { user: await publicUser(req.auth!.userId) } });
   }),

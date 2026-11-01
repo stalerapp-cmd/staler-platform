@@ -1,8 +1,11 @@
 import { motion } from 'framer-motion';
+import { PlacePicker, placeLabel } from '../components/PlacePicker';
+import { expandPlaces, governorateOf, placeKey } from '../lib/places';
+import { fill } from '../lib/format';
 import { ScrollRow } from '../components/ScrollRow';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, FileDown, GitBranch, LayoutGrid, MapPin, Megaphone, Package, Scissors, Search, Shirt, Smartphone, Sofa, Sparkles, Store as StoreIcon, UtensilsCrossed, Wrench } from 'lucide-react';
+import { BookOpen, FileDown, GitBranch, LayoutGrid, MapPin, Megaphone, Package, RotateCcw, Scissors, Search, Shirt, Smartphone, Sofa, Sparkles, Store as StoreIcon, UtensilsCrossed, Wrench, X } from 'lucide-react';
 import { assetUrl, get } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
@@ -70,8 +73,16 @@ export function StoreLogo({ s, size = 56 }: { s: { logo_url?: string | null; sto
   );
 }
 
+/** "حوارة · نابلس": the town, plus its governorate when that adds something. */
+export function cityWithGov(city: string, lang: string) {
+  const g = governorateOf(city);
+  if (!g) return city;
+  const gov = lang === 'ar' ? g.ar : g.en;
+  return placeKey(gov).startsWith(placeKey(city)) || placeKey(city) === placeKey(g.towns[0] ?? '') ? city : `${city} · ${gov}`;
+}
+
 function StoreCard({ s, i }: { s: StoreSummary; i: number }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const Icon = CATEGORY_ICONS[s.category ?? 'other'] ?? LayoutGrid;
   return (
     <motion.div
@@ -98,6 +109,12 @@ function StoreCard({ s, i }: { s: StoreSummary; i: number }) {
           <span className="absolute start-3 top-3 flex items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
             <Icon className="h-3.5 w-3.5" /> {t.shop.cat[s.category ?? 'other'] ?? s.category}
           </span>
+          {s.city && (
+            <span className="absolute bottom-3 end-3 flex max-w-[60%] items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-night shadow-sm backdrop-blur">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-stitch" />
+              <span className="truncate">{cityWithGov(s.city, lang)}</span>
+            </span>
+          )}
         </div>
         <div className="relative px-3 pb-3">
           <div className="-mt-9 flex items-end gap-3">
@@ -111,11 +128,6 @@ function StoreCard({ s, i }: { s: StoreSummary; i: number }) {
           </p>
           {s.description && <p className="mt-2 line-clamp-2 text-sm text-ink/75">{s.description}</p>}
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
-            {s.city && (
-              <span className="flex items-center gap-1 rounded-full bg-sunk px-2.5 py-1">
-                <MapPin className="h-3.5 w-3.5" /> {s.city}
-              </span>
-            )}
             <span className="flex items-center gap-1 rounded-full bg-sunk px-2.5 py-1">
               <Package className="h-3.5 w-3.5" /> <span className="num">{s.products}</span> {t.shop.products}
             </span>
@@ -134,9 +146,15 @@ function StoreCard({ s, i }: { s: StoreSummary; i: number }) {
 /** Directory of stores. Used publicly (/stores) and inside the app (/app/stores). */
 export function StoresDirectory() {
   const { t, err } = useI18n();
+  const { lang } = useI18n();
   const [q, setQ] = useState('');
-  const [cat, setCat] = useState('');
-  const [stores, setStores] = useState<StoreSummary[] | null>(null);
+  const [cats, setCats] = useState<string[]>([]);
+  const [places, setPlaces] = useState<string[]>([]);
+  const [pickPlace, setPickPlace] = useState(false);
+  const [all, setStores] = useState<StoreSummary[] | null>(null);
+  // Places are matched here (a whole governorate is many names — too many for a link).
+  const wanted = useMemo(() => new Set(expandPlaces(places).map(placeKey)), [places]);
+  const stores = useMemo(() => (all && wanted.size ? all.filter((x) => wanted.has(placeKey(x.city ?? ''))) : all), [all, wanted]);
   const [error, setError] = useState<string | null>(null);
   const seq = useRef(0);
   useEffect(() => {
@@ -145,7 +163,7 @@ export function StoresDirectory() {
       try {
         const p = new URLSearchParams();
         if (q.trim()) p.set('q', q.trim());
-        if (cat) p.set('category', cat);
+        if (cats.length) p.set('category', cats.join(','));
         const d = await get<{ stores: StoreSummary[] }>(`/api/store/stores?${p}`);
         if (n === seq.current) setStores(d.stores);
       } catch (e) {
@@ -153,7 +171,7 @@ export function StoresDirectory() {
       }
     }, 220);
     return () => clearTimeout(h);
-  }, [q, cat, err]);
+  }, [q, cats, err]);
 
   return (
     <div>
@@ -182,22 +200,47 @@ export function StoresDirectory() {
       <ScrollRow nudgeKey="stores-cats" label={t.mstore.category} className="mb-6" innerClassName="gap-2">
         {['', ...CATEGORIES].map((c) => {
           const Icon = c ? CATEGORY_ICONS[c]! : StoreIcon;
-          const on = cat === c;
+          const on = c ? cats.includes(c) : !cats.length;
           return (
             <button
               key={c || 'all'}
-              role="radio"
+              role="checkbox"
               aria-checked={on}
-              onClick={() => setCat(c)}
+              onClick={() => (c ? setCats(on ? cats.filter((x) => x !== c) : [...cats, c]) : setCats([]))}
               className={cx('relative flex shrink-0 snap-start items-center gap-2 rounded-full px-4 py-2.5 text-sm transition', on ? 'text-white shadow-lift' : 'bg-surface text-ink/80 ring-1 ring-line/70 hover:-translate-y-0.5 hover:text-ink')}
             >
-              {on && <motion.span layoutId="cat-pill" className="absolute inset-0 rounded-full bg-night" transition={{ type: 'spring', bounce: 0.25, duration: 0.45 }} />}
+              {on && <motion.span initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute inset-0 rounded-full bg-night" transition={{ type: 'spring', bounce: 0.35, duration: 0.4 }} />}
               <Icon className="relative h-4 w-4" />
               <span className="relative whitespace-nowrap">{c ? t.shop.cat[c] : t.shop.allStores}</span>
             </button>
           );
         })}
       </ScrollRow>
+
+      <div className="-mt-3 mb-6 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setPickPlace(true)}
+          className={cx('flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition', places.length ? 'bg-stitch text-white shadow-lift' : 'bg-surface text-ink ring-1 ring-line hover:ring-ink/20')}
+        >
+          <MapPin className="h-4 w-4" />
+          {places.length ? fill(t.shop.inPlaces, { n: places.length }) : t.shop.pickPlace}
+        </button>
+        {places.map((k) => (
+          <span key={k} className="inline-flex items-center gap-1 rounded-full bg-night py-1 pe-1 ps-3 text-xs font-medium text-white dark:bg-white/15">
+            {placeLabel(k, lang)}
+            <button type="button" onClick={() => setPlaces(places.filter((x) => x !== k))} className="grid h-5 w-5 place-items-center rounded-full bg-white/15 hover:bg-white/30" aria-label="✕">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {(places.length > 0 || cats.length > 0) && (
+          <button type="button" onClick={() => (setPlaces([]), setCats([]))} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-stitch transition hover:bg-stitch/10">
+            <RotateCcw className="h-3.5 w-3.5" /> {t.market.clear}
+          </button>
+        )}
+      </div>
+      <PlacePicker open={pickPlace} onClose={() => setPickPlace(false)} value={places} onChange={setPlaces} />
 
       <ErrorNote>{error}</ErrorNote>
       {!stores ? (

@@ -161,7 +161,12 @@ storeRouter.get(
         merchant: idParam.optional(),
         store: z.string().trim().max(80).optional(),
         category: z.string().trim().max(40).optional(),
-        storeCategory: z.enum(STORE_CATEGORIES).optional(),
+        storeCategory: z
+          .string()
+          .trim()
+          .max(300)
+          .optional()
+          .transform((v) => (v ? v.split(',').filter((x) => (STORE_CATEGORIES as readonly string[]).includes(x)) : undefined)),
         type: z.enum(['digital', 'physical', 'deposit', 'deals']).optional(),
         sort: z.enum(['new', 'price_asc', 'price_desc', 'name']).default('new'),
       })
@@ -187,9 +192,9 @@ storeRouter.get(
       params.push(f.category);
       where.push(`p.category = $${params.length}`);
     }
-    if (f.storeCategory) {
+    if (f.storeCategory?.length) {
       params.push(f.storeCategory);
-      where.push(`COALESCE((SELECT pm.category FROM ${S}.merchants pm WHERE pm.id = m.parent_id), m.category, 'other') = $${params.length}`);
+      where.push(`COALESCE((SELECT pm.category FROM ${S}.merchants pm WHERE pm.id = m.parent_id), m.category, 'other') = ANY($${params.length}::text[])`);
     }
     if (f.type === 'deals') where.push('p.compare_at_price IS NOT NULL AND p.compare_at_price > p.price');
     else if (f.type === 'deposit') where.push('p.deposit_percent > 0 AND NOT COALESCE(p.is_digital,false)');
@@ -219,20 +224,43 @@ storeRouter.get(
   }),
 );
 
+/** Place names compared loosely: case, spaces and Arabic letter variants (أ/إ/آ, ة/ه, ى/ي) don't matter. */
+const normPlace = (v: string) =>
+  v.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ');
+const PLACE_SQL = (col: string) => `regexp_replace(translate(lower(trim(COALESCE(${col}, ''))), 'أإآةى', 'اااهي'), '\\s+', ' ', 'g')`;
+
 /** Store directory: main stores with owner, category, city, counts. */
 storeRouter.get(
   '/stores',
-  validate({ query: z.object({ q: z.string().trim().max(64).optional(), category: z.string().trim().max(40).optional() }).strict() }),
+  validate({
+    query: z
+      .object({
+        q: z.string().trim().max(64).optional(),
+        // One category or several, comma separated.
+        category: z.string().trim().max(300).optional(),
+        // Places, comma separated: a store matches when it (or one of its branches) is in any of them.
+        cities: z.string().trim().max(6000).optional(),
+      })
+      .strict(),
+  }),
   ah(async (req, res) => {
     const params: unknown[] = [];
     const where = [ACTIVE('m'), 'm.parent_id IS NULL'];
+    if (req.query.cities) {
+      const list = String(req.query.cities).split(',').map(normPlace).filter(Boolean).slice(0, 400);
+      if (list.length) {
+        params.push(list);
+        const n = `$${params.length}::text[]`;
+        where.push(`(${PLACE_SQL('m.city')} = ANY(${n}) OR EXISTS (SELECT 1 FROM ${S}.merchants b WHERE b.parent_id = m.id AND ${ACTIVE('b')} AND ${PLACE_SQL('b.city')} = ANY(${n})))`);
+      }
+    }
     if (req.query.q) {
       params.push(like(String(req.query.q)));
       where.push(`(m.store_name ILIKE $${params.length} OR m.description ILIKE $${params.length} OR u.full_name ILIKE $${params.length} OR m.city ILIKE $${params.length})`);
     }
     if (req.query.category) {
-      params.push(req.query.category);
-      where.push(`m.category = $${params.length}`);
+      params.push(String(req.query.category).split(',').filter(Boolean));
+      where.push(`m.category = ANY($${params.length}::text[])`);
     }
     const r = await pool.query(
       `SELECT m.id, m.slug, m.store_name, m.description, m.logo_url, m.cover_url, m.category, m.city, m.accent, u.full_name AS owner_name,

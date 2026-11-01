@@ -275,7 +275,7 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
           ) : (
             <Select block label={t.mstore.category} value={f.category} onChange={(v) => setF({ ...f, category: v })} options={CATEGORIES.map((c) => ({ value: c, label: t.shop.cat[c] }))} />
           )}
-          <Field label={t.mstore.city} value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} maxLength={60} />
+          <Field list="ps-places" autoComplete="off" label={t.mstore.city} value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} maxLength={60} />
           <Field label={t.mstore.address} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} maxLength={200} />
           <Field label={t.mstore.storePhone} type="tel" dir="ltr" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
           <div className="flex items-end">
@@ -1336,7 +1336,7 @@ export function MerchantPickup() {
             <Field label={t.pick.name} placeholder={t.pick.namePh} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required minLength={2} maxLength={80} />
             <TextArea label={t.pick.description} placeholder={t.pick.descPh} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} maxLength={300} />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={t.mstore.city} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} maxLength={60} />
+              <Field list="ps-places" autoComplete="off" label={t.mstore.city} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} maxLength={60} />
               <Field label={t.mstore.address} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} maxLength={200} />
             </div>
             <Field label={t.pick.hours} value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} maxLength={120} />

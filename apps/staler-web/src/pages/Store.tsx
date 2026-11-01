@@ -36,6 +36,7 @@ import {
   ArrowLeft,
   SlidersHorizontal,
   X,
+  RotateCcw,
 } from 'lucide-react';
 import { ApiError, downloadFile, get, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -79,7 +80,7 @@ function Market() {
   const [q, setQ] = useState('');
   const [type, setType] = useState('all');
   const [sort, setSort] = useState('new');
-  const [cat, setCat] = useState<string>('all');
+  const [cats, setCats] = useState<string[]>([]);
   const [items, setItems] = useState<Product[] | null>(null);
   const [stores, setStores] = useState<StoreSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +103,7 @@ function Market() {
         const p = new URLSearchParams({ limit: '60', sort });
         if (q.trim()) p.set('q', q.trim());
         if (type !== 'all') p.set('type', type);
-        if (cat !== 'all') p.set('storeCategory', cat);
+        if (cats.length) p.set('storeCategory', cats.join(','));
         const d = await get<{ products: Product[] }>(`/api/store/products?${p}`);
         if (n === seq.current) setItems(d.products);
       } catch (e) {
@@ -110,7 +111,7 @@ function Market() {
       }
     }, 250);
     return () => clearTimeout(h);
-  }, [q, type, sort, cat, err]);
+  }, [q, type, sort, cats, err]);
   useEffect(() => {
     if (params.get('cart')) setCartOpen(true);
   }, [params]);
@@ -130,11 +131,13 @@ function Market() {
   ];
   const allCats = [{ k: 'all', icon: LayoutGrid, c: '#141B3D' }, ...CATS];
   const catLabel = (k: string) => (k === 'all' ? M.everything : t.shop.cat[k]);
-  const active = (cat !== 'all' ? 1 : 0) + (type !== 'all' ? 1 : 0) + (sort !== 'new' ? 1 : 0);
+  const active = cats.length + (type !== 'all' ? 1 : 0) + (sort !== 'new' ? 1 : 0);
+  const isOn = (k: string) => (k === 'all' ? !cats.length : cats.includes(k));
+  const flip = (k: string) => (k === 'all' ? setCats([]) : setCats(cats.includes(k) ? cats.filter((x) => x !== k) : [...cats, k]));
   const clear = () => {
     setQ('');
     setType('all');
-    setCat('all');
+    setCats([]);
     setSort('new');
   };
 
@@ -164,7 +167,7 @@ function Market() {
           <button
             type="button"
             onClick={() => setFilters(true)}
-            className="relative flex h-14 shrink-0 items-center gap-2 rounded-2xl bg-gold px-4 text-sm font-bold text-night shadow-lg transition hover:brightness-105 active:scale-95"
+            className="relative flex h-14 shrink-0 items-center gap-2 rounded-2xl bg-white/12 px-4 text-sm font-semibold text-white ring-1 ring-white/30 backdrop-blur-md transition hover:bg-white/20 active:scale-95"
             aria-label={M.filters}
           >
             <SlidersHorizontal className="h-5 w-5" />
@@ -182,7 +185,7 @@ function Market() {
         </div>
         <ScrollRow nudgeKey="market-cats" label={M.cats} innerClassName="gap-2.5">
           {allCats.map((x, i) => {
-            const on = cat === x.k;
+            const on = isOn(x.k);
             return (
               <motion.button
                 key={x.k}
@@ -192,14 +195,14 @@ function Market() {
                 transition={{ delay: 0.15 + i * 0.045, type: 'spring', bounce: 0.45 }}
                 whileHover="wiggle"
                 whileTap={{ scale: 0.92 }}
-                onClick={() => setCat(x.k)}
+                onClick={() => flip(x.k)}
                 aria-pressed={on}
                 className={cx(
                   'relative flex shrink-0 snap-start items-center gap-2.5 rounded-2xl py-2 pe-4 ps-2 text-sm transition',
                   on ? 'text-white shadow-lift' : 'bg-surface text-ink/85 ring-1 ring-line/70 hover:-translate-y-0.5 hover:ring-ink/15',
                 )}
               >
-                {on && <motion.span layoutId="cat-on" className="absolute inset-0 rounded-2xl" style={{ background: x.c }} transition={{ type: 'spring', bounce: 0.25, duration: 0.45 }} />}
+                {on && <motion.span initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute inset-0 rounded-2xl" style={{ background: x.c }} transition={{ type: 'spring', bounce: 0.35, duration: 0.4 }} />}
                 <motion.span
                   className="relative grid h-9 w-9 place-items-center rounded-xl transition-colors"
                   style={{ background: on ? 'rgba(255,255,255,0.18)' : `${x.c}1a`, color: on ? '#fff' : x.c }}
@@ -217,7 +220,7 @@ function Market() {
       </section>
 
       {/* -------------------------------------------------- shop by store */}
-      {stores.length > 0 && cat === 'all' && !q.trim() && (
+      {stores.length > 0 && !cats.length && !q.trim() && (
         <section className="mb-8">
           <div className="mb-2.5 flex items-end justify-between gap-3">
             <h2 className="text-xl">{M.byStore}</h2>
@@ -279,14 +282,18 @@ function Market() {
           </button>
         </div>
         <AnimatePresence initial={false}>
-          {(cat !== 'all' || type !== 'all' || q.trim()) && (
+          {(cats.length > 0 || type !== 'all' || q.trim()) && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
               <div className="flex flex-wrap items-center gap-1.5 pt-2.5">
                 {q.trim() && <Pill onClear={() => setQ('')}>“{q.trim()}”</Pill>}
-                {cat !== 'all' && <Pill onClear={() => setCat('all')}>{catLabel(cat)}</Pill>}
+                {cats.map((c) => (
+                  <Pill key={c} onClear={() => flip(c)}>
+                    {catLabel(c)}
+                  </Pill>
+                ))}
                 {type !== 'all' && <Pill onClear={() => setType('all')}>{types.find((x) => x.v === type)?.label}</Pill>}
-                <button type="button" onClick={clear} className="px-2 text-xs font-medium text-stitch hover:underline">
-                  {M.clear}
+                <button type="button" onClick={clear} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-stitch transition hover:bg-stitch/10">
+                  <RotateCcw className="h-3.5 w-3.5" /> {M.clear}
                 </button>
               </div>
             </motion.div>
@@ -342,12 +349,12 @@ function Market() {
             <h3 className="mb-2.5 text-sm font-semibold text-ink/80">{M.cats}</h3>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {allCats.map((x) => {
-                const on = cat === x.k;
+                const on = isOn(x.k);
                 return (
                   <button
                     key={x.k}
                     type="button"
-                    onClick={() => setCat(x.k)}
+                    onClick={() => flip(x.k)}
                     aria-pressed={on}
                     className={cx('flex min-w-0 flex-col items-center gap-1.5 rounded-2xl border p-2.5 text-center text-xs transition', on ? 'border-transparent text-white shadow-lift' : 'border-line bg-surface text-ink/85 hover:bg-sunk/60')}
                     style={on ? { background: x.c } : undefined}

@@ -189,7 +189,7 @@ export default function Bank() {
 
   return (
     <div>
-      <PageHeader plain title={t.bank.title} />
+      <PageHeader title={t.bank.title} lead={t.bank.pageLead} />
       {link.loading && !link.data ? (
         <Skeleton className="h-64 rounded-3xl" />
       ) : !link.data?.linked ? (
@@ -365,7 +365,7 @@ export function BankQr() {
 
   return (
     <div className="mx-auto max-w-md">
-      <PageHeader plain title={t.bank.qrTitle} />
+      <PageHeader title={t.bank.qrTitle} lead={t.bank.qrLead} />
       <AnimatePresence mode="wait">
         {phase === 'inspect' && (
           <motion.div key="i" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="card p-6">
