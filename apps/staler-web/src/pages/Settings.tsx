@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AtSign, Camera, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Moon, Palette, ShieldAlert, ShieldCheck, Sun, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { AtSign, Camera, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Palette, ShieldAlert, ShieldCheck, Trash2, UserRound, type LucideIcon } from 'lucide-react';
 import { applySession, del, patch, post, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
@@ -574,7 +574,7 @@ export default function Settings() {
 function ThemePicker({ theme, onChange }: { theme: string; onChange: (v: 'light' | 'dark') => void }) {
   const { t } = useI18n();
   return (
-    <div role="radiogroup" aria-label={t.settings.appearance} className="grid grid-cols-2 gap-3">
+    <div role="radiogroup" aria-label={t.settings.appearance} className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
       {(['light', 'dark'] as const).map((v) => {
         const on = theme === v;
         const light = v === 'light';
@@ -583,42 +583,31 @@ function ThemePicker({ theme, onChange }: { theme: string; onChange: (v: 'light'
             key={v}
             role="radio"
             aria-checked={on}
-            whileTap={{ scale: 0.96 }}
+            whileTap={{ scale: 0.97 }}
             onClick={() => onChange(v)}
-            className={cx('group relative overflow-hidden rounded-[22px] p-1.5 text-start transition duration-300', on ? 'bg-surface shadow-[0_16px_36px_-22px_rgb(var(--night)/0.6)] ring-2 ring-gold' : 'bg-sunk/60 ring-1 ring-line hover:ring-ink/25')}
+            className={cx(
+              'group relative isolate flex h-32 overflow-hidden rounded-[24px] text-start transition duration-300',
+              light ? 'bg-[linear-gradient(135deg,#FFFFFF_0%,#F6F3EC_100%)] text-[#141B3D]' : 'bg-[radial-gradient(120%_120%_at_0%_0%,#2A3570_0%,#0D1230_70%)] text-white',
+              on ? 'shadow-[0_22px_44px_-26px_rgb(20_27_61/0.75)] ring-2 ring-gold' : 'ring-1 ring-line hover:-translate-y-0.5',
+            )}
           >
-            {/* A miniature of the app in this theme */}
-            <div className={cx('relative h-28 overflow-hidden rounded-[17px] p-2.5', light ? 'bg-[#F4F5F9]' : 'bg-[#0D1230]')}>
-              <div className={cx('flex h-5 items-center gap-1.5 overflow-hidden rounded-md', light ? 'bg-white' : 'bg-[#161D45]')}>
-                <span className="h-full w-9 bg-[#141B3D] [clip-path:polygon(0_0,100%_0,75%_100%,0_100%)] rtl:[clip-path:polygon(0_0,100%_0,100%_100%,25%_100%)]" />
-                <span className={cx('h-1 w-6 rounded-full', light ? 'bg-[#DDE1EC]' : 'bg-[#2A3366]')} />
-              </div>
-              <motion.div
-                className="relative mt-2 h-11 overflow-hidden rounded-lg bg-gradient-to-br from-[#2A3570] to-[#141B3D] p-1.5"
-                animate={on ? { y: [0, -2, 0] } : { y: 0 }}
-                transition={{ repeat: on ? Infinity : 0, duration: 3, ease: 'easeInOut' }}
-              >
-                <span className="block h-1 w-8 rounded-full bg-white/40" />
-                <span className="mt-1.5 block h-2 w-14 rounded-full bg-white/85" />
-                <span className="absolute -end-2 -top-2 h-10 w-10 rounded-full border border-dashed border-[#D9A73A]/50" />
-              </motion.div>
-              <div className="mt-2 flex gap-1.5">
-                {['#C8344A', '#5E7A2E', '#4070D6', '#D9A73A'].map((c) => (
-                  <span key={c} className="h-3.5 flex-1 rounded" style={{ background: light ? `${c}22` : `${c}44` }} />
-                ))}
-              </div>
-              <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[5px] hdr-belt" />
-              {on && (
-                <motion.span layoutId="theme-check" className="absolute end-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-gold text-night shadow">
-                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                </motion.span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 px-2 pb-1 pt-2.5">
-              <span className={cx('grid h-6 w-6 place-items-center rounded-full', light ? 'bg-gold/15 text-[rgb(150_105_10)]' : 'bg-night text-[#C9CEE8] dark:bg-white/10')}>{light ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}</span>
-              <span className="font-semibold">{light ? t.settings.themeLight : t.settings.themeDark}</span>
-            </div>
-            <p className="px-2 pb-1.5 text-xs text-muted">{light ? t.settings.themeLightD : t.settings.themeDarkD}</p>
+            {/* Medallion: an eight-pointed star that stitches itself in when chosen */}
+            <span className="pointer-events-none absolute -end-6 top-1/2 grid h-40 w-40 -translate-y-1/2 place-items-center">
+              <span className={cx('absolute inset-0 rounded-full border border-dashed', light ? 'border-[#C8344A]/25' : 'border-[#E9C060]/30')} />
+              <span className={cx('absolute inset-5 rounded-full', light ? 'bg-[#C8344A]/[0.04]' : 'bg-[#E9C060]/[0.06]')} />
+              <motion.span className="relative" animate={on ? { scale: [0.92, 1] } : { scale: 0.92 }} transition={{ duration: 0.6, ease: 'easeOut' }}>
+                <StarMotif key={on ? 'on' : 'off'} size={13} cell={7} strokeWidth={1.6} className={cx('h-[91px] w-[91px] transition-opacity duration-500', on ? 'opacity-100' : 'opacity-40 group-hover:opacity-70')} colors={light ? ['#C8344A', '#D9A73A'] : ['#E9C060', '#E2506A']} />
+              </motion.span>
+            </span>
+            <span className="relative z-10 flex flex-1 flex-col justify-between p-4">
+              <span>
+                <span className="block font-display text-2xl leading-none">{light ? t.settings.themeLight : t.settings.themeDark}</span>
+                <span className={cx('mt-1.5 block max-w-[60%] text-xs', light ? 'text-[#5B6383]' : 'text-white/60')}>{light ? t.settings.themeLightD : t.settings.themeDarkD}</span>
+              </span>
+              <span className={cx('grid h-6 w-6 place-items-center rounded-full transition', on ? 'bg-gold text-night' : light ? 'ring-1 ring-[#141B3D]/25' : 'ring-1 ring-white/30')}>
+                {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+              </span>
+            </span>
           </motion.button>
         );
       })}

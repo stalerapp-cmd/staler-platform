@@ -1,13 +1,14 @@
 import { motion } from 'framer-motion';
-import { Check, Moon, Sun } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
+import { Guilloche } from './Guilloche';
 import { cx } from './ui';
 
-/** Light / dark, each shown as a small preview of the bank in that theme. */
+/** Light / dark as two engraved banknote panels; the chosen one turns its brass rosette. */
 export function ThemePicker({ theme, onChange }: { theme: string; onChange: (v: 'light' | 'dark') => void }) {
   const { t } = useI18n();
   return (
-    <div role="radiogroup" aria-label={t.settings.appearance} className="grid grid-cols-2 gap-3">
+    <div role="radiogroup" aria-label={t.settings.appearance} className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
       {(['light', 'dark'] as const).map((v) => {
         const on = theme === v;
         const light = v === 'light';
@@ -16,42 +17,26 @@ export function ThemePicker({ theme, onChange }: { theme: string; onChange: (v: 
             key={v}
             role="radio"
             aria-checked={on}
-            whileTap={{ scale: 0.96 }}
+            whileTap={{ scale: 0.97 }}
             onClick={() => onChange(v)}
-            className={cx('relative overflow-hidden rounded-[22px] p-1.5 text-start transition duration-300', on ? 'bg-surface shadow-[0_16px_36px_-22px_rgb(0_0_0/0.5)] ring-2 ring-gold' : 'bg-sunk/60 ring-1 ring-line hover:ring-ink/25')}
+            className={cx(
+              'group relative isolate flex h-32 overflow-hidden rounded-[24px] text-start transition duration-300',
+              light ? 'bg-[linear-gradient(135deg,#FFFFFF_0%,#F4EFE3_100%)] text-[#0C1A17]' : 'bg-[radial-gradient(120%_120%_at_0%_0%,#1C3A2E_0%,#0A1411_70%)] text-[#F3E9D2]',
+              on ? 'shadow-[0_22px_44px_-26px_rgb(0_0_0/0.7)] ring-2 ring-[#C9A45C]' : 'ring-1 ring-line hover:-translate-y-0.5',
+            )}
           >
-            {/* A miniature of the bank in this theme */}
-            <div className={cx('relative h-28 overflow-hidden rounded-[17px] p-2.5', light ? 'bg-[#F6F3EA]' : 'bg-[#0A1411]')}>
-              <div className={cx('flex h-5 items-center justify-between rounded-md px-1.5', light ? 'bg-white' : 'bg-[#13221D]')}>
-                <span className={cx('h-1 w-6 rounded-full', light ? 'bg-[#E4DCC8]' : 'bg-[#26392F]')} />
-                <span className="h-2.5 w-2.5 rotate-45 rounded-[2px] bg-[#C9A45C]" />
-              </div>
-              <motion.div
-                className="relative mt-2 h-11 overflow-hidden rounded-lg bg-[#0C1A17] p-1.5 ring-1 ring-[#C9A45C]/30"
-                animate={on ? { y: [0, -2, 0] } : { y: 0 }}
-                transition={{ repeat: on ? Infinity : 0, duration: 3, ease: 'easeInOut' }}
-              >
-                <span className="block h-1 w-8 rounded-full bg-[#C9A45C]/60" />
-                <span className="mt-1.5 block h-2 w-14 rounded-full bg-[#F3E9D2]/90" />
-                <span className="absolute -end-3 -top-3 h-12 w-12 rounded-full border border-[#C9A45C]/40" />
-                <span className="absolute -end-1 -top-1 h-8 w-8 rounded-full border border-dashed border-[#C9A45C]/40" />
-              </motion.div>
-              <div className="mt-2 flex gap-1.5">
-                {[0, 1, 2].map((k) => (
-                  <span key={k} className={cx('h-3.5 flex-1 rounded', light ? 'bg-[#0C1A17]/[0.07]' : 'bg-white/[0.07]')} />
-                ))}
-              </div>
-              {on && (
-                <motion.span layoutId="theme-check" className="absolute end-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-gold text-night shadow">
-                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                </motion.span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 px-2 pb-1 pt-2.5">
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-gold/15 text-gold">{light ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}</span>
-              <span className="font-semibold">{light ? t.settings.themeLight : t.settings.themeDark}</span>
-            </div>
-            <p className="px-2 pb-1.5 text-xs text-muted">{light ? t.settings.themeLightD : t.settings.themeDarkD}</p>
+            <span className={cx('pointer-events-none absolute -end-10 top-1/2 h-44 w-44 -translate-y-1/2 transition-opacity duration-500', on ? 'opacity-100' : 'opacity-40 group-hover:opacity-70')}>
+              <Guilloche key={on ? 'on' : 'off'} className="h-full w-full" color="#C9A45C" spin={on} />
+            </span>
+            <span className="relative z-10 flex flex-1 flex-col justify-between p-4">
+              <span>
+                <span className="block font-display text-2xl leading-none">{light ? t.settings.themeLight : t.settings.themeDark}</span>
+                <span className={cx('mt-1.5 block max-w-[60%] text-xs', light ? 'text-[#5E6B64]' : 'text-[#F3E9D2]/60')}>{light ? t.settings.themeLightD : t.settings.themeDarkD}</span>
+              </span>
+              <span className={cx('grid h-6 w-6 place-items-center rounded-full transition', on ? 'bg-[#C9A45C] text-[#0C1A17]' : light ? 'ring-1 ring-[#0C1A17]/25' : 'ring-1 ring-white/30')}>
+                {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+              </span>
+            </span>
           </motion.button>
         );
       })}
