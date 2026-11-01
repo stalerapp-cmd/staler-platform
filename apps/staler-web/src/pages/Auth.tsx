@@ -79,13 +79,17 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
         </div>
-        <div className="safe-top hidden items-center justify-between px-8 py-5 lg:flex">
+        {/* Desktop: one row lined up with the form — back and name on one side, language and theme on the other. */}
+        <div className="safe-top hidden px-12 lg:block xl:px-20">
+          <div className="mx-auto mt-8 flex w-full max-w-lg items-center justify-between gap-4 border-b border-dashed border-line pb-5">
           <div className="flex items-center gap-3">
             <AuthBack />
             <Link to="/" className="flex items-center gap-2.5">
               <Logo className="h-9 w-9" />
               <span className="font-display text-xl">S-Taler</span>
             </Link>
+          </div>
+          <AuthPrefs top />
           </div>
         </div>
         <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center lg:px-12 lg:pb-16 lg:pt-6 xl:px-20">

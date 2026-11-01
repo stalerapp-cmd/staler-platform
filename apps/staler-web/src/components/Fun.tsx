@@ -55,13 +55,13 @@ export function PrefsPill({ onDark = false, bare = false }: { onDark?: boolean; 
 }
 
 /** Sign-in pages: language and light/dark as two plainly labelled links under the form. */
-export function AuthPrefs() {
+export function AuthPrefs({ top = false }: { top?: boolean }) {
   const { lang, setLang } = useI18n();
   const { theme, setTheme } = useTheme();
   const dark = theme === 'dark';
   const btn = 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-muted transition hover:bg-sunk hover:text-ink';
   return (
-    <div className="mt-6 flex items-center justify-center gap-1 border-t border-dashed border-line pt-4">
+    <div className={top ? 'flex items-center gap-1' : 'mt-6 flex items-center justify-center gap-1 border-t border-dashed border-line pt-4 lg:hidden'}>
       <button type="button" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} className={btn}>
         <Languages className="h-4 w-4" />
         {lang === 'ar' ? 'English' : 'العربية'}
