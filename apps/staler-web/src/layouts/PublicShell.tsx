@@ -49,7 +49,7 @@ export function PublicShell({ children, onCart, brand, className }: { children: 
           </div>
         </div>
       </header>
-      <main className={cx('safe-bottom mx-auto max-w-6xl px-4 pb-16 pt-5 sm:px-6', className)}>{children}</main>
+      <main className={cx('safe-bottom mx-auto max-w-6xl px-4 pb-16 sm:px-6', /(^|\s)pt-/.test(className ?? '') ? undefined : 'pt-5', className)}>{children}</main>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
 import { ScrollRow } from '../components/ScrollRow';
-import { fill } from '../lib/format';
+import { CountChip } from './Store';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Bike, ClipboardList, Map as MapIcon, MapPin, Package, Phone, Search, Share2, ShoppingBag, Store as StoreIcon } from 'lucide-react';
@@ -170,21 +170,26 @@ export default function StorePage() {
           {/* ---------------------------------------------------------- hero */}
           <section ref={heroRef} className="relative -mx-4 overflow-hidden sm:mx-0 sm:rounded-[2rem]" style={{ background: accent }}>
             <motion.div style={{ y: coverY, scale: coverScale }}>
-              <StoreCover s={s.main ?? s} className="h-60 sm:h-80" />
+              <StoreCover s={s.main ?? s} className="h-56 sm:h-72" />
             </motion.div>
           </section>
-          <div className="relative -mt-16 rounded-[1.75rem] bg-surface/95 p-5 shadow-card ring-1 ring-line/60 backdrop-blur sm:mx-6 sm:-mt-24 sm:p-7">
-            <motion.div className="-mt-14 inline-block sm:-mt-16" initial={{ scale: 0.6, rotate: -12, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: 'spring', bounce: 0.45 }}>
-              <StoreLogo s={s.main ?? s} size={92} />
-            </motion.div>
-            <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3 font-display text-3xl leading-tight sm:text-4xl">
-              {s.store_name}
-              {s.branch_name && <span className="text-muted"> · {s.branch_name}</span>}
-            </motion.h1>
-            <p className="mt-1 text-sm text-muted">
-              {t.shop.owner}: <span className="font-medium text-ink">{s.owner_name}</span>
-            </p>
-            {s.description && <p className="mt-4 max-w-2xl text-ink/80">{s.description}</p>}
+          <div className="relative px-1 sm:px-6">
+            {/* Logo on the cover's edge, name beside it */}
+            <div className="-mt-12 flex items-start gap-4">
+              <motion.div className="shrink-0" initial={{ scale: 0.6, rotate: -12, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: 'spring', bounce: 0.45 }}>
+                <StoreLogo s={s.main ?? s} size={96} />
+              </motion.div>
+              <div className="min-w-0 pt-14">
+                <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="font-display text-2xl leading-tight sm:text-4xl">
+                  {s.store_name}
+                  {s.branch_name && <span className="text-muted"> · {s.branch_name}</span>}
+                </motion.h1>
+                <p className="mt-0.5 truncate text-sm text-muted">
+                  {t.shop.owner}: <span className="font-medium text-ink">{s.owner_name}</span>
+                </p>
+              </div>
+            </div>
+            {s.description && <p className="mt-4 max-w-2xl leading-relaxed text-ink/80">{s.description}</p>}
             <div className="mt-4 flex flex-wrap gap-2 text-sm">
               <span className="flex items-center gap-1.5 rounded-full bg-sunk px-3 py-1.5">
                 <CatIcon className="h-4 w-4" /> {t.shop.cat[s.main?.category ?? s.category ?? 'other']}
@@ -236,13 +241,13 @@ export default function StorePage() {
                   </a>
                 ))}
               {pins.length > 0 && (
-                <Button variant="ghost" icon={<MapIcon className="h-4 w-4" />} onClick={() => setShowMap((v) => !v)}>
+                <Button variant="secondary" icon={<MapIcon className="h-4 w-4" />} onClick={() => setShowMap((v) => !v)}>
                   {t.ord.map}
                 </Button>
               )}
               {user && (
                 <Link to="/app/orders">
-                  <Button variant="ghost" icon={<ClipboardList className="h-4 w-4" />}>
+                  <Button variant="secondary" icon={<ClipboardList className="h-4 w-4" />}>
                     {t.shop.yourOrders}
                   </Button>
                 </Link>
@@ -325,9 +330,9 @@ export default function StorePage() {
 
           {/* ----------------------------------------------------- products */}
           <section className="mt-8">
-            <div className="mb-3 flex items-end justify-between gap-3">
+            <div className="mb-3 flex items-center gap-2.5">
               <h2 className="text-2xl">{t.merchant.products}</h2>
-              {products && <span className="num text-sm text-muted">{fill(t.market.results, { n: products.length })}</span>}
+              <CountChip n={products?.length ?? null} />
             </div>
             <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-4 mb-4 space-y-2.5 bg-bg/85 px-4 py-2.5 backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:px-3">
               <label className="relative block">

@@ -152,13 +152,35 @@ input::-ms-reveal, input::-ms-clear { display: none; }
 .cloth-sky { background: linear-gradient(135deg, #1F3F8F 0%, #4070D6 60%, #5E8FE8 100%); }
 .cloth .lead { color: rgb(255 255 255 / 0.82); }
 
-/* The app ground: faint embroidery-cloth dots so screens are never bare white. */
-.app-ground {
-  background-color: rgb(var(--bg));
-  background-image: radial-gradient(rgb(var(--ink) / 0.055) 1px, transparent 1.3px);
-  background-size: 18px 18px;
-  background-attachment: fixed;
+/* The app ground: warm light from the corners that drifts slowly, over a faint field of
+   cross-stitch that fades toward the middle — felt, never loud. Used on every page. */
+.app-ground, .shop-ground { position: relative; isolation: isolate; background-color: rgb(var(--bg)); }
+.app-ground::before, .shop-ground::before {
+  content: ''; position: fixed; inset: -12%; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(48% 42% at 90% 4%, rgb(var(--gold) / 0.32), transparent 72%),
+    radial-gradient(44% 40% at 6% 10%, rgb(var(--stitch) / 0.22), transparent 72%),
+    radial-gradient(52% 44% at 28% 98%, rgb(var(--olive) / 0.24), transparent 72%),
+    radial-gradient(44% 40% at 98% 76%, rgb(var(--sky) / 0.18), transparent 72%);
+  animation: ground-drift 38s ease-in-out infinite alternate;
 }
+.app-ground::after, .shop-ground::after {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg stroke-width='1.3' stroke-linecap='round' fill='none'%3E%3Cpath d='M26 2l4 4M30 2l-4 4M22 6l4 4M26 6l-4 4M30 6l4 4M34 6l-4 4M26 10l4 4M30 10l-4 4' stroke='%23C8344A'/%3E%3Cpath d='M2 30l4 4M6 30l-4 4M50 30l4 4M54 30l-4 4' stroke='%23D9A73A'/%3E%3Cpath d='M26 44l4 4M30 44l-4 4' stroke='%235E7A2E'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 56px 56px;
+  opacity: 0.12;
+  -webkit-mask-image: radial-gradient(110% 85% at 50% 42%, rgb(0 0 0 / 0.25) 20%, #000 75%);
+  mask-image: radial-gradient(110% 85% at 50% 42%, rgb(0 0 0 / 0.25) 20%, #000 75%);
+  animation: stitch-pan 90s linear infinite;
+}
+[data-theme='dark'] .app-ground::after, [data-theme='dark'] .shop-ground::after { opacity: 0.14; }
+@keyframes stitch-pan { to { background-position: 56px 112px; } }
+@keyframes ground-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-2.5%, 1.5%, 0) scale(1.04); }
+  100% { transform: translate3d(2%, -1.5%, 0) scale(1.02); }
+}
+@media (prefers-reduced-motion: reduce) { .app-ground::before, .shop-ground::before, .app-ground::after, .shop-ground::after { animation: none; } }
 
 /* A sewn card edge for highlighted cards. */
 .sewn { position: relative; }
@@ -258,14 +280,6 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
 .row-scroll { --row-end: right; }
 [dir='rtl'] .row-scroll { --row-end: left; }
 
-/* Shopping pages: a calm, solid ground with soft light from the corners — no dots, no "empty paper" feel. */
-.shop-ground {
-  background-color: rgb(var(--bg));
-  background-image:
-    radial-gradient(1100px 520px at 100% -8%, rgb(var(--gold) / 0.13), transparent 62%),
-    radial-gradient(900px 480px at -10% 4%, rgb(var(--stitch) / 0.07), transparent 58%);
-  background-attachment: fixed;
-}
 
 /* The scroll cue: a quiet "there's more below" for people who don't think to scroll. */
 @keyframes cue-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }

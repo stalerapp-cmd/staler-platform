@@ -164,11 +164,11 @@ function Market() {
           <button
             type="button"
             onClick={() => setFilters(true)}
-            className="relative flex h-14 shrink-0 items-center gap-2 rounded-2xl bg-white/12 px-4 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur transition hover:bg-white/20 active:scale-95"
+            className="relative flex h-14 shrink-0 items-center gap-2 rounded-2xl bg-gold px-4 text-sm font-bold text-night shadow-lg transition hover:brightness-105 active:scale-95"
             aria-label={M.filters}
           >
             <SlidersHorizontal className="h-5 w-5" />
-            <span className="hidden sm:inline">{M.filters}</span>
+            <span>{M.filters}</span>
             {active > 0 && <span className="num absolute -end-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-stitch px-1 text-[11px] text-white ring-2 ring-night">{active}</span>}
           </button>
         </div>
@@ -181,13 +181,17 @@ function Market() {
           <span className="text-xs text-muted sm:hidden">{M.swipe}</span>
         </div>
         <ScrollRow nudgeKey="market-cats" label={M.cats} innerClassName="gap-2.5">
-          {allCats.map((x) => {
+          {allCats.map((x, i) => {
             const on = cat === x.k;
             return (
               <motion.button
                 key={x.k}
                 type="button"
-                whileTap={{ scale: 0.94 }}
+                initial={{ opacity: 0, y: 14, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: 0.15 + i * 0.045, type: 'spring', bounce: 0.45 }}
+                whileHover="wiggle"
+                whileTap={{ scale: 0.92 }}
                 onClick={() => setCat(x.k)}
                 aria-pressed={on}
                 className={cx(
@@ -196,9 +200,15 @@ function Market() {
                 )}
               >
                 {on && <motion.span layoutId="cat-on" className="absolute inset-0 rounded-2xl" style={{ background: x.c }} transition={{ type: 'spring', bounce: 0.25, duration: 0.45 }} />}
-                <span className="relative grid h-9 w-9 place-items-center rounded-xl transition-colors" style={{ background: on ? 'rgba(255,255,255,0.18)' : `${x.c}1a`, color: on ? '#fff' : x.c }}>
+                <motion.span
+                  className="relative grid h-9 w-9 place-items-center rounded-xl transition-colors"
+                  style={{ background: on ? 'rgba(255,255,255,0.18)' : `${x.c}1a`, color: on ? '#fff' : x.c }}
+                  variants={{ wiggle: { rotate: [0, -12, 10, -6, 0], scale: [1, 1.12, 1], transition: { duration: 0.55 } } }}
+                  animate={on ? { rotate: [0, -10, 8, 0], scale: [1, 1.15, 1] } : { rotate: 0, scale: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
                   <x.icon className="h-[18px] w-[18px]" strokeWidth={2} />
-                </span>
+                </motion.span>
                 <span className={cx('relative whitespace-nowrap', on && 'font-semibold')}>{catLabel(x.k)}</span>
               </motion.button>
             );
@@ -211,9 +221,6 @@ function Market() {
         <section className="mb-8">
           <div className="mb-2.5 flex items-end justify-between gap-3">
             <h2 className="text-xl">{M.byStore}</h2>
-            <Link to="/app/stores" className="flex items-center gap-1 text-sm font-medium text-stitch hover:underline">
-              {fill(M.allStoresN, { n: stores.length })} <ArrowLeft className="h-4 w-4 ltr:rotate-180" />
-            </Link>
           </div>
           <ScrollRow nudgeKey="market-stores" label={M.byStore} innerClassName="gap-3.5">
             {stores.slice(0, 14).map((s) => (
@@ -241,30 +248,50 @@ function Market() {
                 </div>
               </Link>
             ))}
+            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} whileHover={{ y: -4 }} whileTap={{ scale: 0.95 }} className="shrink-0 snap-start">
+              <Link
+                to="/app/stores"
+                className="group flex h-full min-h-[176px] w-[150px] flex-col items-center justify-center gap-2.5 rounded-[1.5rem] border-2 border-dashed border-stitch/40 bg-stitch/5 text-center text-stitch transition hover:bg-stitch/10"
+              >
+                <span className="relative grid h-14 w-14 place-items-center rounded-full bg-stitch text-white shadow-md shadow-stitch/30">
+                  <span className="absolute -inset-1.5 rounded-full border-2 border-dashed border-stitch/50 motion-safe:animate-[spin_12s_linear_infinite]" />
+                  <ArrowLeft className="h-6 w-6 transition group-hover:-translate-x-0.5 ltr:rotate-180" />
+                </span>
+                <span className="text-sm font-semibold">{t.shop.allStores}</span>
+                <span className="num -mt-1 text-xs text-stitch/70">{stores.length}</span>
+              </Link>
+            </motion.div>
           </ScrollRow>
         </section>
       )}
 
-      {/* ------------------------------------- results bar + active filters */}
-      <div className="sticky top-[calc(env(safe-area-inset-top)+4.5rem)] z-20 -mx-4 mb-4 bg-bg/80 px-4 py-2.5 backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:px-3 lg:top-[4.75rem]">
-        <div className="flex items-center gap-2">
-          <p className="min-w-0 flex-1 truncate text-sm font-medium">{items ? fill(M.results, { n: items.length }) : '…'}</p>
-          <button type="button" onClick={() => setFilters(true)} className="flex shrink-0 items-center gap-1.5 rounded-full bg-surface px-3.5 py-2 text-sm ring-1 ring-line transition hover:ring-ink/20">
-            <SlidersHorizontal className="h-4 w-4" /> {M.filters}
-            {active > 0 && <span className="num grid h-5 min-w-5 place-items-center rounded-full bg-stitch px-1 text-[11px] text-white">{active}</span>}
+      {/* ------------------------------------- results header + active filters */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h2 className="text-2xl">{t.merchant.products}</h2>
+            <CountChip n={items?.length ?? null} />
+          </div>
+          <button type="button" onClick={() => setFilters(true)} className="flex shrink-0 items-center gap-1.5 rounded-full py-1.5 pe-2 ps-3 text-sm text-muted transition hover:bg-surface hover:text-ink">
+            <ArrowDownUp className="h-4 w-4" />
+            <span className="font-medium text-ink">{sorts.find((x) => x.v === sort)?.label}</span>
+            <ChevronDown className="h-4 w-4" />
           </button>
         </div>
-        {(active > 0 || q.trim()) && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {q.trim() && <Pill onClear={() => setQ('')}>“{q.trim()}”</Pill>}
-            {cat !== 'all' && <Pill onClear={() => setCat('all')}>{catLabel(cat)}</Pill>}
-            {type !== 'all' && <Pill onClear={() => setType('all')}>{types.find((x) => x.v === type)?.label}</Pill>}
-            {sort !== 'new' && <Pill onClear={() => setSort('new')}>{sorts.find((x) => x.v === sort)?.label}</Pill>}
-            <button type="button" onClick={clear} className="px-2 text-xs font-medium text-stitch hover:underline">
-              {M.clear}
-            </button>
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {(cat !== 'all' || type !== 'all' || q.trim()) && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <div className="flex flex-wrap items-center gap-1.5 pt-2.5">
+                {q.trim() && <Pill onClear={() => setQ('')}>“{q.trim()}”</Pill>}
+                {cat !== 'all' && <Pill onClear={() => setCat('all')}>{catLabel(cat)}</Pill>}
+                {type !== 'all' && <Pill onClear={() => setType('all')}>{types.find((x) => x.v === type)?.label}</Pill>}
+                <button type="button" onClick={clear} className="px-2 text-xs font-medium text-stitch hover:underline">
+                  {M.clear}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <ErrorNote>{error}</ErrorNote>
@@ -375,6 +402,20 @@ function Market() {
         }}
       />
     </div>
+  );
+}
+
+/** The product count as a small stitched tag; the number rolls when it changes. */
+export function CountChip({ n }: { n: number | null }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-dashed border-stitch/35 bg-stitch/[0.06] py-1 pe-3 ps-2 text-sm text-stitch">
+      <span className="h-1.5 w-1.5 rotate-45 bg-stitch" />
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span key={n ?? 'x'} initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -10, opacity: 0 }} transition={{ duration: 0.22 }} className="num font-bold">
+          {n == null ? '…' : n}
+        </motion.span>
+      </AnimatePresence>
+    </span>
   );
 }
 

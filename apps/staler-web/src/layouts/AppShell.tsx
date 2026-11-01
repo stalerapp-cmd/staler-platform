@@ -538,7 +538,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
 
   return (
     <div
-      className={cx(/^\/app\/(store|stores)(\/|$)/.test(loc.pathname) ? 'shop-ground' : 'app-ground', 'safe-x min-h-dvh lg:grid lg:transition-[grid-template-columns] lg:duration-300', rail ? 'lg:grid-cols-[84px_1fr]' : 'lg:grid-cols-[272px_1fr]')}
+      className={cx('app-ground safe-x min-h-dvh lg:grid lg:transition-[grid-template-columns] lg:duration-300', rail ? 'lg:grid-cols-[84px_1fr]' : 'lg:grid-cols-[272px_1fr]')}
     >
       <aside className="sticky top-0 hidden h-dvh flex-col border-e border-line bg-surface/80 py-5 backdrop-blur lg:flex">
         <div className={cx('mb-5 flex items-center', rail ? 'flex-col gap-3 px-2' : 'justify-between px-5')}>

@@ -173,12 +173,6 @@ export function ProductCard({ p, onOpen, index, showStore = true }: { p: Product
           </div>
         )}
         {few && <span className="absolute bottom-2 start-2 rounded-full bg-night/80 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">{fill(t.shop.fewLeft, { n: p.stock })}</span>}
-        {/* A quiet "open" mark that wakes on hover — tells people the card opens. */}
-        {!soldOut && (
-          <span className="absolute bottom-2 end-2 grid h-9 w-9 place-items-center rounded-full bg-white/95 text-night shadow-md transition duration-300 group-hover:scale-110 group-hover:bg-stitch group-hover:text-white">
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-          </span>
-        )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col px-2 pb-2 pt-2.5">
         {showStore && (
