@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { Logo, StarMotif, StitchBand } from '../components/Tatreez';
 import { Button, CodeInput, ErrorNote, Field, PasswordStrength, cx, Segmented } from '../components/ui';
-import { TopControls } from '../layouts/AppShell';
+import { AuthPrefs } from '../components/Fun';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
 import { AuthBack, MailTips, ResendCode } from '../components/AuthExtras';
@@ -70,7 +70,6 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           </div>
           <div className="relative flex items-center justify-between">
             <AuthBack onDark />
-            <TopControls onDark />
           </div>
           <div className="relative mt-3 flex items-center gap-3 px-2">
             <Logo className="h-12 w-12" animate />
@@ -88,7 +87,6 @@ export function AuthLayout({ children }: { children: ReactNode }) {
               <span className="font-display text-xl">S-Taler</span>
             </Link>
           </div>
-          <TopControls />
         </div>
         <div className="relative -mt-10 flex flex-1 items-start justify-center px-3 pb-10 sm:px-5 lg:mt-0 lg:items-center">
           <motion.div
@@ -98,6 +96,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             className="sewn relative w-full max-w-md rounded-[30px] border border-line/70 bg-surface p-6 shadow-card sm:p-8"
           >
             {children}
+            <AuthPrefs />
           </motion.div>
         </div>
       </div>

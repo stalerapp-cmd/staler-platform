@@ -104,7 +104,7 @@ export default function Settings() {
             <StarMotif size={17} cell={10} className="h-full w-full" colors={['#FFFFFF', '#FFE3A1']} strokeWidth={2.2} />
           </div>
         </div>
-        <div className="relative flex flex-wrap items-center gap-5">
+        <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:flex-wrap sm:text-start">
           {/* Photo: the avatar with its own two clear actions right under it */}
           <div className="flex flex-col items-center gap-2.5">
             <button
@@ -161,14 +161,18 @@ export default function Settings() {
               )}
             </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-display text-2xl text-white">{user?.full_name}</p>
-            <p className="truncate text-sm text-white/75">{user?.email}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+            <p className="break-words font-display text-2xl text-white">{user?.full_name}</p>
+            <p className="truncate text-sm text-white/75" dir="ltr">
+              {user?.email}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
               <RoleBadge onDark />
               {user?.wallet_id && (
-                <span className="num inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs text-white/90">
-                  {user.wallet_id}
+                <span className="num inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-white/15 py-1 pe-1 ps-2.5 text-xs text-white/90">
+                  <span dir="ltr" className="truncate">
+                    {user.wallet_id}
+                  </span>
                   <CopyButton text={user.wallet_id} />
                 </span>
               )}
@@ -207,7 +211,7 @@ export default function Settings() {
 
       <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-6">
         {/* Tabs: a scrolling pill row on phones, a sticky list on desktop */}
-        <div role="tablist" className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 lg:sticky lg:top-24 lg:mx-0 lg:mb-0 lg:h-fit lg:flex-col lg:overflow-visible lg:px-0">
+        <div role="tablist" className="mb-5 grid grid-cols-4 gap-1.5 rounded-3xl bg-surface p-1.5 shadow-card lg:sticky lg:top-24 lg:mb-0 lg:flex lg:h-fit lg:flex-col lg:gap-2 lg:bg-transparent lg:p-0 lg:shadow-none">
           {(['profile', 'security', 'devices', 'account'] as Tab[]).map((k) => {
             const Icon = TAB_ICONS[k];
             const on = tab === k;
@@ -217,11 +221,11 @@ export default function Settings() {
                 role="tab"
                 aria-selected={on}
                 onClick={() => setTab(k)}
-                className={cx('relative flex shrink-0 items-center gap-2.5 rounded-2xl px-4 py-2.5 text-[15px] transition', on ? 'text-white' : 'bg-surface text-muted hover:text-ink lg:bg-transparent')}
+                className={cx('relative flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[12px] transition lg:flex-row lg:gap-2.5 lg:px-4 lg:py-2.5 lg:text-[15px]', on ? 'text-white' : 'text-muted hover:text-ink')}
               >
                 {on && <motion.span layoutId="settings-tab" className="absolute inset-0 rounded-2xl bg-night shadow-lift dark:bg-white/15" transition={{ type: 'spring', bounce: 0.2, duration: 0.45 }} />}
                 <Icon className="relative h-[18px] w-[18px]" />
-                <span className="relative whitespace-nowrap">{t.settings.tabs[k]}</span>
+                <span className="relative max-w-full truncate">{t.settings.tabs[k]}</span>
               </button>
             );
           })}

@@ -17,6 +17,7 @@ import { bankingRouter } from './modules/banking.js';
 import { withdrawalsRouter, integrationRouter } from './modules/withdrawals.js';
 import { linkCustomerRouter, linkExchangeRouter } from './modules/link.js';
 import { wireRouter } from './modules/wire.js';
+import { supportRouter } from './modules/support.js';
 import { adminRouter } from './modules/admin.js';
 
 let maintenanceCache = { at: 0, on: false };
@@ -93,6 +94,7 @@ export function createApp(): Express {
 
   app.use('/api/auth', noStore, authRouter);
   app.use('/api/withdrawals', noStore, withdrawalsRouter);
+  app.use('/api', noStore, supportRouter);
   app.use('/api/admin', noStore, adminRouter);
   app.use('/api', noStore, linkCustomerRouter);
   app.use('/api', noStore, bankingRouter);

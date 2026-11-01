@@ -12,6 +12,9 @@ import Landing from './pages/Landing';
 import { isNative } from './lib/api';
 
 const Overview = lazyRetry(() => import('./pages/Overview'));
+const SupportChat = lazyRetry(() => import('./pages/Support').then((m) => ({ default: m.SupportChat })));
+const AdminSupport = lazyRetry(() => import('./pages/Support').then((m) => ({ default: m.AdminSupport })));
+const AdminSupportThread = lazyRetry(() => import('./pages/Support').then((m) => ({ default: m.AdminSupportThread })));
 const Transfer = lazyRetry(() => import('./pages/Transfer'));
 const Transactions = lazyRetry(() => import('./pages/Transactions'));
 const Requests = lazyRetry(() => import('./pages/Requests'));
@@ -89,6 +92,9 @@ export default function App() {
           <Route path="withdraw/:opId" element={page(<WalletWithdraw />)} />
           <Route path="apps" element={page(<Apps />)} />
           <Route path="settings" element={page(<Settings />)} />
+          <Route path="support" element={page(<SupportChat />)} />
+          <Route path="admin/support" element={admin(<AdminSupport />)} />
+          <Route path="admin/support/:userId" element={admin(<AdminSupportThread />)} />
           <Route path="admin" element={admin(<AdminOverview />)} />
           <Route path="admin/customers" element={admin(<AdminCustomers />)} />
           <Route path="admin/customers/:id" element={admin(<AdminCustomer />)} />

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Copy, CornerUpLeft, ExternalLink, LifeBuoy, MessageCirclePlus, MessagesSquare, Pencil, SendHorizontal, Smile, Trash2, UserPlus, X } from 'lucide-react';
 import { del, get, patch, post, PUBLIC_ORIGIN } from '../lib/api';
@@ -161,7 +162,7 @@ function Chat({ id, conv }: { id: string; conv: any }) {
               return (
                 <Fragment key={m.id}>
                   {newDay && (
-                    <div className="sticky top-0 z-10 flex justify-center py-2">
+                    <div className="flex justify-center py-2">
                       <span className="rounded-full bg-surface/90 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-line backdrop-blur">{dayLabel(m.created_at, t, lang)}</span>
                     </div>
                   )}
@@ -469,6 +470,7 @@ export default function Messages() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const other = current?.type !== 'support' ? current?.participants?.[0] : null;
+  const wide = useWide();
 
   return (
     <div>
@@ -522,7 +524,8 @@ export default function Messages() {
           )}
         </aside>
         {/* Phones: an open chat takes the whole screen like a messaging app (above the tab bar, composer above the keyboard). */}
-        <section className={cx(id ? 'fixed inset-0 z-[60] flex flex-col bg-bg lg:static lg:z-auto lg:block lg:bg-transparent' : 'hidden lg:block')}>
+        <PhoneLayer active={!!id && !wide}>
+        <section className={cx(id ? 'fixed inset-0 z-[70] flex h-[100dvh] flex-col bg-bg lg:static lg:z-auto lg:block lg:h-auto lg:bg-transparent' : 'hidden lg:block')}>
           {id ? (
             <>
               <div className="safe-top flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface/95 px-2 py-2 backdrop-blur sm:px-4 lg:bg-transparent lg:py-2.5">
@@ -579,8 +582,40 @@ export default function Messages() {
             </div>
           )}
         </section>
+        </PhoneLayer>
       </div>
       <NewChat open={newOpen} onClose={() => setNewOpen(false)} />
     </div>
   );
+}
+
+/** True on screens wide enough for the side-by-side chat layout. */
+function useWide() {
+  const q = '(min-width: 1024px)';
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia(q);
+    const on = () => setWide(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
+
+/**
+ * The page sits inside an animated (transformed) wrapper, which would trap a fixed
+ * element inside it. On phones the open chat is lifted to the body so it truly fills the screen.
+ */
+function PhoneLayer({ active, children }: { active: boolean; children: ReactNode }) {
+  useEffect(() => {
+    if (!active) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.classList.add('chat-open');
+    return () => {
+      document.body.style.overflow = prev;
+      document.documentElement.classList.remove('chat-open');
+    };
+  }, [active]);
+  return active ? createPortal(children, document.body) : <>{children}</>;
 }

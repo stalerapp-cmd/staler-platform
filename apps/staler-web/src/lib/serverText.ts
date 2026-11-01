@@ -128,6 +128,8 @@ const AR: Record<string, string> = {
   'The bank refused the request': 'البنك رفض الطلب',
   'No bank account found': 'ما في حساب بنكي',
   'Account not found': 'الحساب مش موجود',
+  'Customer not found': 'ما لقينا الزبون',
+  'Write a message': 'اكتب رسالة',
   'Choose a customer account': 'اختار حساب عميل',
   'Source and destination are the same account': 'الحساب المرسِل والمستلِم نفس الحساب',
   'The destination account cannot receive money right now': 'الحساب المستلم ما بيستقبل مصاري هلّأ',

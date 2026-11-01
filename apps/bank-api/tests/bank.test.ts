@@ -642,3 +642,22 @@ describe('ledger invariants', () => {
     expect(bad.rows[0].n).toBe(0);
   });
 });
+
+describe('support chat', () => {
+  it('customer writes, staff sees the thread and answers, customer reads the reply', async () => {
+    const c = await registerCustomer(app, 'Needs Help');
+    expect((await request(app).post('/api/support').set(auth(c.token)).send({ body: 'My card is stuck' })).status).toBe(201);
+    expect((await request(app).post('/api/support').set(auth(c.token)).send({ body: '' })).status).toBe(400);
+    const login = await request(app).post('/api/auth/login').send({ login: 'admin@talerbank.local', password: process.env.BANK_ADMIN_PASSWORD });
+    const staff = auth(login.body.data.accessToken);
+    const list = await request(app).get('/api/admin/support').set(staff);
+    expect(list.status).toBe(200);
+    expect(list.body.data.threads.find((t: any) => t.user_id === c.userId).unread).toBe(1);
+    expect((await request(app).get('/api/admin/support').set(auth(c.token))).status).toBe(403);
+    expect((await request(app).post(`/api/admin/support/${c.userId}`).set(staff).send({ body: 'We are on it' })).status).toBe(201);
+    expect((await request(app).get('/api/support/unread').set(auth(c.token))).body.data.unread).toBe(1);
+    const mine = await request(app).get('/api/support').set(auth(c.token));
+    expect(mine.body.data.messages.map((m: any) => m.from_staff)).toEqual([false, true]);
+    expect((await request(app).get('/api/support/unread').set(auth(c.token))).body.data.unread).toBe(0);
+  });
+});

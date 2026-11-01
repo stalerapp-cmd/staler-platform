@@ -495,7 +495,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
     { to: '/app', label: t.nav.home, icon: Home, end: true },
     { to: '/app/activity', label: t.nav.activity, icon: Activity },
     { to: '/app/scan', label: t.nav.scan, icon: ScanLine },
-    user?.role === 'exchange' ? { to: '/app/agent', label: t.nav.agentDesk, icon: HandCoins } : { to: '/app/store', label: t.nav.store, icon: ShoppingBag },
+    user?.role === 'exchange' ? { to: '/app/agent', label: t.nav.desk, icon: HandCoins } : { to: '/app/store', label: t.nav.store, icon: ShoppingBag },
   ];
 
   const sidebar = (onClick?: () => void, animated = true, isRail = false) => (

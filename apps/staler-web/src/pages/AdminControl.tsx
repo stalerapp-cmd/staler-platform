@@ -138,7 +138,7 @@ export function AdminStoreList() {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input className="input ps-9" placeholder={C.searchStores} value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="field w-full ps-9" placeholder={C.searchStores} value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
         <Chips
           label={C.status}
@@ -231,7 +231,7 @@ export function AdminStoreDetail() {
   return (
     <div>
       <PageHeader title={s.store_name + (s.branch_name ? ` · ${s.branch_name}` : '')} lead={`${s.owner ?? '—'} · ${s.owner_email ?? ''}`} />
-      <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="mb-4 grid grid-cols-1 gap-2 min-[420px]:grid-cols-3 sm:gap-3">
         {[
           [C.revenue, money(data.stats.revenue, lang)],
           [C.inEscrow, money(data.stats.in_escrow, lang)],

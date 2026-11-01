@@ -20,6 +20,7 @@ export function MapView({ pins, trail = false, onPick, className, zoom = 13 }: {
   const map = useRef<any>(null);
   const layer = useRef<any>(null);
   const L = useRef<any>(null);
+  const resize = useRef<ResizeObserver | null>(null);
   const pick = useRef(onPick);
   pick.current = onPick;
   const { lang } = useI18n();
@@ -33,15 +34,27 @@ export function MapView({ pins, trail = false, onPick, className, zoom = 13 }: {
       L.current = mod.default ?? mod;
       const start = pins[pins.length - 1] ?? { lat: 31.9522, lng: 35.2332 }; // Ramallah by default
       map.current = L.current.map(box.current, { zoomControl: true, attributionControl: true }).setView([start.lat, start.lng], zoom);
+      // CARTO's OpenStreetMap tiles: allowed inside apps (OSM's own server blocks app WebViews).
       L.current
-        .tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' })
+        .tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19,
+          subdomains: 'abcd',
+          attribution: '© OpenStreetMap · © CARTO',
+        })
         .addTo(map.current);
+      // The map may first appear inside a tab or sheet that is still sizing up: re-measure when it settles.
+      if (typeof ResizeObserver !== 'undefined') {
+        resize.current = new ResizeObserver(() => map.current?.invalidateSize());
+        resize.current.observe(box.current);
+      }
+      setTimeout(() => map.current?.invalidateSize(), 300);
       layer.current = L.current.layerGroup().addTo(map.current);
       map.current.on('click', (e: any) => pick.current?.({ lat: +e.latlng.lat.toFixed(5), lng: +e.latlng.lng.toFixed(5) }));
       draw();
     })();
     return () => {
       alive = false;
+      resize.current?.disconnect();
       map.current?.remove();
       map.current = null;
     };

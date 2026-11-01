@@ -54,6 +54,27 @@ export function PrefsPill({ onDark = false, bare = false }: { onDark?: boolean; 
   );
 }
 
+/** Sign-in pages: language and light/dark as two plainly labelled links under the form. */
+export function AuthPrefs() {
+  const { lang, setLang } = useI18n();
+  const { theme, setTheme } = useTheme();
+  const dark = theme === 'dark';
+  const btn = 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-muted transition hover:bg-sunk hover:text-ink';
+  return (
+    <div className="mt-6 flex items-center justify-center gap-1 border-t border-dashed border-line pt-4">
+      <button type="button" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} className={btn}>
+        <Languages className="h-4 w-4" />
+        {lang === 'ar' ? 'English' : 'العربية'}
+      </button>
+      <span className="h-4 w-px bg-line" />
+      <button type="button" onClick={() => setTheme(dark ? 'light' : 'dark')} className={btn}>
+        {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        {lang === 'ar' ? (dark ? 'الوضع الفاتح' : 'الوضع الداكن') : dark ? 'Light mode' : 'Dark mode'}
+      </button>
+    </div>
+  );
+}
+
 /**
  * The page's own scrollbar on desktop (the browser's one would show the plain
  * system pointer). A thin stitched thumb; drag it or click the track.

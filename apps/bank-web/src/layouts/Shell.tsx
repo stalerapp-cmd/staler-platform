@@ -107,6 +107,7 @@ function useNav() {
         { to: '/app/admin', label: t.nav.admin, icon: LayoutDashboard, end: true },
         ...([
           { to: '/app/admin/customers', label: t.nav.customers, icon: Users, perm: 'customers.view' },
+          { to: '/app/admin/support', label: t.navg.support, icon: LifeBuoy, perm: 'support' },
           { to: '/app/admin/ledger', label: t.nav.ledger, icon: Landmark, perm: 'ledger.view' },
           { to: '/app/admin/exchange', label: t.nav.exchange, icon: Vault, perm: 'exchange.view' },
           { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
@@ -223,11 +224,12 @@ function Group({ g, onClick, animated, rail }: { g: NavGroup; onClick?: () => vo
 /** Support: e-mail, or the support chat in the S-Taler wallet. */
 function SupportSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n();
+  const nav = useNavigate();
   const cfg = usePublicConfig();
   const mail = (cfg?.supportEmail as string | null) ?? null;
   const items = [
     ...(mail ? [{ href: `mailto:${mail}?subject=TalerBank`, icon: Mail, title: t.navg.emailUs, d: `${t.navg.emailD} ${mail}`, c: 'bg-night text-[#F3DDA6]' }] : []),
-    { href: 'https://s-taler.onrender.com/app/messages?support=1', icon: MessageCircle, title: t.navg.chatStaler, d: t.navg.chatStalerD, c: 'bg-olive text-white' },
+    { href: '/app/support', icon: MessageCircle, title: t.navg.chatBank, d: t.navg.chatBankD, c: 'bg-olive text-white', inApp: true },
   ];
   return (
     <Sheet open={open} onClose={onClose} title={t.navg.support}>
@@ -237,8 +239,9 @@ function SupportSheet({ open, onClose }: { open: boolean; onClose: () => void })
           <motion.a
             key={i.href}
             href={i.href}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...('inApp' in i
+              ? { onClick: (e: React.MouseEvent) => (e.preventDefault(), onClose(), nav(i.href)) }
+              : { target: '_blank', rel: 'noopener noreferrer' })}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: n * 0.06 }}
@@ -260,6 +263,7 @@ function SupportSheet({ open, onClose }: { open: boolean; onClose: () => void })
 
 function Notifications() {
   const { t, lang } = useI18n();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<{ notifications: Notice[]; unread: number } | null>(null);
   const load = async () => {
@@ -296,7 +300,17 @@ function Notifications() {
             {data.notifications.map((n) => {
               const l = localize(n, lang);
               return (
-                <li key={n.id} className="flex gap-3 py-3">
+                <li
+                  key={n.id}
+                  className={cx('flex gap-3 py-3', typeof n.metadata?.link === 'string' && 'cursor-pointer')}
+                  onClick={() => {
+                    const link = n.metadata?.link;
+                    if (typeof link === 'string' && link.startsWith('/app/')) {
+                      setOpen(false);
+                      navigate(link);
+                    }
+                  }}
+                >
                   <span className={cx('mt-2 h-2 w-2 shrink-0 rounded-full', n.is_read ? 'bg-transparent' : 'bg-stitch')} aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{l.title}</p>

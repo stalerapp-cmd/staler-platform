@@ -32,6 +32,7 @@ const LOOKS: [RegExp, ClothTone, LucideIcon][] = [
   [/^\/app\/merchant/, 'sand', Store],
   [/^\/app\/admin\/users/, 'night', Users],
   [/^\/app\/admin\/stores/, 'sand', Store],
+  [/^\/app\/admin\/agents/, 'gold', HandCoins],
   [/^\/app\/admin\/disputes/, 'stitch', Scale],
   [/^\/app\/admin\/pending/, 'olive', UserPlus],
   [/^\/app\/admin\/bank/, 'sky', Landmark],
