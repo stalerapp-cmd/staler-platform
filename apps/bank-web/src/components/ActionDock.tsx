@@ -43,7 +43,7 @@ export function ActionDock({ actions }: { actions: DockAction[] }) {
     <motion.nav
       initial={reduce ? false : { opacity: 0, y: -18, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: 'spring', bounce: 0.3, duration: 0.7, delay: 0.25 }}
+      transition={{ type: 'spring', bounce: 0.25, duration: 0.4, delay: 0.05 }}
       className="relative z-10 mx-2 -mt-9 rounded-[26px] bg-surface/95 p-1.5 shadow-[0_18px_40px_-22px_rgb(var(--vault)/0.55)] ring-1 ring-line/70 backdrop-blur sm:mx-5 sm:p-2"
     >
       {/* A stitched seam along the top edge, where the dock meets the card. */}
@@ -62,7 +62,7 @@ export function ActionDock({ actions }: { actions: DockAction[] }) {
                 whileTap="tap"
                 variants={{
                   hidden: { opacity: 0, y: 10 },
-                  rest: { opacity: 1, y: 0, transition: { delay: 0.4 + i * 0.06, type: 'spring', bounce: 0.4 } },
+                  rest: { opacity: 1, y: 0, transition: { delay: 0.1 + i * 0.035, type: 'spring', bounce: 0.3, duration: 0.35 } },
                   hover: { y: -3 },
                   tap: { scale: 0.92 },
                 }}

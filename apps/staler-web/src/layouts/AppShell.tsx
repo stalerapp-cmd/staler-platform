@@ -50,6 +50,7 @@ import { relative } from '../lib/format';
 import { localize, targetOf, type Notice } from '../lib/notifications';
 import { useToast } from '../components/Toast';
 import { Logo, StitchBand } from '../components/Tatreez';
+import { StitchCorner, StitchRing } from '../components/HeaderStitch';
 import { Avatar, Sheet, cx } from '../components/ui';
 import { ErrorBoundary, PageSpinner } from '../components/Boundary';
 import { useConfirm } from '../components/Confirm';
@@ -571,22 +572,31 @@ export default function AppShell({ children }: { children?: ReactNode }) {
           ))}
         </datalist>
         <header className="safe-top sticky top-0 z-30 px-2.5 pt-2 sm:px-5 lg:px-0 lg:pt-0">
-          <div className="hdr-ribbon flex h-[60px] w-full items-center justify-between gap-2 rounded-[22px] bg-surface/90 px-2 shadow-[0_12px_32px_-20px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur-md sm:px-3 lg:h-16 lg:rounded-none lg:px-6 lg:shadow-[0_10px_30px_-24px_rgb(var(--night)/0.6)] lg:ring-0">
-            <div className="flex min-w-0 items-center gap-1">
-              {loc.pathname !== '/app' && <BackButton />}
-              <NavLink to="/app/settings" className="group flex min-w-0 items-center gap-2.5 rounded-[16px] py-1 pe-2.5 ps-1 transition hover:bg-sunk/80 active:scale-[0.98]" aria-label={t.nav.settings}>
-                <span className="relative shrink-0 rounded-full border border-dashed border-stitch/40 p-[2px] transition group-hover:border-stitch/70">
-                  <Avatar name={user?.full_name} src={user?.profile_image} size={36} />
-                  <span className="absolute bottom-0 end-0 h-2.5 w-2.5 rounded-full bg-olive ring-2 ring-surface" />
+          <div className="hdr-lux relative flex h-[62px] w-full items-stretch justify-between overflow-hidden rounded-[22px] bg-surface/95 shadow-[0_12px_32px_-20px_rgb(var(--night)/0.55)] ring-1 ring-line/60 backdrop-blur-md lg:h-16 lg:rounded-none lg:ring-0">
+            <div className="flex min-w-0 items-stretch">
+              {/* Name side: a dark embroidered cuff */}
+              <NavLink to="/app/settings" className="hdr-cuff group relative flex min-w-0 items-center gap-2.5 bg-night pe-10 ps-1.5 text-white transition active:brightness-110 sm:ps-3 lg:ps-6" aria-label={t.nav.settings}>
+                <StitchRing size={48}>
+                  <span className="relative">
+                    <Avatar name={user?.full_name} src={user?.profile_image} size={36} />
+                    <span className="absolute bottom-0 end-0 h-2.5 w-2.5 rounded-full bg-olive ring-2 ring-night" />
+                  </span>
+                </StitchRing>
+                <span className="relative min-w-0 leading-tight">
+                  <span className="block truncate text-[11px] text-white/55">{t.home.hello}</span>
+                  <span className="block max-w-[30vw] truncate text-[15px] font-semibold sm:max-w-[200px]">{user?.full_name?.split(' ')[0]}</span>
                 </span>
-                <span className="min-w-0 leading-tight">
-                  <span className="block truncate text-[11px] text-muted">{t.home.hello}</span>
-                  <span className="block max-w-[34vw] truncate text-[15px] font-semibold sm:max-w-[220px]">{user?.full_name?.split(' ')[0]}</span>
-                </span>
-                <RoleBadge className="ms-1 hidden md:inline-flex" />
+                <RoleBadge onDark className="relative ms-1 hidden md:inline-flex" />
               </NavLink>
+              {loc.pathname !== '/app' && (
+                <span className="flex items-center ps-1">
+                  <BackButton />
+                </span>
+              )}
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="relative flex shrink-0 items-center gap-1 pe-6 ps-2 lg:pe-8">
+              <StitchCorner className="pointer-events-none absolute end-2 top-2 ltr:-scale-x-100" />
+              <StitchCorner className="pointer-events-none absolute bottom-2.5 end-2 -scale-y-100 ltr:scale-x-[-1] ltr:-scale-y-100" />
               <div className="hidden sm:block">
                 <PrefsPill bare />
               </div>
@@ -600,6 +610,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                 <LogOut className="h-[19px] w-[19px] flip-rtl" />
               </button>
             </div>
+            <span aria-hidden="true" className="hdr-belt pointer-events-none absolute inset-x-0 bottom-0 h-[5px]" />
           </div>
         </header>
 

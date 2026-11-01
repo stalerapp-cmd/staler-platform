@@ -3,7 +3,7 @@ import { Check, Moon, Sun } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { cx } from './ui';
 
-/** Light / dark as two little skies: a sun that spins its rays, a moon with twinkling stars. */
+/** Light / dark, each shown as a small preview of the bank in that theme. */
 export function ThemePicker({ theme, onChange }: { theme: string; onChange: (v: 'light' | 'dark') => void }) {
   const { t } = useI18n();
   return (
@@ -18,50 +18,37 @@ export function ThemePicker({ theme, onChange }: { theme: string; onChange: (v: 
             aria-checked={on}
             whileTap={{ scale: 0.96 }}
             onClick={() => onChange(v)}
-            className={cx('relative overflow-hidden rounded-[22px] p-1.5 text-start transition', on ? 'bg-gold/12 ring-2 ring-gold' : 'bg-sunk/70 ring-1 ring-line hover:ring-ink/30')}
+            className={cx('relative overflow-hidden rounded-[22px] p-1.5 text-start transition duration-300', on ? 'bg-surface shadow-[0_16px_36px_-22px_rgb(0_0_0/0.5)] ring-2 ring-gold' : 'bg-sunk/60 ring-1 ring-line hover:ring-ink/25')}
           >
-            <div className={cx('relative h-24 overflow-hidden rounded-[18px]', light ? 'bg-gradient-to-b from-[#BFE3FF] to-[#FFF4D6]' : 'bg-gradient-to-b from-[#0B1033] to-[#2A2466]')}>
-              {light ? (
-                <>
-                  <motion.svg viewBox="0 0 40 40" className="absolute end-4 top-3 h-12 w-12" animate={on ? { rotate: 360 } : { rotate: 0 }} transition={on ? { repeat: Infinity, duration: 12, ease: 'linear' } : {}}>
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <line key={i} x1="20" y1="3" x2="20" y2="8" stroke="#F2A93B" strokeWidth="2.6" strokeLinecap="round" transform={`rotate(${i * 45} 20 20)`} />
-                    ))}
-                    <circle cx="20" cy="20" r="8" fill="#FFC94A" />
-                  </motion.svg>
-                  <motion.span animate={{ x: [0, 10, 0] }} transition={{ repeat: Infinity, duration: 6 }} className="absolute bottom-4 start-4 h-5 w-14 rounded-full bg-white/90 shadow-sm" />
-                  <span className="absolute bottom-7 start-8 h-6 w-8 rounded-full bg-white/90" />
-                </>
-              ) : (
-                <>
-                  <motion.svg viewBox="0 0 40 40" className="absolute end-4 top-3 h-12 w-12" animate={on ? { rotate: [-8, 8, -8] } : { rotate: 0 }} transition={{ repeat: Infinity, duration: 5 }}>
-                    <path d="M26 6a14 14 0 1 0 8 25A12 12 0 0 1 26 6Z" fill="#F4E7C9" />
-                  </motion.svg>
-                  {[
-                    [16, 22],
-                    [34, 52],
-                    [58, 30],
-                    [24, 68],
-                    [48, 74],
-                  ].map(([x, y], i) => (
-                    <motion.span
-                      key={i}
-                      className="absolute h-1.5 w-1.5 rounded-full bg-[#FFE7A6]"
-                      style={{ insetInlineStart: `${x}%`, top: `${y}%` }}
-                      animate={{ opacity: [0.2, 1, 0.2], scale: [0.7, 1.2, 0.7] }}
-                      transition={{ repeat: Infinity, duration: 1.8 + i * 0.4, delay: i * 0.3 }}
-                    />
-                  ))}
-                </>
-              )}
+            {/* A miniature of the bank in this theme */}
+            <div className={cx('relative h-28 overflow-hidden rounded-[17px] p-2.5', light ? 'bg-[#F6F3EA]' : 'bg-[#0A1411]')}>
+              <div className={cx('flex h-5 items-center justify-between rounded-md px-1.5', light ? 'bg-white' : 'bg-[#13221D]')}>
+                <span className={cx('h-1 w-6 rounded-full', light ? 'bg-[#E4DCC8]' : 'bg-[#26392F]')} />
+                <span className="h-2.5 w-2.5 rotate-45 rounded-[2px] bg-[#C9A45C]" />
+              </div>
+              <motion.div
+                className="relative mt-2 h-11 overflow-hidden rounded-lg bg-[#0C1A17] p-1.5 ring-1 ring-[#C9A45C]/30"
+                animate={on ? { y: [0, -2, 0] } : { y: 0 }}
+                transition={{ repeat: on ? Infinity : 0, duration: 3, ease: 'easeInOut' }}
+              >
+                <span className="block h-1 w-8 rounded-full bg-[#C9A45C]/60" />
+                <span className="mt-1.5 block h-2 w-14 rounded-full bg-[#F3E9D2]/90" />
+                <span className="absolute -end-3 -top-3 h-12 w-12 rounded-full border border-[#C9A45C]/40" />
+                <span className="absolute -end-1 -top-1 h-8 w-8 rounded-full border border-dashed border-[#C9A45C]/40" />
+              </motion.div>
+              <div className="mt-2 flex gap-1.5">
+                {[0, 1, 2].map((k) => (
+                  <span key={k} className={cx('h-3.5 flex-1 rounded', light ? 'bg-[#0C1A17]/[0.07]' : 'bg-white/[0.07]')} />
+                ))}
+              </div>
               {on && (
-                <motion.span layoutId="theme-check" className="absolute start-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-gold text-night shadow">
+                <motion.span layoutId="theme-check" className="absolute end-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-gold text-night shadow">
                   <Check className="h-3.5 w-3.5" strokeWidth={3} />
                 </motion.span>
               )}
             </div>
             <div className="flex items-center gap-2 px-2 pb-1 pt-2.5">
-              {light ? <Sun className="h-4 w-4 text-[#E59A1E]" /> : <Moon className="h-4 w-4 text-[#7C83D6]" />}
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-gold/15 text-gold">{light ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}</span>
               <span className="font-semibold">{light ? t.settings.themeLight : t.settings.themeDark}</span>
             </div>
             <p className="px-2 pb-1.5 text-xs text-muted">{light ? t.settings.themeLightD : t.settings.themeDarkD}</p>

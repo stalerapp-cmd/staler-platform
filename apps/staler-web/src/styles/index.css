@@ -295,14 +295,14 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
 /* ------------------------------------------------- store page: warm pearl
    Softer, warmer whites with a gold hairline instead of stark white cards. */
 :root:not([data-theme='dark']) .store-luxe {
-  --surface: 255 252 246;
-  --sunk: 246 240 228;
-  --line: 233 222 198;
+  --surface: 255 255 254;
+  --sunk: 245 245 243;
+  --line: 230 228 222;
 }
-.store-luxe .shadow-card, .store-luxe .shadow-lift { box-shadow: 0 18px 40px -26px rgb(120 86 20 / 0.35), 0 0 0 1px rgb(var(--gold) / 0.14); }
+.store-luxe .shadow-card, .store-luxe .shadow-lift { box-shadow: 0 18px 40px -28px rgb(var(--night) / 0.35), 0 0 0 1px rgb(var(--gold) / 0.10); }
 .luxe-sheen::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
-  background: linear-gradient(110deg, transparent 35%, rgb(var(--gold) / 0.16) 50%, transparent 65%);
+  background: linear-gradient(110deg, transparent 35%, rgb(var(--gold) / 0.08) 50%, transparent 65%);
   background-size: 250% 100%; animation: luxe-sheen 7s ease-in-out infinite;
 }
 .luxe-sheen::before {
@@ -312,3 +312,23 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
 @keyframes luxe-sheen { 0%, 60% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
 .store-luxe a:has(> img), .store-luxe [data-product] { transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s; }
 @media (prefers-reduced-motion: reduce) { .luxe-sheen::after { animation: none; } }
+
+/* ------------------------------------------------ top bar: cuff + belt
+   The name side is a dark embroidered cuff with a slanted edge; a fine
+   stitched belt runs along the bottom of the bar. */
+.hdr-lux { animation: hdr-in .3s cubic-bezier(.2,.8,.2,1) both; }
+.hdr-cuff { clip-path: polygon(0 0, 100% 0, calc(100% - 26px) 100%, 0 100%); background-image: radial-gradient(120% 140% at 0% 0%, rgb(255 255 255 / 0.10), transparent 60%); }
+[dir='rtl'] .hdr-cuff { clip-path: polygon(0 0, 100% 0, 100% 100%, 26px 100%); background-image: radial-gradient(120% 140% at 100% 0%, rgb(255 255 255 / 0.10), transparent 60%); }
+.hdr-cuff::after {
+  content: ''; position: absolute; inset-block: 6px; inset-inline-end: 14px; width: 30px; pointer-events: none; opacity: .55;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2.5 2.5l3 3M5.5 2.5l-3 3' stroke='%23D9A73A' stroke-width='1' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-size: 10px 10px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 25%, #000 75%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 25%, #000 75%, transparent);
+}
+.hdr-belt {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='5' viewBox='0 0 24 5'%3E%3Cpath d='M1 1l3 3M4 1L1 4' stroke='%23C8344A' stroke-width='.9' stroke-linecap='round'/%3E%3Cpath d='M9 1l3 3M12 1l-3 3' stroke='%23D9A73A' stroke-width='.9' stroke-linecap='round'/%3E%3Cpath d='M17 1l3 3M20 1l-3 3' stroke='%235E7A2E' stroke-width='.9' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-size: 24px 5px; background-repeat: repeat-x; opacity: .55;
+}
+.stitch-ring { animation: ring-turn 40s linear infinite; }
+@keyframes ring-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .stitch-ring { animation: none; } }

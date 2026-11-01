@@ -585,50 +585,37 @@ function ThemePicker({ theme, onChange }: { theme: string; onChange: (v: 'light'
             aria-checked={on}
             whileTap={{ scale: 0.96 }}
             onClick={() => onChange(v)}
-            className={cx('relative overflow-hidden rounded-[22px] p-1.5 text-start transition', on ? 'bg-stitch/12 ring-2 ring-stitch' : 'bg-sunk/70 ring-1 ring-line hover:ring-ink/30')}
+            className={cx('group relative overflow-hidden rounded-[22px] p-1.5 text-start transition duration-300', on ? 'bg-surface shadow-[0_16px_36px_-22px_rgb(var(--night)/0.6)] ring-2 ring-gold' : 'bg-sunk/60 ring-1 ring-line hover:ring-ink/25')}
           >
-            <div className={cx('relative h-24 overflow-hidden rounded-[18px]', light ? 'bg-gradient-to-b from-[#BFE3FF] to-[#FFF4D6]' : 'bg-gradient-to-b from-[#0B1033] to-[#2A2466]')}>
-              {light ? (
-                <>
-                  <motion.svg viewBox="0 0 40 40" className="absolute end-4 top-3 h-12 w-12" animate={on ? { rotate: 360 } : { rotate: 0 }} transition={on ? { repeat: Infinity, duration: 12, ease: 'linear' } : {}}>
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <line key={i} x1="20" y1="3" x2="20" y2="8" stroke="#F2A93B" strokeWidth="2.6" strokeLinecap="round" transform={`rotate(${i * 45} 20 20)`} />
-                    ))}
-                    <circle cx="20" cy="20" r="8" fill="#FFC94A" />
-                  </motion.svg>
-                  <motion.span animate={{ x: [0, 10, 0] }} transition={{ repeat: Infinity, duration: 6 }} className="absolute bottom-4 start-4 h-5 w-14 rounded-full bg-white/90 shadow-sm" />
-                  <span className="absolute bottom-7 start-8 h-6 w-8 rounded-full bg-white/90" />
-                </>
-              ) : (
-                <>
-                  <motion.svg viewBox="0 0 40 40" className="absolute end-4 top-3 h-12 w-12" animate={on ? { rotate: [-8, 8, -8] } : { rotate: 0 }} transition={{ repeat: Infinity, duration: 5 }}>
-                    <path d="M26 6a14 14 0 1 0 8 25A12 12 0 0 1 26 6Z" fill="#F4E7C9" />
-                  </motion.svg>
-                  {[
-                    [16, 22],
-                    [34, 52],
-                    [58, 30],
-                    [24, 68],
-                    [48, 74],
-                  ].map(([x, y], i) => (
-                    <motion.span
-                      key={i}
-                      className="absolute h-1.5 w-1.5 rounded-full bg-[#FFE7A6]"
-                      style={{ insetInlineStart: `${x}%`, top: `${y}%` }}
-                      animate={{ opacity: [0.2, 1, 0.2], scale: [0.7, 1.2, 0.7] }}
-                      transition={{ repeat: Infinity, duration: 1.8 + i * 0.4, delay: i * 0.3 }}
-                    />
-                  ))}
-                </>
-              )}
+            {/* A miniature of the app in this theme */}
+            <div className={cx('relative h-28 overflow-hidden rounded-[17px] p-2.5', light ? 'bg-[#F4F5F9]' : 'bg-[#0D1230]')}>
+              <div className={cx('flex h-5 items-center gap-1.5 overflow-hidden rounded-md', light ? 'bg-white' : 'bg-[#161D45]')}>
+                <span className="h-full w-9 bg-[#141B3D] [clip-path:polygon(0_0,100%_0,75%_100%,0_100%)] rtl:[clip-path:polygon(0_0,100%_0,100%_100%,25%_100%)]" />
+                <span className={cx('h-1 w-6 rounded-full', light ? 'bg-[#DDE1EC]' : 'bg-[#2A3366]')} />
+              </div>
+              <motion.div
+                className="relative mt-2 h-11 overflow-hidden rounded-lg bg-gradient-to-br from-[#2A3570] to-[#141B3D] p-1.5"
+                animate={on ? { y: [0, -2, 0] } : { y: 0 }}
+                transition={{ repeat: on ? Infinity : 0, duration: 3, ease: 'easeInOut' }}
+              >
+                <span className="block h-1 w-8 rounded-full bg-white/40" />
+                <span className="mt-1.5 block h-2 w-14 rounded-full bg-white/85" />
+                <span className="absolute -end-2 -top-2 h-10 w-10 rounded-full border border-dashed border-[#D9A73A]/50" />
+              </motion.div>
+              <div className="mt-2 flex gap-1.5">
+                {['#C8344A', '#5E7A2E', '#4070D6', '#D9A73A'].map((c) => (
+                  <span key={c} className="h-3.5 flex-1 rounded" style={{ background: light ? `${c}22` : `${c}44` }} />
+                ))}
+              </div>
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[5px] hdr-belt" />
               {on && (
-                <motion.span layoutId="theme-check" className="absolute start-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-stitch text-white shadow">
+                <motion.span layoutId="theme-check" className="absolute end-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-gold text-night shadow">
                   <Check className="h-3.5 w-3.5" strokeWidth={3} />
                 </motion.span>
               )}
             </div>
             <div className="flex items-center gap-2 px-2 pb-1 pt-2.5">
-              {light ? <Sun className="h-4 w-4 text-[#E59A1E]" /> : <Moon className="h-4 w-4 text-[#7C83D6]" />}
+              <span className={cx('grid h-6 w-6 place-items-center rounded-full', light ? 'bg-gold/15 text-[rgb(150_105_10)]' : 'bg-night text-[#C9CEE8] dark:bg-white/10')}>{light ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}</span>
               <span className="font-semibold">{light ? t.settings.themeLight : t.settings.themeDark}</span>
             </div>
             <p className="px-2 pb-1.5 text-xs text-muted">{light ? t.settings.themeLightD : t.settings.themeDarkD}</p>
