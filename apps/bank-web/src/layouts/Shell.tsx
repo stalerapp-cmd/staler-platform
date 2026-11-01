@@ -78,7 +78,7 @@ function useNav() {
   const { can } = usePerm();
   const quick: NavItem[] = [
     { to: '/app/transfer', label: t.nav.transfer, icon: ArrowRightLeft },
-    { to: '/app/requests', label: t.nav.requests, icon: QrCode },
+    { to: '/app/requests', label: t.dock.requests, icon: QrCode },
     { to: '/app/scan', label: t.nav.scan, icon: ScanLine },
   ];
   const groups: NavGroup[] = [
@@ -167,14 +167,14 @@ function QuickTiles({ items, onClick, rail }: { items: NavItem[]; onClick?: () =
           className={({ isActive }) =>
             cx(
               'group relative flex flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl text-xs font-medium transition active:scale-95',
-              rail ? 'h-12' : 'h-[70px]',
+              rail ? 'h-12' : 'min-h-[70px] px-1.5 py-2',
               isActive ? 'bg-gold text-night shadow-md shadow-gold/30' : n === 0 ? 'bg-night text-[#F3DDA6] dark:bg-white/10' : 'bg-sunk text-ink hover:bg-line/70',
             )
           }
         >
           <span className="pointer-events-none absolute inset-[4px] rounded-[13px] border border-dashed border-current opacity-25" />
           <i.icon className="h-5 w-5 transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-110" strokeWidth={1.9} />
-          {!rail && <span>{i.label}</span>}
+          {!rail && <span className="line-clamp-2 max-w-full px-1 text-center text-[11px] leading-tight [overflow-wrap:anywhere]">{i.label}</span>}
         </NavLink>
       ))}
     </div>
