@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Layers } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { cx } from './ui';
 import { isNative } from '../lib/api';
@@ -31,6 +32,36 @@ const COLORS: Record<NonNullable<Pin['kind']>, string> = { store: '#141B3D', hom
 const OSM = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opts: { maxZoom: 19, attribution: '© OpenStreetMap contributors' } };
 const ESRI = { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', opts: { maxZoom: 19, attribution: 'Tiles © Esri — Esri, HERE, Garmin, OpenStreetMap contributors' } };
 const PROVIDERS = isNative ? [ESRI, OSM] : [OSM, ESRI];
+
+/** Map styles to switch between, like a maps app: streets, satellite (with labels), terrain, night. */
+const AG = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+const esri = (path: string) => `${AG}/${path}/MapServer/tile/{z}/{y}/{x}`;
+type Base = 'streets' | 'satellite' | 'terrain' | 'dark';
+const BASES: Record<Exclude<Base, 'streets'>, { layers: string[]; attribution: string }> = {
+  satellite: { layers: ['World_Imagery', 'Reference/World_Transportation', 'Reference/World_Boundaries_and_Places'], attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' },
+  terrain: { layers: ['World_Topo_Map'], attribution: 'Tiles © Esri — Esri, HERE, Garmin, USGS' },
+  dark: { layers: ['Canvas/World_Dark_Gray_Base', 'Canvas/World_Dark_Gray_Reference'], attribution: 'Tiles © Esri — Esri, HERE, Garmin' },
+};
+// A small preview tile (around Ramallah) for each style.
+const THUMB: Record<Base, string> = {
+  streets: `${AG}/World_Street_Map/MapServer/tile/10/416/612`,
+  satellite: `${AG}/World_Imagery/MapServer/tile/10/416/612`,
+  terrain: `${AG}/World_Topo_Map/MapServer/tile/10/416/612`,
+  dark: `${AG}/Canvas/World_Dark_Gray_Base/MapServer/tile/10/416/612`,
+};
+const BASE_NAME: Record<'ar' | 'en', Record<Base, string>> = {
+  ar: { streets: 'شوارع', satellite: 'قمر صناعي', terrain: 'تضاريس', dark: 'ليلي' },
+  en: { streets: 'Streets', satellite: 'Satellite', terrain: 'Terrain', dark: 'Night' },
+};
+function startBase(): Base {
+  try {
+    const v = localStorage.getItem('st.mapBase');
+    if (v === 'streets' || v === 'satellite' || v === 'terrain' || v === 'dark') return v;
+  } catch {
+    /* storage blocked */
+  }
+  return typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark' ? 'dark' : 'streets';
+}
 
 const pinHtml = (color: string, size: number, pulse: boolean, selected: boolean) =>
   `<span style="position:relative;display:block;width:${size}px;height:${size}px">` +
@@ -81,6 +112,19 @@ export function MapView({
   const pinClick = useRef(onPinClick);
   pinClick.current = onPinClick;
   const { lang } = useI18n();
+  const [base, setBase] = useState<Base>(startBase);
+  const [picking, setPicking] = useState(false);
+  const baseRef = useRef(base);
+  const applyBase = useRef<((b: Base) => void) | null>(null);
+  useEffect(() => {
+    baseRef.current = base;
+    applyBase.current?.(base);
+    try {
+      localStorage.setItem('st.mapBase', base);
+    } catch {
+      /* storage blocked */
+    }
+  }, [base]);
 
   useEffect(() => {
     let alive = true;
@@ -92,23 +136,40 @@ export function MapView({
       const start = me ?? pins[pins.length - 1] ?? { lat: 31.9522, lng: 35.2332 }; // Ramallah by default
       map.current = L.current.map(box.current, { zoomControl: true, attributionControl: true, tap: true }).setView([start.lat, start.lng], zoom);
 
-      // Tiles with automatic fallback: a provider that keeps failing before any tile loads is replaced by the next.
-      let idx = 0;
-      let tiles: any = null;
-      const use = (i: number) => {
-        if (tiles) map.current?.removeLayer(tiles);
+      // Base map. Streets fall back to the next provider when one keeps failing before any tile loads.
+      let current: any[] = [];
+      const clear = () => {
+        current.forEach((l) => map.current?.removeLayer(l));
+        current = [];
+      };
+      const streets = (i: number) => {
+        clear();
         const p = PROVIDERS[i]!;
         let ok = 0;
         let bad = 0;
-        tiles = L.current.tileLayer(p.url, { ...p.opts, crossOrigin: false, referrerPolicy: 'strict-origin-when-cross-origin' });
+        const tiles = L.current.tileLayer(p.url, { ...p.opts, crossOrigin: false, referrerPolicy: 'strict-origin-when-cross-origin' });
         tiles.on('tileload', () => ok++);
         tiles.on('tileerror', () => {
           bad++;
-          if (ok === 0 && bad >= 3 && idx < PROVIDERS.length - 1) use(++idx);
+          if (ok === 0 && bad >= 3 && i < PROVIDERS.length - 1) streets(i + 1);
         });
         tiles.addTo(map.current);
+        tiles.bringToBack();
+        current = [tiles];
       };
-      use(0);
+      applyBase.current = (b: Base) => {
+        if (!map.current) return;
+        if (b === 'streets') return streets(0);
+        clear();
+        const def = BASES[b];
+        current = def.layers.map((path, k) =>
+          L.current
+            .tileLayer(esri(path), { maxZoom: 19, maxNativeZoom: k === 0 ? 19 : 17, attribution: k === 0 ? def.attribution : '', referrerPolicy: 'strict-origin-when-cross-origin' })
+            .addTo(map.current),
+        );
+        current[0]?.bringToBack();
+      };
+      applyBase.current(baseRef.current);
 
       layer.current = L.current.layerGroup().addTo(map.current);
       meLayer.current = L.current.layerGroup().addTo(map.current);
@@ -207,5 +268,49 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pins]);
 
-  return <div ref={box} dir="ltr" lang={lang} className={cx('relative z-0 h-64 w-full overflow-hidden rounded-2xl border border-line bg-sunk', onPick && 'cursor-crosshair', className)} />;
+  const names = BASE_NAME[lang === 'ar' ? 'ar' : 'en'];
+  return (
+    <div dir="ltr" lang={lang} className={cx('relative z-0 h-64 w-full overflow-hidden rounded-2xl border border-line bg-sunk', className)}>
+      <div ref={box} className={cx('absolute inset-0', onPick && 'cursor-crosshair')} />
+      {/* Map style switcher (bottom-left, like a maps app) */}
+      <div className="absolute bottom-2.5 left-2.5 z-[500] flex flex-col-reverse items-start gap-2">
+        <button
+          type="button"
+          onClick={() => setPicking((v) => !v)}
+          aria-expanded={picking}
+          aria-label={lang === 'ar' ? 'شكل الخريطة' : 'Map style'}
+          className="group relative h-12 w-12 overflow-hidden rounded-xl bg-white shadow-[0_6px_18px_-6px_rgba(0,0,0,0.45)] ring-2 ring-white transition hover:scale-105 active:scale-95"
+        >
+          <img src={THUMB[base === 'satellite' ? 'streets' : 'satellite']} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+          <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 bg-black/45 py-0.5 text-[9px] font-semibold text-white backdrop-blur-sm">
+            <Layers className="h-2.5 w-2.5" />
+          </span>
+        </button>
+        {picking && (
+          <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-white/95 p-1.5 shadow-[0_14px_34px_-12px_rgba(0,0,0,0.5)] ring-1 ring-black/5 backdrop-blur" role="radiogroup" aria-label={lang === 'ar' ? 'شكل الخريطة' : 'Map style'}>
+            {(['streets', 'satellite', 'terrain', 'dark'] as Base[]).map((b) => (
+              <button
+                key={b}
+                type="button"
+                role="radio"
+                aria-checked={base === b}
+                onClick={() => {
+                  setBase(b);
+                  setPicking(false);
+                }}
+                className={cx('group w-[68px] rounded-xl p-1 text-center transition', base === b ? 'bg-[#141B3D]/[0.07]' : 'hover:bg-black/[0.04]')}
+              >
+                <span className={cx('block h-12 overflow-hidden rounded-lg ring-2 transition', base === b ? 'ring-[#C8344A]' : 'ring-transparent group-hover:ring-black/10')}>
+                  <img src={THUMB[b]} alt="" className="h-full w-full object-cover" loading="lazy" />
+                </span>
+                <span lang={lang} className={cx('mt-1 block text-[11px] leading-tight', base === b ? 'font-semibold text-[#C8344A]' : 'text-[#141B3D]/80')}>
+                  {names[b]}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
