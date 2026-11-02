@@ -26,6 +26,7 @@ import {
   Cpu,
   Sparkles,
   Sofa,
+  Tag,
   Scissors,
   Wrench,
   Shapes,
@@ -57,6 +58,7 @@ import { ScrollRow } from '../components/ScrollRow';
 import { CheckMark } from '../components/Choice';
 import { PlacePicker, placeLabel } from '../components/PlacePicker';
 import { StarMotif } from '../components/Tatreez';
+import { useCategories } from '../lib/categories';
 
 export { CartProvider, useCart } from '../components/Commerce';
 export type { Product } from '../components/Commerce';
@@ -134,8 +136,15 @@ function Market() {
     { v: 'digital', label: t.store.digital },
     { v: 'deposit', label: t.mstore.deposit },
   ];
-  const allCats = [{ k: 'all', icon: LayoutGrid, c: '#141B3D' }, ...CATS];
-  const catLabel = (k: string) => (k === 'all' ? M.everything : t.shop.cat[k]);
+  const catList = useCategories();
+  const CUSTOM_TONES = ['#0F7A6C', '#B04A9E', '#4070D6', '#C8344A', '#5E7A2E', '#8A5A0E'];
+  const allCats = [
+    { k: 'all', icon: LayoutGrid, c: '#141B3D' },
+    ...CATS.filter((x) => x.k !== 'other'),
+    ...catList.custom.map((x, i) => ({ k: x.slug, icon: Tag, c: CUSTOM_TONES[i % CUSTOM_TONES.length]! })),
+    ...CATS.filter((x) => x.k === 'other'),
+  ];
+  const catLabel = (k: string) => (k === 'all' ? M.everything : catList.label(k));
   const active = cats.length + places.length + (type !== 'all' ? 1 : 0) + (sort !== 'new' ? 1 : 0);
   const isOn = (k: string) => (k === 'all' ? !cats.length : cats.includes(k));
   const flip = (k: string) => (k === 'all' ? setCats([]) : setCats(cats.includes(k) ? cats.filter((x) => x !== k) : [...cats, k]));

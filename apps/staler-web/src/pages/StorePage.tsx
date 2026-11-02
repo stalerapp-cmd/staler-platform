@@ -5,7 +5,7 @@ import { cityWithGov } from './Stores';
 import { fill } from '../lib/format';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Bike, ClipboardList, Facebook, GitBranch, Instagram, Map as MapIcon, MapPin, MessageCircle, Music2, Package, Phone, Quote, Search, Share2, ShoppingBag, Store as StoreIcon, Truck } from 'lucide-react';
+import { Bike, ClipboardList, Facebook, GitBranch, Instagram, Map as MapIcon, MapPin, MessageCircle, Music2, Package, Phone, Quote, Search, Share2, ShoppingBag, Store as StoreIcon, Tag, Truck } from 'lucide-react';
 import { assetUrl, get, PUBLIC_ORIGIN } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -15,6 +15,7 @@ import { MapView } from '../components/MapView';
 import { Button, EmptyState, Skeleton, cx } from '../components/ui';
 import { PublicShell } from '../layouts/PublicShell';
 import { CATEGORY_ICONS, StoreCover, StoreLogo, accentOf } from './Stores';
+import { useCategories } from '../lib/categories';
 
 interface Branch {
   id: string;
@@ -133,7 +134,8 @@ export default function StorePage() {
     [data],
   );
   const accent = s ? accentOf(s.main ?? s) : '#141B3D';
-  const CatIcon = CATEGORY_ICONS[s?.main?.category ?? s?.category ?? 'other'] ?? StoreIcon;
+  const CatIcon = CATEGORY_ICONS[s?.main?.category ?? s?.category ?? 'other'] ?? Tag;
+  const catList = useCategories();
   const shareUrl = `${PUBLIC_ORIGIN}/s/${slug}`;
   const waPhone = s?.phone ? s.phone.replace(/[^\d]/g, '').replace(/^0/, '970') : null;
 
@@ -185,7 +187,7 @@ export default function StorePage() {
               {/* top line: what the store offers */}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/25 backdrop-blur-md">
-                  <CatIcon className="h-3.5 w-3.5" /> {t.shop.cat[s.main?.category ?? s.category ?? 'other']}
+                  <CatIcon className="h-3.5 w-3.5" /> {catList.label(s.main?.category ?? s.category)}
                 </span>
                 {s.offers_delivery && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/25 backdrop-blur-md">

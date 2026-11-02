@@ -5,7 +5,7 @@ import { fill } from '../lib/format';
 import { ScrollRow } from '../components/ScrollRow';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, FileDown, GitBranch, LayoutGrid, MapPin, Megaphone, Package, RotateCcw, Scissors, Search, Shirt, Smartphone, Sofa, Sparkles, Store as StoreIcon, UtensilsCrossed, Wrench, X } from 'lucide-react';
+import { BookOpen, FileDown, GitBranch, LayoutGrid, MapPin, Megaphone, Package, RotateCcw, Scissors, Search, Shirt, Smartphone, Sofa, Sparkles, Store as StoreIcon, Tag, UtensilsCrossed, Wrench, X } from 'lucide-react';
 import { assetUrl, get } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
@@ -13,6 +13,7 @@ import { CartSheet } from '../components/Commerce';
 import { StarMotif } from '../components/Tatreez';
 import { EmptyState, ErrorNote, Skeleton, cx } from '../components/ui';
 import { PublicShell } from '../layouts/PublicShell';
+import { useCategories } from '../lib/categories';
 
 export const CATEGORY_ICONS: Record<string, typeof StoreIcon> = {
   food: UtensilsCrossed,
@@ -83,7 +84,8 @@ export function cityWithGov(city: string, lang: string) {
 
 function StoreCard({ s, i }: { s: StoreSummary; i: number }) {
   const { t, lang } = useI18n();
-  const Icon = CATEGORY_ICONS[s.category ?? 'other'] ?? LayoutGrid;
+  const cat = useCategories();
+  const Icon = CATEGORY_ICONS[s.category ?? 'other'] ?? Tag;
   return (
     <motion.div
       initial={{ opacity: 0, y: 26 }}
@@ -107,7 +109,7 @@ function StoreCard({ s, i }: { s: StoreSummary; i: number }) {
             </span>
           )}
           <span className="absolute start-3 top-3 flex items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
-            <Icon className="h-3.5 w-3.5" /> {t.shop.cat[s.category ?? 'other'] ?? s.category}
+            <Icon className="h-3.5 w-3.5" /> {cat.label(s.category)}
           </span>
           {s.city && (
             <span className="absolute bottom-3 end-3 flex max-w-[60%] items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-night shadow-sm backdrop-blur">
@@ -147,6 +149,7 @@ function StoreCard({ s, i }: { s: StoreSummary; i: number }) {
 export function StoresDirectory() {
   const { t, err } = useI18n();
   const { lang } = useI18n();
+  const catList = useCategories();
   const [q, setQ] = useState('');
   const [cats, setCats] = useState<string[]>([]);
   const [places, setPlaces] = useState<string[]>([]);
@@ -196,8 +199,8 @@ export function StoresDirectory() {
       </section>
 
       <ScrollRow nudgeKey="stores-cats" label={t.mstore.category} className="mb-6" innerClassName="gap-2">
-        {['', ...CATEGORIES].map((c) => {
-          const Icon = c ? CATEGORY_ICONS[c]! : StoreIcon;
+        {['', ...catList.keys].map((c) => {
+          const Icon = c ? (CATEGORY_ICONS[c] ?? Tag) : StoreIcon;
           const on = c ? cats.includes(c) : !cats.length;
           return (
             <button
@@ -209,7 +212,7 @@ export function StoresDirectory() {
             >
               {on && <motion.span initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute inset-0 rounded-full bg-night" transition={{ type: 'spring', bounce: 0.35, duration: 0.4 }} />}
               <Icon className="relative h-4 w-4" />
-              <span className="relative whitespace-nowrap">{c ? t.shop.cat[c] : t.shop.allStores}</span>
+              <span className="relative whitespace-nowrap">{c ? catList.label(c) : t.shop.allStores}</span>
             </button>
           );
         })}

@@ -62,6 +62,12 @@ const en = {
     lockedTo: 'for {name}', lockedNote: 'Locked to {name}. Nobody else can claim it, even with a photo of this code.', bearerNote: 'Anyone who scans this code first gets the money. Show it only to your customer, and watch it switch to “claimed”.',
     notYours: 'This voucher is locked to another wallet. Ask the agent to issue one for you.',
   },
+  catx: {
+    title: 'Suggested categories', lead: 'Store owners can suggest a category that isn’t in the list. Approve it and it appears for everyone.',
+    pending: 'Waiting', approved: 'Approved', rejected: 'Not added', none: 'No suggestions yet.', from: 'From {store}', stores: '{n} store(s)',
+    nameAr: 'Arabic name', nameEn: 'English name', approve: 'Approve and add', reject: 'Don’t add', withdraw: 'Remove category', reason: 'Reason (sent to the store owner, optional)',
+    approvedT: 'Category added', rejectedT: 'Suggestion turned down', withdrawQ: 'Remove this category? Its stores go back to “Other”.',
+  },
   ctl: {
     agents: 'Cash agents', agentsLead: 'People who asked to exchange cash for S-Taler. New requests wait here until you approve them — only then do they show on the map.',
     waiting: 'Waiting for approval', listed: 'On the map', all: 'All', noneWaiting: 'No requests waiting — you’re all caught up.', noProfile: 'No listing yet',
@@ -114,6 +120,9 @@ const en = {
     protect: 'Protected by S-Taler: the store only gets paid after delivery.',
   },
   mstore: {
+    suggestCat: 'Suggest a new category…', catAr: 'Category name in Arabic', catEn: 'Name in English (optional)',
+    catHint: 'We review suggestions. Once approved it becomes a choice for everyone and your store moves into it — until then your store shows under “Other”.',
+    catPending: 'Your suggestion “{name}” is waiting for review', catRejected: 'Your suggestion “{name}” wasn’t added',
     stores: 'Stores & branches', newStore: 'New store', newBranch: 'New branch', branchName: 'Branch name', branchOf: 'Branch of', current: 'Working in',
     switch: 'Switch store', editStore: 'Store details', logo: 'Logo', logoAdd: 'Add your store logo', logoAddD: 'Your logo shows on the store page, the market and every product — instead of a letter.', cover: 'Cover', city: 'City', address: 'Address', storePhone: 'Store phone', showPhone: 'Show phone on the store page',
     accent: 'Store colour', pickupOn: 'Customers can pick up', deliveryOn: 'We deliver', deliveryNote: 'Delivery note', category: 'Category', pin: 'Store location', pinHint: 'Tap the map to place your store.',
@@ -404,6 +413,12 @@ const ar: Dict = {
     lockedTo: 'لـ {name}', lockedNote: 'مقفولة على {name}. ما حدا غيره بيقدر يصرفها حتى لو صوّر الكود.', bearerNote: 'أول واحد بيمسح الكود بياخد المبلغ. ورجيه لزبونك بس، واستنى لحد ما تصير «انصرفت».',
     notYours: 'هالقسيمة مقفولة على محفظة ثانية. اطلب من الوكيل يطلعلك وحدة باسمك.',
   },
+  catx: {
+    title: 'تصنيفات مقترحة', lead: 'أصحاب المتاجر بقدروا يقترحوا تصنيف مش موجود. لما توافق عليه بيبين للكل كخيار جديد.',
+    pending: 'بستنى', approved: 'انقبل', rejected: 'ما انضاف', none: 'ما في اقتراحات لسا.', from: 'من {store}', stores: '{n} متجر',
+    nameAr: 'الاسم بالعربي', nameEn: 'الاسم بالإنجليزي', approve: 'وافق وأضفه', reject: 'ما تضيفه', withdraw: 'شيل التصنيف', reason: 'السبب (بيوصل لصاحب المتجر، اختياري)',
+    approvedT: 'انضاف التصنيف', rejectedT: 'انرفض الاقتراح', withdrawQ: 'تشيل هالتصنيف؟ متاجره بترجع لـ «غير ذلك».',
+  },
   ctl: {
     agents: 'وكلاء الصرف', agentsLead: 'الناس اللي طلبوا يصرفوا كاش مقابل S-Taler. الطلبات الجديدة بتستنى هون لحد ما توافق عليها — وبعدها بس بيظهروا على الخريطة.',
     waiting: 'بستنوا الموافقة', listed: 'ظاهرين عالخريطة', all: 'الكل', noneWaiting: 'ما في طلبات بتستنى — كله تمام.', noProfile: 'ما عمل ملف لسا',
@@ -456,6 +471,9 @@ const ar: Dict = {
     protect: 'محمي من S-Taler: المتجر ما بيقبض إلا بعد التسليم.',
   },
   mstore: {
+    suggestCat: 'اقترح تصنيف جديد…', catAr: 'اسم التصنيف بالعربي', catEn: 'الاسم بالإنجليزي (اختياري)',
+    catHint: 'بنراجع الاقتراح، ولما ينقبل بصير خيار للكل ومتجرك بنتقل عليه. لحد هداك متجرك بيبين تحت «غير ذلك».',
+    catPending: 'اقتراحك «{name}» عم يستنى المراجعة', catRejected: 'اقتراحك «{name}» ما انقبل',
     stores: 'المتاجر والفروع', newStore: 'متجر جديد', newBranch: 'فرع جديد', branchName: 'اسم الفرع', branchOf: 'فرع من', current: 'شغّال على',
     switch: 'بدّل المتجر', editStore: 'تفاصيل المتجر', logo: 'الشعار', logoAdd: 'أضف شعار متجرك', logoAddD: 'شعارك بيظهر بصفحة المتجر وبالسوق وعلى كل منتج — بدل الحرف.', cover: 'صورة الغلاف', city: 'المدينة', address: 'العنوان', storePhone: 'رقم المتجر', showPhone: 'اعرض الرقم بصفحة المتجر',
     accent: 'لون المتجر', pickupOn: 'الزبون بيقدر يستلم من المتجر', deliveryOn: 'منوصّل', deliveryNote: 'ملاحظة التوصيل', category: 'التصنيف', pin: 'موقع المتجر', pinHint: 'اكبس على الخريطة لتحدد مكان متجرك.',

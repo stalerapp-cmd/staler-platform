@@ -437,6 +437,33 @@ describe('marketplace', () => {
     expect(await walletBalance(app, buyer)).toBe('100.00');
   });
 
+  it('store owners suggest a category; once approved everyone can pick it', async () => {
+    const m = await walletUser(app, 'Pet Shop Owner', 'merchant');
+    expect((await request(app).post('/api/merchant/stores').set(auth(m.token)).send({ storeName: 'Paws', category: 'nope' })).status).toBe(400);
+    const st = await request(app).post('/api/merchant/stores').set(auth(m.token)).send({ storeName: 'Paws', categoryRequest: { nameAr: 'حيوانات أليفة' } });
+    expect(st.status).toBe(201);
+    expect(st.body.data.store.category).toBe('other');
+    const mine = await request(app).get('/api/merchant/category-requests').set(auth(m.token));
+    const slug = mine.body.data.requests[0].slug;
+    expect(mine.body.data.requests[0].status).toBe('pending');
+    // not offered before approval, and not usable directly
+    expect((await request(app).get('/api/store/categories')).body.data.categories).not.toContain(slug);
+    expect((await request(app).patch(`/api/merchant/stores/${st.body.data.store.id}`).set(auth(m.token)).send({ category: slug })).status).toBe(400);
+    // only admins review
+    expect((await request(app).post(`/api/admin/categories/${slug}/approve`).set(auth(m.token)).send({ nameAr: 'حيوانات', nameEn: 'Pets' })).status).toBe(403);
+    const admin = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    expect((await request(app).get('/api/admin/categories').set(auth(admin))).body.data.categories.some((c: any) => c.slug === slug)).toBe(true);
+    expect((await request(app).post(`/api/admin/categories/${slug}/approve`).set(auth(admin)).send({ nameAr: 'حيوانات أليفة', nameEn: 'Pets' })).status).toBe(200);
+    const cats = (await request(app).get('/api/store/categories')).body.data;
+    expect(cats.categories).toContain(slug);
+    expect(cats.custom.find((c: any) => c.slug === slug).name_en).toBe('Pets');
+    const dir = await request(app).get(`/api/store/stores?category=${slug}`);
+    expect(dir.body.data.stores.map((x: any) => x.store_name)).toContain('Paws');
+    // withdrawing it sends the stores back to "Other"
+    expect((await request(app).post(`/api/admin/categories/${slug}/reject`).set(auth(admin)).send({})).status).toBe(200);
+    expect((await request(app).get('/api/store/categories')).body.data.categories).not.toContain(slug);
+  });
+
   it('sells exactly the stock under concurrent checkouts', async () => {
     const m = await walletUser(app, 'Scarce Seller', 'merchant');
     await request(app).post('/api/merchant/profile').set(auth(m.token)).send({ storeName: 'Scarce' });

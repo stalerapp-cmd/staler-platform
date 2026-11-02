@@ -40,7 +40,8 @@ import { MapView, type Pin } from '../components/MapView';
 import { ShareSheet } from '../components/Share';
 import { Scanner } from '../components/Scanner';
 import { AmountInput, Badge, Button, Chips, CodeInput, EmptyState, ErrorNote, Field, PageHeader, Select, Sheet, Skeleton, TextArea, Toggle, cx } from '../components/ui';
-import { CATEGORIES, StoreCover, StoreLogo } from './Stores';
+import { StoreCover, StoreLogo } from './Stores';
+import { useCategories } from '../lib/categories';
 import { ImageCropper } from '../components/ImageCropper';
 
 interface MStore {
@@ -115,8 +116,12 @@ async function uploadTo(path: string, field: string, f: File) {
 const ACCENTS = ['#141B3D', '#5A1424', '#2F3F18', '#1C3B4A', '#4A2C10', '#7A2E8C', '#0F5F5C', '#B34A1E'];
 
 function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean; onClose: () => void; store?: MStore | null; parent?: MStore | null; onSaved: () => void }) {
-  const { t, err } = useI18n();
+  const { t, err, lang } = useI18n();
   const toast = useToast();
+  const catList = useCategories();
+  const reqs = useData<{ requests: any[] }>(open && store ? '/api/merchant/category-requests' : null, [open, store?.id]);
+  // The latest suggestion for this store, while it is still news (waiting, or turned down and still under "Other").
+  const myReq = reqs.data?.requests.find((r) => r.merchant_id === store?.id && (r.status === 'pending' || (r.status === 'rejected' && store?.category === 'other')));
   const [f, setF] = useState<any>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +138,8 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
             branchName: store.branch_name ?? '',
             description: store.description ?? '',
             category: store.category ?? 'other',
+            catAr: '',
+            catEn: '',
             city: store.city ?? '',
             address: store.address ?? '',
             phone: store.phone ?? '',
@@ -154,6 +161,8 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
             branchName: '',
             description: parent?.description ?? '',
             category: parent?.category ?? 'other',
+            catAr: '',
+            catEn: '',
             city: '',
             address: '',
             phone: parent?.phone ?? '',
@@ -192,7 +201,7 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
     const body: any = {
       storeName: f.storeName.trim(),
       description: f.description.trim(),
-      category: f.category,
+      ...(f.category === '__new' ? { categoryRequest: { nameAr: f.catAr.trim(), ...(f.catEn.trim() ? { nameEn: f.catEn.trim() } : {}) } } : { category: f.category }),
       city: f.city.trim() || null,
       address: f.address.trim() || null,
       phone: f.phone.trim() || null,
@@ -273,7 +282,13 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
           {isBranch ? (
             <Field label={t.mstore.branchName} value={f.branchName} onChange={(e) => setF({ ...f, branchName: e.target.value })} required minLength={2} maxLength={60} />
           ) : (
-            <Select block label={t.mstore.category} value={f.category} onChange={(v) => setF({ ...f, category: v })} options={CATEGORIES.map((c) => ({ value: c, label: t.shop.cat[c] }))} />
+            <Select
+              block
+              label={t.mstore.category}
+              value={f.category}
+              onChange={(v) => setF({ ...f, category: v })}
+              options={[...catList.keys.map((c) => ({ value: c, label: catList.label(c) })), { value: '__new', label: t.mstore.suggestCat }]}
+            />
           )}
           <Field list="ps-places" autoComplete="off" label={t.mstore.city} value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} maxLength={60} />
           <Field label={t.mstore.address} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} maxLength={200} />
@@ -282,6 +297,21 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
             <Toggle checked={f.showPhone} onChange={(v) => setF({ ...f, showPhone: v })} label={t.mstore.showPhone} />
           </div>
         </div>
+        {!isBranch && f.category === '__new' && (
+          <div className="rounded-2xl bg-gold/10 p-4 ring-1 ring-gold/30">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t.mstore.catAr} value={f.catAr} onChange={(e) => setF({ ...f, catAr: e.target.value })} required minLength={2} maxLength={30} />
+              <Field label={t.mstore.catEn} dir="ltr" value={f.catEn} onChange={(e) => setF({ ...f, catEn: e.target.value })} maxLength={30} />
+            </div>
+            <p className="mt-2.5 text-xs leading-relaxed text-muted">{t.mstore.catHint}</p>
+          </div>
+        )}
+        {!isBranch && myReq && f.category !== '__new' && (
+          <p className={cx('rounded-xl px-3 py-2 text-sm', myReq.status === 'pending' ? 'bg-gold/10 text-ink/80' : 'bg-stitch/10 text-stitch')}>
+            {fill(myReq.status === 'pending' ? t.mstore.catPending : t.mstore.catRejected, { name: lang === 'ar' ? myReq.name_ar : myReq.name_en })}
+            {myReq.status === 'rejected' && myReq.reason ? ` — ${myReq.reason}` : ''}
+          </p>
+        )}
         <TextArea label={t.merchant.description} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={500} rows={3} />
         <div>
           <p className="mb-2 text-sm font-medium text-ink/80">{t.mstore.accent}</p>
@@ -516,6 +546,7 @@ function LicenceLookup() {
 // ---------------------------------------------------------- stores/branches
 export function MerchantStores() {
   const { t } = useI18n();
+  const catList = useCategories();
   const toast = useToast();
   const confirm = useConfirm();
   const st = useStores();
@@ -540,7 +571,7 @@ export function MerchantStores() {
                     <StoreLogo s={m} size={56} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-display text-2xl">{m.store_name}</p>
-                      <p className="text-xs text-white/80">{t.shop.cat[m.category ?? 'other']}</p>
+                      <p className="text-xs text-white/80">{catList.label(m.category)}</p>
                     </div>
                   </div>
                 </div>

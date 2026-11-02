@@ -1093,3 +1093,70 @@ adminRouter.post(
     res.json({ success: true, data: { sessions: new Set(r.rows.map((x) => x.family_id)).size } });
   }),
 );
+
+// ------------------------------------------------------ suggested categories
+/** Category suggestions from store owners, newest first, with how many stores use each. */
+adminRouter.get(
+  '/categories',
+  requirePerm('stores.manage'),
+  ah(async (_req, res) => {
+    const r = await pool.query(
+      `SELECT c.slug, c.name_ar, c.name_en, c.status, c.reason, c.created_at, c.reviewed_at,
+              m.store_name, m.slug AS store_slug, u.full_name AS owner_name,
+              (SELECT count(*)::int FROM ${S}.merchants x WHERE x.category = c.slug AND COALESCE(x.status,'active') <> 'closed') AS stores
+         FROM ${S}.store_categories c
+         LEFT JOIN ${S}.merchants m ON m.id = c.merchant_id
+         LEFT JOIN ${S}.users u ON u.id = c.requested_by
+        ORDER BY (c.status = 'pending') DESC, c.created_at DESC LIMIT 200`,
+    );
+    res.json({ success: true, data: { categories: r.rows } });
+  }),
+);
+
+const catSlug = z.object({ slug: z.string().regex(/^c_[a-f0-9]{6}$/) }).strict();
+
+/** Approve a suggestion (names can be tidied first): it joins the list and the store that asked moves into it. */
+adminRouter.post(
+  '/categories/:slug/approve',
+  requirePerm('stores.manage'),
+  validate({ params: catSlug, body: z.object({ nameAr: z.string().trim().min(2).max(30), nameEn: z.string().trim().min(2).max(30) }).strict() }),
+  ah(async (req, res) => {
+    const c = await one<any>(
+      `UPDATE ${S}.store_categories SET status = 'approved', name_ar = $2, name_en = $3, reason = NULL, reviewed_by = $4, reviewed_at = now()
+        WHERE slug = $1 RETURNING slug, merchant_id, requested_by`,
+      [req.params.slug, req.body.nameAr, req.body.nameEn, req.auth!.userId],
+    );
+    if (!c) throw notFound('Category not found');
+    if (c.merchant_id) await pool.query(`UPDATE ${S}.merchants SET category = $2, updated_at = now() WHERE id = $1 AND category = 'other'`, [c.merchant_id, c.slug]);
+    if (c.requested_by)
+      await notifyBi(undefined, c.requested_by, 'store:category', ['Category approved', `“${req.body.nameEn}” is now a category, and your store is in it.`], ['انقبل التصنيف', `«${req.body.nameAr}» صار تصنيف، ومتجرك صار فيه.`]);
+    await audit({ userId: req.auth!.userId, action: 'admin.category_approved', entityType: 'category', entityId: c.slug, details: { nameAr: req.body.nameAr, nameEn: req.body.nameEn } }, req);
+    res.json({ success: true });
+  }),
+);
+
+/** Turn a suggestion down (or withdraw an approved category: its stores go back to "Other"). */
+adminRouter.post(
+  '/categories/:slug/reject',
+  requirePerm('stores.manage'),
+  validate({ params: catSlug, body: z.object({ reason: z.string().trim().max(200).optional() }).strict() }),
+  ah(async (req, res) => {
+    const c = await one<any>(
+      `UPDATE ${S}.store_categories SET status = 'rejected', reason = $2, reviewed_by = $3, reviewed_at = now()
+        WHERE slug = $1 RETURNING slug, name_ar, name_en, requested_by`,
+      [req.params.slug, req.body.reason || null, req.auth!.userId],
+    );
+    if (!c) throw notFound('Category not found');
+    await pool.query(`UPDATE ${S}.merchants SET category = 'other', updated_at = now() WHERE category = $1`, [c.slug]);
+    if (c.requested_by)
+      await notifyBi(
+        undefined,
+        c.requested_by,
+        'store:category',
+        ['Category not added', `“${c.name_en}” wasn’t added${req.body.reason ? `: ${req.body.reason}` : '.'} Your store stays under “Other”.`],
+        ['ما انضاف التصنيف', `«${c.name_ar}» ما انضاف${req.body.reason ? `: ${req.body.reason}` : '.'} متجرك بضل تحت «غير ذلك».`],
+      );
+    await audit({ userId: req.auth!.userId, action: 'admin.category_rejected', entityType: 'category', entityId: c.slug, details: { reason: req.body.reason } }, req);
+    res.json({ success: true });
+  }),
+);

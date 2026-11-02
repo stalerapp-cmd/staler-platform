@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Check, ExternalLink, Eye, EyeOff, HandCoins, MapPin, Package, PackageCheck, Pause, Phone, Play, Search, Store as StoreIcon, Trash2, Truck, UserRound } from 'lucide-react';
+import { Check, ExternalLink, Tag, Eye, EyeOff, HandCoins, MapPin, Package, PackageCheck, Pause, Phone, Play, Search, Store as StoreIcon, Trash2, Truck, UserRound } from 'lucide-react';
 import { ProductImage } from '../components/Commerce';
 import { StoreLogo } from './Stores';
 import { del, patch, post, put } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { usePerm } from '../lib/perm';
 import { useData } from '../lib/hooks';
+import { reloadCategories } from '../lib/categories';
 import { date, fill, money } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
@@ -126,6 +127,7 @@ export function AdminAgents() {
 /** The store list: search, filter and open any store or branch. */
 export function AdminStoreList() {
   const { t, lang, err } = useI18n();
+  const { can } = usePerm();
   const { data, error } = useData<{ stores: any[] }>('/api/admin/stores');
   const [q, setQ] = useState('');
   const [st, setSt] = useState('all');
@@ -137,6 +139,7 @@ export function AdminStoreList() {
   return (
     <div>
       <PageHeader title={t.nav.stores} lead={C.storesLead} />
+      {can('stores.manage') && <SuggestedCategories />}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -474,5 +477,135 @@ export function AdminStoreDetail() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** Category suggestions from store owners: tidy the names, then add or turn down. */
+function SuggestedCategories() {
+  const { t, lang, err } = useI18n();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const X = t.catx;
+  const { data, reload } = useData<{ categories: any[] }>('/api/admin/categories');
+  const [names, setNames] = useState<Record<string, { ar: string; en: string; reason: string; rejecting?: boolean }>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [showOld, setShowOld] = useState(false);
+  const list = data?.categories ?? [];
+  const pending = list.filter((c) => c.status === 'pending');
+  const approved = list.filter((c) => c.status === 'approved');
+  const rejected = list.filter((c) => c.status === 'rejected');
+  if (!data || !list.length) return null;
+  const nm = (c: any) => names[c.slug] ?? { ar: c.name_ar, en: c.name_en === c.name_ar ? '' : c.name_en, reason: '' };
+  const set = (c: any, v: Partial<{ ar: string; en: string; reason: string; rejecting: boolean }>) => setNames((m) => ({ ...m, [c.slug]: { ...nm(c), ...v } }));
+  const act = async (slug: string, fn: () => Promise<unknown>, ok: string) => {
+    setBusy(slug);
+    try {
+      await fn();
+      toast(ok);
+      void reload();
+      void reloadCategories();
+    } catch (e) {
+      toast(err(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section className="card mb-6 overflow-hidden">
+      <header className="flex items-start gap-3 border-b border-line px-5 py-4">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gold/15 text-[rgb(150_105_10)] dark:text-gold">
+          <Tag className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="flex items-center gap-2 text-lg">
+            {X.title}
+            {pending.length > 0 && <span className="num rounded-full bg-stitch px-2 py-0.5 text-xs font-bold text-white">{pending.length}</span>}
+          </h2>
+          <p className="text-sm text-muted">{X.lead}</p>
+        </div>
+      </header>
+      {pending.length > 0 && (
+        <ul className="divide-y divide-line">
+          {pending.map((c) => {
+            const v = nm(c);
+            return (
+              <li key={c.slug} className="space-y-3 px-5 py-4">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <Badge tone="warn">{X.pending}</Badge>
+                  <span className="font-semibold">{c.name_ar}</span>
+                  {c.name_en !== c.name_ar && <span className="text-muted" dir="ltr">{c.name_en}</span>}
+                  <span className="text-xs text-muted">
+                    · {fill(X.from, { store: c.store_name ?? '—' })} · {date(c.created_at, lang)}
+                  </span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label={X.nameAr} value={v.ar} onChange={(e) => set(c, { ar: e.target.value })} maxLength={30} />
+                  <Field label={X.nameEn} dir="ltr" value={v.en} onChange={(e) => set(c, { en: e.target.value })} maxLength={30} />
+                </div>
+                {v.rejecting && <Field label={X.reason} value={v.reason} onChange={(e) => set(c, { reason: e.target.value })} maxLength={200} />}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    icon={<Check className="h-4 w-4" />}
+                    loading={busy === c.slug && !v.rejecting}
+                    disabled={v.ar.trim().length < 2 || v.en.trim().length < 2}
+                    onClick={() => act(c.slug, () => post(`/api/admin/categories/${c.slug}/approve`, { nameAr: v.ar.trim(), nameEn: v.en.trim() }), X.approvedT)}
+                  >
+                    {X.approve}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={v.rejecting ? 'danger' : 'secondary'}
+                    loading={busy === c.slug && !!v.rejecting}
+                    onClick={() => (v.rejecting ? act(c.slug, () => post(`/api/admin/categories/${c.slug}/reject`, v.reason.trim() ? { reason: v.reason.trim() } : {}), X.rejectedT) : set(c, { rejecting: true }))}
+                  >
+                    {X.reject}
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {(approved.length > 0 || rejected.length > 0) && (
+        <div className={cx('px-5 py-3', pending.length > 0 && 'border-t border-line')}>
+          <div className="flex flex-wrap gap-2">
+            {approved.map((c) => (
+              <span key={c.slug} className="inline-flex items-center gap-2 rounded-full bg-olive/10 py-1 pe-1 ps-3 text-sm">
+                {lang === 'ar' ? c.name_ar : c.name_en}
+                <span className="num text-xs text-muted">{fill(X.stores, { n: c.stores })}</span>
+                <button
+                  type="button"
+                  title={X.withdraw}
+                  aria-label={X.withdraw}
+                  onClick={async () => {
+                    if (!(await confirm({ title: X.withdraw, body: X.withdrawQ, confirmLabel: X.withdraw, tone: 'danger' }))) return;
+                    void act(c.slug, () => post(`/api/admin/categories/${c.slug}/reject`, {}), X.rejectedT);
+                  }}
+                  className="grid h-6 w-6 place-items-center rounded-full text-muted transition hover:bg-stitch/10 hover:text-stitch"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+          {rejected.length > 0 && (
+            <button type="button" onClick={() => setShowOld((v) => !v)} className="mt-2 text-xs text-muted underline-offset-2 hover:underline">
+              {X.rejected} ({rejected.length})
+            </button>
+          )}
+          {showOld && (
+            <ul className="mt-2 space-y-1 text-xs text-muted">
+              {rejected.map((c) => (
+                <li key={c.slug}>
+                  {c.name_ar} · {c.store_name ?? '—'}
+                  {c.reason ? ` — ${c.reason}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

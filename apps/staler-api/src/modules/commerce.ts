@@ -29,6 +29,27 @@ const short = (id: string) => String(id).slice(0, 8);
 const money = (v: string | number) => `${v} ${env.CURRENCY}`;
 
 export const STORE_CATEGORIES = ['food', 'fashion', 'electronics', 'books', 'beauty', 'home', 'crafts', 'digital', 'services', 'other'] as const;
+/** A category key: built-in ones are words, suggested ones look like "c_1a2b3c". */
+export const categoryKey = z.string().trim().regex(/^[a-z][a-z0-9_]{1,39}$/);
+/** Built-in categories plus the suggested ones an admin approved. */
+export async function categoryExists(key: string) {
+  if ((STORE_CATEGORIES as readonly string[]).includes(key)) return true;
+  return !!(await one(`SELECT 1 FROM ${S}.store_categories WHERE slug = $1 AND status = 'approved'`, [key]));
+}
+/** Store owner's suggestion for a category that isn't in the list yet. */
+const categoryRequest = z
+  .object({ nameAr: z.string().trim().min(2).max(30), nameEn: z.string().trim().max(30).optional() })
+  .strict();
+async function suggestCategory(userId: string, merchantId: string, r: z.infer<typeof categoryRequest>) {
+  // One open suggestion per store: a new one replaces the previous.
+  await pool.query(`DELETE FROM ${S}.store_categories WHERE merchant_id = $1 AND status = 'pending'`, [merchantId]);
+  const slug = `c_${crypto.randomBytes(3).toString('hex')}`;
+  await pool.query(
+    `INSERT INTO ${S}.store_categories (slug, name_ar, name_en, requested_by, merchant_id) VALUES ($1, $2, $3, $4, $5)`,
+    [slug, r.nameAr, r.nameEn || r.nameAr, userId, merchantId],
+  );
+  return slug;
+}
 
 // Columns that are safe to show to anyone. digital_file_url is NEVER public.
 const PUBLIC_PRODUCT_COLS = `p.id, p.merchant_id, p.name, p.description, p.price, p.compare_at_price, p.image_url, p.stock, p.is_digital, p.digital_mode,
@@ -149,7 +170,11 @@ export const storeRouter = Router();
 storeRouter.get(
   '/categories',
   ah(async (_req, res) => {
-    res.json({ success: true, data: { categories: STORE_CATEGORIES } });
+    const custom = await pool.query(
+      `SELECT slug, name_ar, name_en FROM ${S}.store_categories WHERE status = 'approved' ORDER BY name_ar`,
+    );
+    const base = STORE_CATEGORIES.filter((c) => c !== 'other');
+    res.json({ success: true, data: { categories: [...base, ...custom.rows.map((c) => c.slug), 'other'], custom: custom.rows } });
   }),
 );
 
@@ -167,7 +192,7 @@ storeRouter.get(
           .trim()
           .max(300)
           .optional()
-          .transform((v) => (v ? v.split(',').filter((x) => (STORE_CATEGORIES as readonly string[]).includes(x)) : undefined)),
+          .transform((v) => (v ? v.split(',').filter((x) => /^[a-z][a-z0-9_]{1,39}$/.test(x)) : undefined)),
         places: z.string().trim().max(3000).optional(),
         type: z.enum(['digital', 'physical', 'deposit', 'deals']).optional(),
         sort: z.enum(['new', 'price_asc', 'price_desc', 'name']).default('new'),
@@ -783,7 +808,8 @@ const storeBody = z
     description: z.string().trim().max(500).optional().default(''),
     logoUrl: optUrl.optional().nullable(),
     coverUrl: optUrl.optional().nullable(),
-    category: z.enum(STORE_CATEGORIES).optional(),
+    category: categoryKey.optional(),
+    categoryRequest: categoryRequest.optional(),
     city: z.string().trim().max(60).optional().nullable(),
     address: z.string().trim().max(200).optional().nullable(),
     lat: z.number().min(-90).max(90).optional().nullable(),
@@ -866,7 +892,10 @@ merchantRouter.post(
   '/stores',
   validate({ body: storeBody }),
   ah(async (req, res) => {
+    if (req.body.categoryRequest) req.body.category = 'other';
+    if (req.body.category && !(await categoryExists(req.body.category))) throw badRequest('BAD_CATEGORY', 'Unknown category');
     const m: any = await createStore(req.auth!.userId, req.body);
+    if (req.body.categoryRequest) m.pendingCategory = await suggestCategory(req.auth!.userId, m.id, req.body.categoryRequest);
     const { instagram, tiktok, facebook } = req.body;
     if (instagram || tiktok || facebook) {
       await pool.query(`UPDATE ${S}.merchants SET instagram = $2, tiktok = $3, facebook = $4 WHERE id = $1`, [m.id, instagram ?? null, tiktok ?? null, facebook ?? null]);
@@ -903,6 +932,13 @@ merchantRouter.patch(
   '/stores/:id',
   validate({ params: z.object({ id: idParam }).strict(), body: storeBody.omit({ parentId: true }).partial().strict() }),
   ah(async (req, res) => {
+    if (req.body.categoryRequest) req.body.category = 'other';
+    if (req.body.category && !(await categoryExists(req.body.category))) throw badRequest('BAD_CATEGORY', 'Unknown category');
+    if (req.body.categoryRequest) {
+      const own = await one(`SELECT id FROM ${S}.merchants WHERE id = $1 AND user_id = $2`, [req.params.id, req.auth!.userId]);
+      if (!own) throw notFound('Store not found');
+      await suggestCategory(req.auth!.userId, String(req.params.id), req.body.categoryRequest);
+    }
     const sets: string[] = [];
     const vals: unknown[] = [req.params.id, req.auth!.userId];
     for (const [k, v] of Object.entries(req.body)) {
@@ -934,6 +970,19 @@ merchantRouter.delete(
   }),
 );
 
+/** The store owner's category suggestions and where each one stands. */
+merchantRouter.get(
+  '/category-requests',
+  ah(async (req, res) => {
+    const r = await pool.query(
+      `SELECT c.slug, c.name_ar, c.name_en, c.status, c.reason, c.merchant_id, c.created_at, c.reviewed_at
+         FROM ${S}.store_categories c WHERE c.requested_by = $1 ORDER BY c.created_at DESC LIMIT 20`,
+      [req.auth!.userId],
+    );
+    res.json({ success: true, data: { requests: r.rows } });
+  }),
+);
+
 // Backwards-compatible single-store profile (the current store).
 merchantRouter.get(
   '/profile',
@@ -951,7 +1000,10 @@ merchantRouter.post(
   '/profile',
   validate({ body: storeBody }),
   ah(async (req, res) => {
+    if (req.body.categoryRequest) req.body.category = 'other';
+    if (req.body.category && !(await categoryExists(req.body.category))) throw badRequest('BAD_CATEGORY', 'Unknown category');
     const m: any = await createStore(req.auth!.userId, req.body);
+    if (req.body.categoryRequest) m.pendingCategory = await suggestCategory(req.auth!.userId, m.id, req.body.categoryRequest);
     const { instagram, tiktok, facebook } = req.body;
     if (instagram || tiktok || facebook) {
       await pool.query(`UPDATE ${S}.merchants SET instagram = $2, tiktok = $3, facebook = $4 WHERE id = $1`, [m.id, instagram ?? null, tiktok ?? null, facebook ?? null]);

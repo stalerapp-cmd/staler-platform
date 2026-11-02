@@ -169,6 +169,8 @@ const AR: Record<string, string> = {
 
   // ------------------------------------------------------------- commerce
   'Store not found': 'المتجر مش موجود',
+  'Unknown category': 'هالتصنيف مش موجود',
+  'Category not found': 'التصنيف مش موجود',
   'Main store not found': 'المتجر الرئيسي مش موجود',
   'Product not found': 'المنتج مش موجود',
   'One of the products no longer exists': 'واحد من المنتجات ما عاد موجود',
