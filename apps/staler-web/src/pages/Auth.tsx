@@ -214,7 +214,7 @@ export function Register() {
   const nav = useNavigate();
   const confirm = useConfirm();
   const cfg = usePublicConfig();
-  const [method, setMethod] = useState<'email' | 'sms'>('email');
+  const [method, setMethod] = useState<'email' | 'sms' | 'telegram'>('email');
   const prefill = (useLocation() as { state?: { email?: string } }).state?.email ?? '';
   const [f, setF] = useState({ fullName: '', email: prefill, password: '', phoneNumber: '', accountType: 'user' as 'user' | 'merchant' | 'exchange' });
   const [busy, setBusy] = useState(false);
@@ -232,7 +232,7 @@ export function Register() {
     setError(null);
     setFieldErr({});
     try {
-      await post('/api/auth/register', {
+      const reg = await post<{ telegramLink?: string } | undefined>('/api/auth/register', {
         fullName: f.fullName.trim(),
         email: f.email.trim(),
         password: f.password,
@@ -241,7 +241,7 @@ export function Register() {
         ...(f.phoneNumber.trim() ? { phoneNumber: f.phoneNumber.trim() } : {}),
         method,
       });
-      nav('/verify', { state: { email: f.email.trim(), sms: method === 'sms' ? f.phoneNumber.trim() : undefined } });
+      nav('/verify', { state: { email: f.email.trim(), sms: method === 'sms' ? f.phoneNumber.trim() : undefined, telegram: method === 'telegram' ? reg?.telegramLink : undefined } });
     } catch (e2) {
       if (e2 instanceof ApiError && Array.isArray(e2.details)) {
         setFieldErr(Object.fromEntries((e2.details as any[]).map((d) => [d.path, d.message])));
@@ -312,10 +312,19 @@ export function Register() {
           autoComplete="new-password"
           error={fieldErr.password2 ?? (pw2 && !f.password.startsWith(pw2) ? t.auth.mismatch : null)}
         />
-        {cfg?.sms && (
+        {(cfg?.sms || cfg?.telegram) && (
           <div>
             <p className="mb-2 text-sm font-medium text-ink/80">{t.auth.sendVia}</p>
-            <Segmented value={method} onChange={setMethod} options={[{ value: 'email', label: t.auth.viaEmail }, { value: 'sms', label: t.auth.viaSms }]} />
+            <Segmented
+              value={method}
+              onChange={setMethod}
+              options={[
+                { value: 'email' as const, label: t.auth.viaEmail },
+                ...(cfg?.telegram ? [{ value: 'telegram' as const, label: t.auth.viaTelegram }] : []),
+                ...(cfg?.sms ? [{ value: 'sms' as const, label: t.auth.viaSms }] : []),
+              ]}
+            />
+            {method === 'telegram' && <p className="mt-2 text-xs text-muted">{t.auth.tgFree}</p>}
           </div>
         )}
         <ErrorNote>{error}</ErrorNote>
@@ -339,7 +348,7 @@ export function Verify() {
   const nav = useNavigate();
   const toast = useToast();
   const { finishVerification } = useAuth();
-  const loc = useLocation() as { state?: { email?: string; sms?: string } };
+  const loc = useLocation() as { state?: { email?: string; sms?: string; telegram?: string } };
   const [email, setEmail] = useState(loc.state?.email ?? '');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -364,12 +373,28 @@ export function Verify() {
   };
   return (
     <AuthLayout>
-      <h1 className="text-3xl">{t.auth.verifyTitle}</h1>
+      <h1 className="text-3xl">{loc.state?.telegram ? t.auth.tgTitle : t.auth.verifyTitle}</h1>
       <p className="mt-2 text-muted">
-        {loc.state?.sms ? t.auth.verifyLeadSms : t.auth.verifyLead} <span className="num font-medium text-ink" dir="ltr">{loc.state?.sms ?? email}</span>
+        {loc.state?.telegram ? t.auth.tgLead : loc.state?.sms ? t.auth.verifyLeadSms : t.auth.verifyLead} <span className="num font-medium text-ink" dir="ltr">{loc.state?.sms ?? email}</span>
       </p>
       <form onSubmit={submit} className="mt-8 space-y-5">
         {!loc.state?.email && <Field label={t.auth.email} type="email" value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" required />}
+        {loc.state?.telegram && (
+          <div className="rounded-2xl bg-[#229ED9]/[0.08] p-4 ring-1 ring-[#229ED9]/25">
+            <a
+              href={loc.state.telegram}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-[#229ED9] font-semibold text-white shadow-[0_10px_24px_-12px_#229ED9] transition hover:brightness-105 active:scale-[0.98]"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+                <path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.7.8l-4.8-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.5 13.2l-4.7-1.5c-1-.3-1-1 .2-1.5l18.5-7.1c.9-.3 1.6.2 1.4 1.2z" />
+              </svg>
+              {t.auth.tgOpen}
+            </a>
+            <p className="mt-2.5 text-sm leading-relaxed text-ink/75">{t.auth.tgSteps}</p>
+          </div>
+        )}
         <CodeInput value={code} onChange={setCode} />
         <ErrorNote>{error}</ErrorNote>
         {wrong && email.trim() && (
@@ -382,7 +407,7 @@ export function Verify() {
           </Link>
         )}
         <Button block size="lg" loading={busy} disabled={code.length !== 6}>
-          {t.auth.verify}
+          {loc.state?.telegram ? t.auth.tgConfirm : t.auth.verify}
         </Button>
         <ResendCode
           onResend={async () => {
@@ -390,7 +415,7 @@ export function Verify() {
             toast(t.auth.resent);
           }}
         />
-        <MailTips onChangeEmail={() => nav('/register', { state: { email } })} />
+        {!loc.state?.telegram && <MailTips onChangeEmail={() => nav('/register', { state: { email } })} />}
       </form>
     </AuthLayout>
   );

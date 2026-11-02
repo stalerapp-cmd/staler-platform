@@ -4,6 +4,7 @@ import { get } from './api';
 export interface PublicConfig {
   googleClientId?: string | null;
   sms?: boolean;
+  telegram?: boolean;
   [k: string]: unknown;
 }
 let cache: Promise<PublicConfig> | null = null;

@@ -38,7 +38,7 @@ const en = {
   },
   auth: {
     haveAccountHint: 'Did the e-mail say you already have an account? Use its code here to choose a new password.',
-    phone: 'Mobile number', or: 'or', viaEmail: 'E-mail', viaSms: 'SMS', sendVia: 'Send my code by', smsNeedsPhone: 'Add your phone number to get the code by SMS.', verifyLeadSms: 'We sent a 6-digit code by SMS to',
+    phone: 'Mobile number', or: 'or', viaEmail: 'E-mail', viaSms: 'SMS', viaTelegram: 'Telegram', tgLead: 'Your code is waiting on Telegram for', tgOpen: 'Get the code on Telegram', tgSteps: 'Tap the button, then press “Start” in Telegram. Our bot sends you a 6-digit code — come back here and type it.', tgFree: 'Free, no phone number needed.', tgTitle: 'Get your code', tgConfirm: 'Confirm code',  sendVia: 'Send my code by', smsNeedsPhone: 'Add your phone number to get the code by SMS.', verifyLeadSms: 'We sent a 6-digit code by SMS to',
     resendIn: 'Send a new code in', noMailTitle: 'No code yet?', noMail1: 'Check Spam, Promotions and Updates — first e-mails often land there.', noMail2: 'It can take up to a minute to arrive.', noMail3: 'Typo in the address?', changeEmail: 'Change e-mail', reviewTitle: 'Is this e-mail right?', reviewBody: 'We’ll send your 6-digit code to {email}. Make sure it’s an inbox you can open now.', reviewOk: 'Yes, send the code',
     confirmPassword: 'Confirm password', mismatch: 'The two passwords don’t match.',
     welcome: 'Welcome to TalerBank', lead: 'Sign in with your e-mail or username.', login: 'E-mail or username', password: 'Password', signIn: 'Sign in',
@@ -204,7 +204,7 @@ const ar: Dict = {
   },
   auth: {
     haveAccountHint: 'الإيميل حكالك إنه عندك حساب؟ استخدم الرمز اللي فيه هون لتختار كلمة مرور جديدة.',
-    phone: 'رقم الجوال', or: 'أو', viaEmail: 'الإيميل', viaSms: 'رسالة SMS', sendVia: 'ابعتلي الرمز على', smsNeedsPhone: 'أضف رقم جوالك لتستلم الرمز برسالة SMS.', verifyLeadSms: 'بعتنالك رمز من 6 أرقام برسالة SMS على',
+    phone: 'رقم الجوال', or: 'أو', viaEmail: 'الإيميل', viaSms: 'رسالة SMS', viaTelegram: 'تيليجرام', tgLead: 'رمزك بستناك على تيليجرام للحساب', tgOpen: 'استلم الرمز على تيليجرام', tgSteps: 'اكبس الزر، وبتيليجرام اكبس «Start». البوت بيبعتلك رمز من 6 أرقام — ارجع هون واكتبه.', tgFree: 'ببلاش، وما بدها رقم جوال.', tgTitle: 'استلم رمزك', tgConfirm: 'تأكيد الرمز',  sendVia: 'ابعتلي الرمز على', smsNeedsPhone: 'أضف رقم جوالك لتستلم الرمز برسالة SMS.', verifyLeadSms: 'بعتنالك رمز من 6 أرقام برسالة SMS على',
     resendIn: 'رمز جديد بعد', noMailTitle: 'ما وصلك الرمز؟', noMail1: 'افحص البريد المزعج (Spam) والعروض (Promotions) — أول رسالة كثير بتروح هناك.', noMail2: 'ممكن تاخد لحد دقيقة لتوصل.', noMail3: 'في غلط بالإيميل؟', changeEmail: 'غيّر الإيميل', reviewTitle: 'الإيميل صحيح؟', reviewBody: 'رح نبعت الرمز المكوّن من 6 أرقام على {email}. تأكد إنه إيميل بتقدر تفتحه هلّأ.', reviewOk: 'آه، ابعت الرمز',
     confirmPassword: 'تأكيد كلمة المرور', mismatch: 'كلمتا المرور مش متطابقتين.',
     welcome: 'أهلًا بك في TalerBank', lead: 'سجّل الدخول ببريدك أو اسم المستخدم.', login: 'البريد أو اسم المستخدم', password: 'كلمة المرور', signIn: 'دخول',

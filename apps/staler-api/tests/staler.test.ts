@@ -8,6 +8,7 @@ import { migrate } from '../src/db/migrate.js';
 import { bootstrap } from '../src/db/bootstrap.js';
 import { pool } from '../src/lib/db.js';
 import { reconcilePending } from '../src/modules/bank.js';
+import { telegramOutbox, webhookSecret } from '../src/lib/telegram.js';
 import { newReserveKeypair } from '../src/lib/reserve.js';
 import { STALER_PORT, WEBHOOK_SECRET } from './env.js';
 import {
@@ -435,6 +436,29 @@ describe('marketplace', () => {
     const admin = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
     expect((await request(app).post(`/api/admin/orders/${id2}/resolve`).set(auth(admin)).send({ outcome: 'refund', note: 'Store unreachable' })).status).toBe(200);
     expect(await walletBalance(app, buyer)).toBe('100.00');
+  });
+
+  it('sign-up code by Telegram: bot link, Start, code arrives in the chat, account created', async () => {
+    const mail = `tg${crypto.randomBytes(3).toString('hex')}@example.com`;
+    const r = await request(app).post('/api/auth/register').send({ fullName: 'Telegram Person', email: mail, password: 'Tel3gram!Pass#2026', method: 'telegram', language: 'ar' });
+    expect(r.status).toBe(201);
+    const link: string = r.body.data.telegramLink;
+    expect(link).toMatch(/^https:\/\/t\.me\/STalerTestBot\?start=[A-Za-z0-9_-]{16,64}$/);
+    const token = link.split('start=')[1];
+    // only Telegram (with the secret) may call the webhook
+    expect((await request(app).post('/api/telegram/webhook').send({ message: { chat: { id: 1, type: 'private' }, text: `/start ${token}` } })).status).toBe(404);
+    const hook = (text: string) =>
+      request(app).post('/api/telegram/webhook').set('x-telegram-bot-api-secret-token', webhookSecret()).send({ message: { chat: { id: 777001, type: 'private' }, text } });
+    telegramOutbox.length = 0;
+    expect((await hook('/start nonsense-token-123456')).status).toBe(200);
+    expect(telegramOutbox[0]?.text).not.toMatch(/\d{6}/);
+    expect((await hook(`/start ${token}`)).status).toBe(200);
+    const code = /<b>(\d{6})<\/b>/.exec(telegramOutbox.at(-1)!.text)![1];
+    expect(telegramOutbox.at(-1)!.chat_id).toBe(777001);
+    const v = await request(app).post('/api/auth/verify-email').send({ email: mail, code });
+    expect(v.status).toBe(201);
+    const row = await pool.query(`SELECT telegram_chat_id FROM public.users WHERE email = $1`, [mail]);
+    expect(Number(row.rows[0].telegram_chat_id)).toBe(777001);
   });
 
   it('store owners suggest a category; once approved everyone can pick it', async () => {
