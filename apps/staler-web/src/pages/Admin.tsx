@@ -279,13 +279,19 @@ export function AdminAudit() {
   const [q, setQ] = useState('');
   const [qq, setQq] = useState('');
   useEffect(() => {
-    const h = setTimeout(() => setQq(q.trim()), 300);
+    const h = setTimeout(() => setQq(q.trim()), 200);
     return () => clearTimeout(h);
   }, [q]);
   const { data, loading } = useData<{ events: any[] }>(
     `/api/admin/audit?limit=100${filter ? `&action=${encodeURIComponent(filter)}` : ''}${qq ? `&q=${encodeURIComponent(qq)}` : ''}`,
     [filter, qq],
   );
+  // Narrow what's already on screen at once, letter by letter; the server's full answer follows a moment later.
+  const needle = q.trim().toLowerCase();
+  const shown =
+    data?.events && needle && needle !== qq.toLowerCase()
+      ? data.events.filter((e) => `${e.action} ${e.email ?? ''} ${e.ip_address ?? ''} ${e.entity_type ?? ''} ${JSON.stringify(e.details ?? '')}`.toLowerCase().includes(needle))
+      : data?.events;
   return (
     <div>
       <PageHeader title={t.nav.audit} />
@@ -293,10 +299,14 @@ export function AdminAudit() {
         <span className="sr-only">{t.common.search}</span>
         <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.ctl.auditSearch} type="search" className="field h-12 rounded-2xl pe-10 ps-12" />
-        {q && (
-          <button type="button" onClick={() => setQ('')} className="absolute end-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-muted hover:bg-sunk" aria-label={t.common.close}>
-            <X className="h-4 w-4" />
-          </button>
+        {loading && q ? (
+          <span className="absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-sky border-t-transparent" />
+        ) : (
+          q && (
+            <button type="button" onClick={() => setQ('')} className="absolute end-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-muted hover:bg-sunk" aria-label={t.common.close}>
+              <X className="h-4 w-4" />
+            </button>
+          )
         )}
       </label>
       <div className="mb-4">
@@ -313,8 +323,8 @@ export function AdminAudit() {
         />
       </div>
       <div className="card divide-y divide-line">
-        {!loading && data && !data.events.length && <p className="p-6 text-center text-sm text-muted">{t.ctl.auditNone}</p>}
-        {data?.events.map((e) => (
+        {!loading && shown && !shown.length && <p className="p-6 text-center text-sm text-muted">{t.ctl.auditNone}</p>}
+        {shown?.map((e) => (
           <div key={e.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
             <CheckCircle2 className="h-4 w-4 text-olive" />
             <code className="num">{e.action}</code>

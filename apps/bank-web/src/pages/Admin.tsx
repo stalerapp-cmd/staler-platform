@@ -299,12 +299,7 @@ export function AdminExchange() {
 export function AdminAudit() {
   const { t, lang, err } = useI18n();
   const [q, setQ] = useState('');
-  const [qq, setQq] = useState('');
-  useEffect(() => {
-    const h = setTimeout(() => setQq(q.trim()), 300);
-    return () => clearTimeout(h);
-  }, [q]);
-  const list = usePaged<any>('/api/admin/audit', 'events', { q: qq });
+  const list = usePaged<any>('/api/admin/audit', 'events', { q: q.trim() });
   const [open, setOpen] = useState<any>(null);
   return (
     <div>
