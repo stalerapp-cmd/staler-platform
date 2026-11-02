@@ -5,6 +5,7 @@ import { ProductImage } from '../components/Commerce';
 import { StoreLogo } from './Stores';
 import { del, patch, post, put } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { TownField } from '../components/TownField';
 import { usePerm } from '../lib/perm';
 import { useData } from '../lib/hooks';
 import { reloadCategories } from '../lib/categories';
@@ -275,7 +276,7 @@ export function AdminStoreDetail() {
           >
             <Field label={C.name} value={f.storeName} onChange={(e) => setF({ ...f, storeName: e.target.value })} required minLength={2} />
             <Field label={C.branch} value={f.branchName} onChange={(e) => setF({ ...f, branchName: e.target.value })} />
-            <Field list="ps-places" autoComplete="off" label={t.mstore.city} value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} />
+            <TownField label={t.mstore.city} value={f.city ?? ''} onChange={(v) => setF({ ...f, city: v })} />
             <Field label={t.auth.phone} dir="ltr" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
             <div className="sm:col-span-2">
               <Field label={t.mstore.address} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />

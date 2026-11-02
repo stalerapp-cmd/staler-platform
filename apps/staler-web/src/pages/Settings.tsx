@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import { useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AtSign, Camera, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Palette, ShieldAlert, ShieldCheck, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AgentProfileEditor } from '../components/AgentProfileEditor';
+import { AtSign, Camera, HandCoins, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Palette, ShieldAlert, ShieldCheck, Trash2, UserRound, type LucideIcon } from 'lucide-react';
 import { applySession, del, patch, post, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
@@ -36,8 +37,8 @@ function Section({ title, children, aside, icon: Icon, tone = 'bg-night text-whi
   );
 }
 
-type Tab = 'profile' | 'security' | 'devices' | 'account';
-const TAB_ICONS: Record<Tab, LucideIcon> = { profile: UserRound, security: ShieldCheck, devices: MonitorSmartphone, account: KeyRound };
+type Tab = 'profile' | 'agent' | 'security' | 'devices' | 'account';
+const TAB_ICONS: Record<Tab, LucideIcon> = { profile: UserRound, agent: HandCoins, security: ShieldCheck, devices: MonitorSmartphone, account: KeyRound };
 
 export default function Settings() {
   const { t, lang, setLang, err } = useI18n();
@@ -48,7 +49,15 @@ export default function Settings() {
   const fileRef = useRef<HTMLInputElement>(null);
   const confirm = useConfirm();
   const sessions = useData<{ sessions: any[] }>('/api/auth/me/sessions');
-  const [tab, setTab] = useState<Tab>('profile');
+  const isAgent = user?.role === 'exchange';
+  const tabs: Tab[] = isAgent ? ['profile', 'agent', 'security', 'devices', 'account'] : ['profile', 'security', 'devices', 'account'];
+  const [params, setParams] = useSearchParams();
+  const asked = params.get('tab') as Tab | null;
+  const [tab, setTabState] = useState<Tab>(asked && tabs.includes(asked) ? asked : 'profile');
+  const setTab = (k: Tab) => {
+    setTabState(k);
+    setParams(k === 'profile' ? {} : { tab: k }, { replace: true });
+  };
   const [cropFile, setCropFile] = useState<File | null>(null);
 
   const [name, setName] = useState(user?.full_name ?? '');
@@ -211,8 +220,8 @@ export default function Settings() {
 
       <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-6">
         {/* Tabs: a scrolling pill row on phones, a sticky list on desktop */}
-        <div role="tablist" className="mb-5 grid grid-cols-4 gap-1.5 rounded-3xl bg-surface p-1.5 shadow-card lg:sticky lg:top-24 lg:mb-0 lg:flex lg:h-fit lg:flex-col lg:gap-2 lg:bg-transparent lg:p-0 lg:shadow-none">
-          {(['profile', 'security', 'devices', 'account'] as Tab[]).map((k) => {
+        <div role="tablist" className={cx('mb-5 grid gap-1.5', tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4', 'rounded-3xl bg-surface p-1.5 shadow-card lg:sticky lg:top-24 lg:mb-0 lg:flex lg:h-fit lg:flex-col lg:gap-2 lg:bg-transparent lg:p-0 lg:shadow-none')}>
+          {tabs.map((k) => {
             const Icon = TAB_ICONS[k];
             const on = tab === k;
             return (
@@ -225,13 +234,14 @@ export default function Settings() {
               >
                 {on && <motion.span layoutId="settings-tab" className="absolute inset-0 rounded-2xl bg-night shadow-lift dark:bg-white/15" transition={{ type: 'spring', bounce: 0.2, duration: 0.45 }} />}
                 <Icon className="relative h-[18px] w-[18px]" />
-                <span className="relative max-w-full truncate">{t.settings.tabs[k]}</span>
+                <span className="relative max-w-full text-center leading-tight lg:text-start">{t.settings.tabs[k]}</span>
               </button>
             );
           })}
         </div>
 
         <div className="min-w-0 space-y-5">
+      {tab === 'agent' && isAgent && <AgentProfileEditor />}
       {tab === 'profile' && (
         <>
       <Section title={t.settings.profile} icon={UserRound}>

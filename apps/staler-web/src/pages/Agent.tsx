@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowDownToLine, ArrowUpFromLine, Banknote, Clock, LocateFixed, MapPin, Navigation, Phone, Search, Ticket, XCircle } from 'lucide-react';
-import { del, newIdempotencyKey, post, put } from '../lib/api';
+import { del, newIdempotencyKey, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useData, usePolling } from '../lib/hooks';
@@ -14,7 +14,7 @@ import { expandPlaces, placeKey } from '../lib/places';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
 import { useSecureAction } from '../components/SecureAction';
-import { AmountInput, AnimatedNumber, Avatar, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Sheet, Skeleton, SuccessMark, Toggle, cx } from '../components/ui';
+import { AmountInput, AnimatedNumber, Avatar, Badge, Button, EmptyState, ErrorNote, PageHeader, Sheet, Skeleton, SuccessMark, cx } from '../components/ui';
 
 interface Stats {
   balance: string;
@@ -180,7 +180,7 @@ export default function AgentDesk() {
         )}
       </section>
 
-      <AgentProfile />
+      <AgentProfileCard />
 
       <Sheet open={!!show} onClose={() => setShow(null)} title={t.agent.cashOut}>
         {show && (
@@ -213,91 +213,29 @@ export default function AgentDesk() {
   );
 }
 
-function AgentProfile() {
-  const { t, err } = useI18n();
-  const toast = useToast();
+/** A short summary on the desk; the profile itself is edited in Settings → Agent profile. */
+function AgentProfileCard() {
+  const { t, lang } = useI18n();
   const data = useData<{ profile: any }>('/api/exchange/profile');
-  const [f, setF] = useState<any>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (data.data && !f) {
-      const p = data.data.profile;
-      setF({ displayName: p.display_name ?? '', city: p.city ?? '', address: p.address ?? '', phone: p.phone ?? '', hours: p.hours ?? '', lat: p.lat, lng: p.lng, cashIn: p.cash_in, cashOut: p.cash_out });
-    }
-  }, [data.data, f]);
-  if (!f) return <Skeleton className="mt-6 h-64 rounded-3xl" />;
-  const status: string = data.data?.profile.status ?? 'pending';
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const p = data.data?.profile;
+  const status: string = p?.status ?? 'pending';
   return (
-    <section className="card mt-6 overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
-        <div>
-          <h2 className="text-lg">{t.agent.profile}</h2>
-          <p className="text-sm text-muted">{data.data?.profile.missing ? t.agent.setupFirst : t.agent.profileLead}</p>
-        </div>
-        <Badge tone={status === 'active' ? 'good' : status === 'suspended' ? 'bad' : 'warn'}>
-          {status === 'active' ? t.agent.listed : status === 'suspended' ? t.agent.suspended : t.agent.pending}
-        </Badge>
-      </div>
-      <form
-        className="grid gap-5 p-5 lg:grid-cols-2"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          setError(null);
-          try {
-            await put('/api/exchange/profile', {
-              displayName: f.displayName.trim(),
-              city: f.city.trim() || null,
-              address: f.address.trim() || null,
-              phone: f.phone.trim() || null,
-              hours: f.hours.trim() || null,
-              lat: f.lat ?? null,
-              lng: f.lng ?? null,
-              cashIn: f.cashIn,
-              cashOut: f.cashOut,
-            });
-            toast(t.common.saved);
-            void data.reload();
-          } catch (e2) {
-            setError(err(e2));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <div className="space-y-4">
-          <Field label={t.agent.displayName} value={f.displayName} onChange={set('displayName')} required minLength={2} maxLength={60} />
-          <div className="grid grid-cols-2 gap-3">
-            <Field list="ps-places" autoComplete="off" label={t.mstore.city} value={f.city} onChange={set('city')} maxLength={60} />
-            <Field label={t.auth.phone} value={f.phone} onChange={set('phone')} dir="ltr" type="tel" />
-          </div>
-          <Field label={t.mstore.address} value={f.address} onChange={set('address')} maxLength={160} />
-          <Field label={t.agent.hours} value={f.hours} onChange={set('hours')} placeholder={t.agent.hoursPh} maxLength={120} />
-          <div className="space-y-2 rounded-2xl bg-sunk/60 p-3">
-            <p className="px-1 text-sm font-medium">{t.agent.services}</p>
-            <Toggle checked={f.cashIn} onChange={(v) => setF({ ...f, cashIn: v })} label={t.agent.cashIn} />
-            <Toggle checked={f.cashOut} onChange={(v) => setF({ ...f, cashOut: v })} label={t.agent.cashOut} />
-          </div>
-        </div>
-        <div>
-          <p className="mb-2 text-sm font-medium text-ink/80">{t.agent.pin}</p>
-          <MapView
-            className="h-72 rounded-2xl"
-            pins={f.lat != null && f.lng != null ? [{ lat: f.lat, lng: f.lng, kind: 'store', label: f.displayName }] : []}
-            onPick={(p) => setF({ ...f, lat: p.lat, lng: p.lng })}
-          />
-          <p className="mt-2 text-xs text-muted">{t.agent.pinHint}</p>
-        </div>
-        <div className="lg:col-span-2">
-          <ErrorNote>{error}</ErrorNote>
-          <Button size="lg" loading={busy} className="mt-2">
-            {t.agent.saveProfile}
-          </Button>
-        </div>
-      </form>
-    </section>
+    <Link
+      to="/app/settings?tab=agent"
+      className="group mt-6 flex items-center gap-4 rounded-3xl bg-surface p-4 shadow-card ring-1 ring-line/60 transition hover:-translate-y-0.5 hover:ring-ink/20"
+    >
+      <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/15 text-[rgb(150_105_10)] dark:text-gold">
+        <MapPin className="h-6 w-6" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold">{t.agent.profile}</span>
+        <span className="block truncate text-sm text-muted">{p?.missing ? t.agent.setupFirst : [p?.display_name, p?.city].filter(Boolean).join(' · ') || t.agent.profileLead}</span>
+      </span>
+      <Badge tone={status === 'active' ? 'good' : status === 'suspended' ? 'bad' : 'warn'}>
+        {status === 'active' ? t.agent.listed : status === 'suspended' ? t.agent.suspended : t.agent.pending}
+      </Badge>
+      <span className="hidden text-sm font-medium text-sky sm:inline">{lang === 'ar' ? 'تعديل' : 'Edit'}</span>
+    </Link>
   );
 }
 
