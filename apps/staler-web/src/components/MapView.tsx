@@ -30,10 +30,14 @@ const COLORS: Record<NonNullable<Pin['kind']>, string> = { store: '#141B3D', hom
  * that look like successful tiles.)
  */
 const OSM = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opts: { maxZoom: 19, attribution: '© OpenStreetMap contributors' } };
-const ESRI = { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', opts: { maxZoom: 19, attribution: 'Tiles © Esri — Esri, HERE, Garmin, OpenStreetMap contributors' } };
+const ESRI = { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', opts: { maxZoom: 19, maxNativeZoom: 17, attribution: 'Tiles © Esri — Esri, HERE, Garmin, OpenStreetMap contributors' } };
 const PROVIDERS = isNative ? [ESRI, OSM] : [OSM, ESRI];
 
-/** Map styles to switch between, like a maps app: streets, satellite (with labels), terrain, night. */
+/**
+ * Map styles to switch between, like a maps app: streets, satellite (with labels), terrain, night.
+ * Esri has detailed pictures only up to a certain zoom here; past it we enlarge the last real
+ * tiles (maxNativeZoom) instead of showing "Map data not yet available".
+ */
 const AG = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 const esri = (path: string) => `${AG}/${path}/MapServer/tile/{z}/{y}/{x}`;
 type Base = 'streets' | 'satellite' | 'terrain' | 'dark';
@@ -164,7 +168,7 @@ export function MapView({
         const def = BASES[b];
         current = def.layers.map((path, k) =>
           L.current
-            .tileLayer(esri(path), { maxZoom: 19, maxNativeZoom: k === 0 ? 19 : 17, attribution: k === 0 ? def.attribution : '', referrerPolicy: 'strict-origin-when-cross-origin' })
+            .tileLayer(esri(path), { maxZoom: 19, maxNativeZoom: b === 'dark' ? 16 : 17, attribution: k === 0 ? def.attribution : '', referrerPolicy: 'strict-origin-when-cross-origin' })
             .addTo(map.current),
         );
         current[0]?.bringToBack();

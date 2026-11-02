@@ -690,20 +690,26 @@ adminRouter.put(
 adminRouter.get(
   '/audit',
   requirePerm('audit.view'),
-  validate({ query: pageQuery.extend({ action: z.string().max(64).optional() }).strict() }),
+  validate({ query: pageQuery.extend({ action: z.string().max(64).optional(), q: z.string().trim().max(80).optional() }).strict() }),
   ah(async (req, res) => {
     const f = req.query as any;
     const params: unknown[] = [];
-    let where = 'true';
+    const where: string[] = ['true'];
     if (f.action) {
       params.push(like(f.action));
-      where = 'l.action ILIKE $1';
+      where.push(`l.action ILIKE $${params.length}`);
+    }
+    // Free search: what happened, who (e-mail or name), from which address, or anything in the details.
+    if (f.q) {
+      params.push(like(f.q));
+      const n = params.length;
+      where.push(`(l.action ILIKE $${n} OR u.email ILIKE $${n} OR u.full_name ILIKE $${n} OR l.ip_address ILIKE $${n} OR l.entity_type ILIKE $${n} OR l.details::text ILIKE $${n})`);
     }
     params.push(f.limit, f.offset);
     const r = await pool.query(
       `SELECT l.id, l.action, l.entity_type, l.entity_id, l.details, l.ip_address, l.user_agent, l.created_at, u.email, COUNT(*) OVER() AS total
          FROM ${S}.audit_log l LEFT JOIN ${S}.users u ON u.id = l.user_id
-        WHERE ${where} ORDER BY l.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        WHERE ${where.join(' AND ')} ORDER BY l.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params,
     );
     res.json({ success: true, data: { events: r.rows.map(({ total, ...e }) => e), total: Number(r.rows[0]?.total ?? 0) } });

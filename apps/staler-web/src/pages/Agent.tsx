@@ -349,7 +349,6 @@ export function AgentsMap() {
   useEffect(() => {
     setFitKey((k) => k + 1);
   }, [pins.length, places, service]);
-  const chosen = agents.find((a) => a.id === sel) ?? null;
   const fmtDist = (m: number) => (m < 1000 ? fill(A.m, { n: Math.round(m / 10) * 10 }) : fill(A.km, { n: (m / 1000).toFixed(m < 10000 ? 1 : 0) }));
 
   const locate = () => {
@@ -424,45 +423,6 @@ export function AgentsMap() {
                 {locating ? A.locating : me ? A.refresh : A.nearMe}
               </button>
             </div>
-            <AnimatePresence>
-              {chosen && (
-                <motion.div
-                  key={chosen.id}
-                  initial={{ opacity: 0, y: 16, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 12 }}
-                  transition={{ type: 'spring', bounce: 0.3, duration: 0.45 }}
-                  className="absolute inset-x-3 bottom-3 z-[500] rounded-2xl bg-surface/95 p-3.5 shadow-card ring-1 ring-line backdrop-blur"
-                >
-                  <div className="flex items-start gap-3">
-                    <Avatar name={chosen.display_name} src={chosen.logo_url} size={44} />
-                    <div className="min-w-0 flex-1">
-                      <p className="flex min-w-0 items-center gap-1.5 font-semibold">
-                        <span className="truncate">{chosen.display_name}</span>
-                        {mine(chosen) && <span className="shrink-0 rounded-full bg-stitch/10 px-2 py-0.5 text-[11px] font-semibold text-stitch">{you}</span>}
-                      </p>
-                      <p className="truncate text-xs text-muted">{[chosen.city, chosen.address].filter(Boolean).join(' · ') || '—'}</p>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                        {chosen.dist != null && (
-                          <span className="inline-flex items-center gap-1 font-medium text-sky">
-                            <MapPin className="h-3.5 w-3.5" /> {fmtDist(chosen.dist)}
-                          </span>
-                        )}
-                        {chosen.hours && (
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" /> {chosen.hours}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <button type="button" onClick={() => setSel(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted hover:bg-sunk hover:text-ink" aria-label={t.common.close}>
-                      <XCircle className="h-5 w-5" />
-                    </button>
-                  </div>
-                  {actions(chosen, true)}
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         </div>
 

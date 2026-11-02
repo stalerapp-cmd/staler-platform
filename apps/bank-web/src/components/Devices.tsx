@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { ChevronLeft, Laptop, LogOut, Smartphone, Tablet } from 'lucide-react';
+import { ChevronLeft, Laptop, LogOut, MapPin, Smartphone, Tablet } from 'lucide-react';
+import { MapView } from './MapView';
 import { useI18n } from '../lib/i18n';
 import { parseDevice } from '../lib/device';
 import { relative } from '../lib/format';
 import { Badge, Button, Sheet } from './ui';
 
 const W = {
-  en: { title: 'Device details', kind: 'Device', phone: 'Phone', tablet: 'Tablet', computer: 'Computer', app: 'App', web: 'Browser', browser: 'Browser', system: 'System', via: 'Signed in through', ip: 'Network address', first: 'Signed in', last: 'Last active', until: 'Stays signed in until', current: 'This device', out: 'Sign this device out', raw: 'Technical details', on: '{b} on {o}' },
-  ar: { title: 'تفاصيل الجهاز', kind: 'نوع الجهاز', phone: 'جوال', tablet: 'تابلت', computer: 'كمبيوتر', app: 'التطبيق', web: 'المتصفح', browser: 'المتصفح', system: 'النظام', via: 'دخل من', ip: 'عنوان الشبكة', first: 'دخل بتاريخ', last: 'آخر نشاط', until: 'بضل داخل لحد', current: 'هاد الجهاز', out: 'اطلع من هالجهاز', raw: 'تفاصيل تقنية', on: '{b} على {o}' },
+  en: { title: 'Device details', kind: 'Device', phone: 'Phone', tablet: 'Tablet', computer: 'Computer', app: 'App', web: 'Browser', browser: 'Browser', system: 'System', via: 'Signed in through', ip: 'Network address', first: 'Signed in', last: 'Last active', until: 'Stays signed in until', current: 'This device', out: 'Sign this device out', raw: 'Technical details', on: '{b} on {o}', place: 'Approximate place', placeNote: 'Worked out from the network address, so it shows the city or the internet provider’s nearest hub — not an exact spot. A place you don’t recognise? Sign that device out and change your password.' },
+  ar: { title: 'تفاصيل الجهاز', kind: 'نوع الجهاز', phone: 'جوال', tablet: 'تابلت', computer: 'كمبيوتر', app: 'التطبيق', web: 'المتصفح', browser: 'المتصفح', system: 'النظام', via: 'دخل من', ip: 'عنوان الشبكة', first: 'دخل بتاريخ', last: 'آخر نشاط', until: 'بضل داخل لحد', current: 'هاد الجهاز', out: 'اطلع من هالجهاز', raw: 'تفاصيل تقنية', on: '{b} على {o}', place: 'المكان التقريبي', placeNote: 'محسوب من عنوان الشبكة، فهو بيبين المدينة أو أقرب مقسم لمزوّد الإنترنت — مش المكان بالضبط. إذا شفت مكان مش معروف إلك، اطلع من هالجهاز وغيّر كلمة المرور.' },
 };
 
 const Icon = ({ kind, className }: { kind: string; className?: string }) => (kind === 'phone' ? <Smartphone className={className} /> : kind === 'tablet' ? <Tablet className={className} /> : <Laptop className={className} />);
@@ -32,8 +33,16 @@ export function DeviceList({ sessions, onRevoke, thisDevice, lastUsed, revoke }:
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{w.on.replace('{b}', p.app ? w.app : p.browser).replace('{o}', p.os)}</span>
-                  <span className="block truncate text-xs text-muted">
-                    {lastUsed} {relative(s.last_used_at ?? s.created_at, lang)}
+                  <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                    <span>
+                      {lastUsed} {relative(s.last_used_at ?? s.created_at, lang)}
+                    </span>
+                    {s.place?.city && (
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {s.place.city}
+                      </span>
+                    )}
                   </span>
                 </span>
                 {s.current && <Badge tone="info">{thisDevice}</Badge>}
@@ -81,6 +90,7 @@ export function DeviceList({ sessions, onRevoke, thisDevice, lastUsed, revoke }:
                   [w.via, d.app ? w.app : w.web],
                   [w.browser, d.browser],
                   [w.system, d.os],
+                  [w.place, open.place?.city ? [open.place.city, open.place.region !== open.place.city ? open.place.region : null, open.place.country].filter(Boolean).join('، ') : '—'],
                   [w.ip, <span dir="ltr" className="num">{open.ip_address ?? '—'}</span>],
                   [w.first, full(open.created_at)],
                   [w.last, full(open.last_used_at ?? open.created_at)],
@@ -93,6 +103,12 @@ export function DeviceList({ sessions, onRevoke, thisDevice, lastUsed, revoke }:
                 </div>
               ))}
             </dl>
+            {open.place?.lat != null && (
+              <div className="mt-4">
+                <MapView className="h-48 rounded-2xl" zoom={10} pins={[{ lat: Number(open.place.lat), lng: Number(open.place.lng), kind: 'now', label: open.place.city ?? '' }]} />
+                <p className="mt-2 text-xs leading-relaxed text-muted">{w.placeNote}</p>
+              </div>
+            )}
             <details className="mt-4 text-xs text-muted">
               <summary className="cursor-pointer select-none">{w.raw}</summary>
               <p dir="ltr" className="mt-2 break-all rounded-xl bg-sunk p-3 font-mono">

@@ -3,6 +3,7 @@ import { Router, type Request, type Response } from 'express';
 import QRCode from 'qrcode';
 import { z } from 'zod';
 import { env } from '../config/env.js';
+import { placeOf } from '../lib/geo.js';
 import { one, pool, S, tx } from '../lib/db.js';
 import { codeHash, decrypt, encrypt, numericCode, randomToken } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, forbidden, notFound, tooMany, unauthorized } from '../lib/errors.js';
@@ -555,11 +556,18 @@ authRouter.get(
   requireAuth,
   ah(async (req, res) => {
     const r = await pool.query(
-      `SELECT DISTINCT ON (family_id) family_id AS id, user_agent, ip_address, created_at, last_used_at, expires_at
-         FROM ${S}.refresh_tokens WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
-        ORDER BY family_id, created_at DESC`,
+      `SELECT DISTINCT ON (t.family_id) t.family_id AS id, t.user_agent, t.ip_address, t.created_at, t.last_used_at, t.expires_at
+         FROM ${S}.refresh_tokens t WHERE t.user_id = $1 AND t.revoked_at IS NULL AND t.expires_at > now()
+        ORDER BY t.family_id, t.created_at DESC`,
       [req.auth!.userId],
     );
+    // Approximate place of each device (city level, from its network address) — the person's own data.
+    const ips = [...new Set(r.rows.map((x) => x.ip_address).filter(Boolean))] as string[];
+    await Promise.allSettled(ips.slice(0, 6).map((ip) => placeOf(ip)));
+    const geo = ips.length
+      ? (await pool.query(`SELECT ip, city, region, country, country_code, lat, lng FROM ${S}.ip_geo WHERE ok AND ip = ANY($1::text[])`, [ips])).rows
+      : [];
+    for (const s of r.rows) Object.assign(s, geo.find((g) => g.ip === s.ip_address) ? { place: geo.find((g) => g.ip === s.ip_address) } : {});
     res.json({
       success: true,
       data: { sessions: r.rows.map((s) => ({ ...s, current: s.id === req.auth!.sid })) },

@@ -69,6 +69,7 @@ const en = {
     approvedT: 'Category added', rejectedT: 'Suggestion turned down', withdrawQ: 'Remove this category? Its stores go back to “Other”.',
   },
   ctl: {
+    auditSearch: 'Search by e-mail, name, address or action', auditNone: 'Nothing matches this search.',
     agents: 'Cash agents', agentsLead: 'People who asked to exchange cash for S-Taler. New requests wait here until you approve them — only then do they show on the map.',
     waiting: 'Waiting for approval', listed: 'On the map', all: 'All', noneWaiting: 'No requests waiting — you’re all caught up.', noProfile: 'No listing yet',
     approve: 'Approve and list', approved: 'Approved — they now show on the map', pause: 'Take off the map', pauseQ: 'Take {name} off the map?', pauseB: 'Customers stop seeing them right away. Their account keeps working.',
@@ -420,6 +421,7 @@ const ar: Dict = {
     approvedT: 'انضاف التصنيف', rejectedT: 'انرفض الاقتراح', withdrawQ: 'تشيل هالتصنيف؟ متاجره بترجع لـ «غير ذلك».',
   },
   ctl: {
+    auditSearch: 'دوّر بالإيميل، الاسم، العنوان أو نوع الحدث', auditNone: 'ما في إشي بطابق البحث.',
     agents: 'وكلاء الصرف', agentsLead: 'الناس اللي طلبوا يصرفوا كاش مقابل S-Taler. الطلبات الجديدة بتستنى هون لحد ما توافق عليها — وبعدها بس بيظهروا على الخريطة.',
     waiting: 'بستنوا الموافقة', listed: 'ظاهرين عالخريطة', all: 'الكل', noneWaiting: 'ما في طلبات بتستنى — كله تمام.', noProfile: 'ما عمل ملف لسا',
     approve: 'وافق واعرضه', approved: 'تمت الموافقة — صار ظاهر عالخريطة', pause: 'شيله عن الخريطة', pauseQ: 'تشيل {name} عن الخريطة؟', pauseB: 'الزبائن بطّلوا يشوفوه فورًا. حسابه بضل شغّال.',

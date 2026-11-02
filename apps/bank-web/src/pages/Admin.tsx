@@ -298,8 +298,13 @@ export function AdminExchange() {
 
 export function AdminAudit() {
   const { t, lang, err } = useI18n();
-  const [action, setAction] = useState('');
-  const list = usePaged<any>('/api/admin/audit', 'events', { action });
+  const [q, setQ] = useState('');
+  const [qq, setQq] = useState('');
+  useEffect(() => {
+    const h = setTimeout(() => setQq(q.trim()), 300);
+    return () => clearTimeout(h);
+  }, [q]);
+  const list = usePaged<any>('/api/admin/audit', 'events', { q: qq });
   const [open, setOpen] = useState<any>(null);
   return (
     <div>
@@ -307,7 +312,7 @@ export function AdminAudit() {
       <label className="relative mb-4 block">
         <span className="sr-only">{t.common.search}</span>
         <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-        <input value={action} onChange={(e) => setAction(e.target.value)} placeholder="auth.login, transfer…" className="field ps-9" dir="ltr" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === 'ar' ? 'دوّر بالإيميل، الاسم، العنوان أو نوع الحدث' : 'Search by e-mail, name, address or action'} type="search" className="field ps-9" />
       </label>
       {list.error ? <ErrorNote>{err(list.error)}</ErrorNote> : null}
       <div className="card overflow-hidden">
