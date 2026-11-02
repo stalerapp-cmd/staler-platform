@@ -96,6 +96,7 @@ export function MapView({
   zoom = 13,
   search = false,
   onSearchPick,
+  onSearchClear,
   focus,
 }: {
   pins: Pin[];
@@ -111,6 +112,7 @@ export function MapView({
   /** Show a place search box on the map (type an address, the map goes there). */
   search?: boolean;
   onSearchPick?: (p: { lat: number; lng: number; label: string }) => void;
+  onSearchClear?: () => void;
   /** Move the map here whenever `key` changes (e.g. after choosing a city). */
   focus?: { key: string; lat: number; lng: number; zoom?: number; bbox?: [number, number, number, number] | null } | null;
 }) {
@@ -303,7 +305,7 @@ export function MapView({
   return (
     <div dir="ltr" lang={lang} className={cx('relative z-0 h-64 w-full overflow-hidden rounded-2xl border border-line bg-sunk', className)}>
       <div ref={box} className={cx('absolute inset-0', onPick && 'cursor-crosshair')} />
-      {search && <MapSearch onPick={goTo} center={center} />}
+      {search && <MapSearch onPick={goTo} center={center} onClear={onSearchClear} />}
       {/* Map style switcher (bottom-left, like a maps app) */}
       <div className="absolute bottom-2.5 left-2.5 z-[500] flex flex-col-reverse items-start gap-2">
         <button
@@ -356,7 +358,7 @@ interface SearchHit {
 }
 
 /** A search box over the map: suggestions as you type, letter by letter, like a maps app. */
-function MapSearch({ onPick, center }: { onPick: (p: SearchHit) => void; center: () => { lat: number; lng: number } | null }) {
+function MapSearch({ onPick, center, onClear }: { onPick: (p: SearchHit) => void; center: () => { lat: number; lng: number } | null; onClear?: () => void }) {
   const { lang } = useI18n();
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -425,7 +427,7 @@ function MapSearch({ onPick, center }: { onPick: (p: SearchHit) => void; center:
           <span className="absolute end-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-[#4070D6] border-t-transparent" />
         ) : (
           q && (
-            <button type="button" onClick={() => (setQ(''), setHits([]))} className="absolute end-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[#5B6383] hover:bg-black/5" aria-label={ar ? 'امسح' : 'Clear'}>
+            <button type="button" onClick={() => (setQ(''), setHits([]), onClear?.())} className="absolute end-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[#5B6383] hover:bg-black/5" aria-label={ar ? 'امسح' : 'Clear'}>
               <X className="h-4 w-4" />
             </button>
           )

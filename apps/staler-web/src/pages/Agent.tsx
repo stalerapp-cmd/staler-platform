@@ -264,21 +264,24 @@ export function AgentsMap() {
   const [service, setService] = useState<'all' | 'in' | 'out'>('all');
   const [sel, setSel] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+  const [origin, setOrigin] = useState<{ lat: number; lng: number; label: string } | null>(null);
   const [locating, setLocating] = useState(false);
   const [fitKey, setFitKey] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
   const A = t.agentMap;
 
   const all = data.data?.agents ?? [];
+  // Distances are measured from a place searched on the map, or else from the person.
+  const from = origin ?? me;
   const agents = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = all
       .filter((a) => !needle || `${a.display_name} ${a.city ?? ''} ${a.address ?? ''} ${a.phone ?? ''}`.toLowerCase().includes(needle))
       .filter((a) => !wanted.size || wanted.has(placeKey(a.city ?? '')))
       .filter((a) => service === 'all' || (service === 'in' ? a.cash_in : a.cash_out))
-      .map((a) => ({ ...a, dist: me && a.lat != null ? metres(me, { lat: Number(a.lat), lng: Number(a.lng) }) : null }));
-    return me ? list.sort((x, y) => (x.dist ?? Infinity) - (y.dist ?? Infinity)) : list;
-  }, [all, q, wanted, service, me]);
+      .map((a) => ({ ...a, dist: from && a.lat != null ? metres(from, { lat: Number(a.lat), lng: Number(a.lng) }) : null }));
+    return from ? list.sort((x, y) => (x.dist ?? Infinity) - (y.dist ?? Infinity)) : list;
+  }, [all, q, wanted, service, from]);
   const pins = useMemo(
     () => agents.filter((a) => a.lat != null && a.lng != null).map((a) => ({ id: a.id, lat: Number(a.lat), lng: Number(a.lng), kind: 'agent' as const, label: mine(a) ? `${a.display_name} ${you}` : a.display_name })),
     [agents],
@@ -296,6 +299,7 @@ export function AgentsMap() {
       (p) => {
         setLocating(false);
         setMe({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy });
+        setOrigin(null);
         setSel(null);
         setPlaces([]);
         if (p.coords.accuracy > 500) toast(fill(A.rough, { n: Math.round(p.coords.accuracy) }));
@@ -343,15 +347,22 @@ export function AgentsMap() {
           <div className="relative lg:sticky lg:top-24">
             <MapView
               className="h-[340px] rounded-3xl shadow-lift sm:h-[440px] lg:h-[calc(100dvh-9rem)] lg:max-h-[720px]"
-              pins={pins}
+              pins={origin ? [...pins, { lat: origin.lat, lng: origin.lng, kind: 'home' as const, label: origin.label }] : pins}
               selectedId={sel}
               onPinClick={(id) => choose(id === sel ? null : id)}
               me={me}
               fitKey={fitKey}
               zoom={9}
+              search
+              onSearchPick={(p) => {
+                setOrigin(p);
+                setPlaces([]);
+                setSel(null);
+              }}
+              onSearchClear={() => setOrigin(null)}
             />
-            {/* Floating controls over the map */}
-            <div dir="ltr" className="pointer-events-none absolute inset-x-3 top-3 z-[500] flex justify-end">
+            {/* Floating controls over the map (under the search box) */}
+            <div dir="ltr" className="pointer-events-none absolute inset-x-3 top-[3.9rem] z-[500] flex justify-end">
               <button
                 type="button"
                 onClick={locate}
@@ -415,7 +426,9 @@ export function AgentsMap() {
           </div>
           {data.data && (
             <p className="mb-3 text-sm text-muted">
-              {fill(me ? A.countNear : A.count, { n: agents.length })}
+              {origin
+                ? `${fill(A.count, { n: agents.length })} — ${lang === 'ar' ? `الأقرب لـ «${origin.label}» أول` : `nearest to “${origin.label}” first`}`
+                : fill(me ? A.countNear : A.count, { n: agents.length })}
             </p>
           )}
           {!data.data ? (

@@ -361,3 +361,6 @@ html.native[data-theme='dark'] .hdr-glass { background: rgb(22 29 69 / 0.97); }
 html.native[data-theme='dark'] .hdr-cuff { background-color: rgb(34 43 96); }
 /* Keep fixed and sticky bars on their own layer so they don't repaint with the page. */
 header.sticky, .fixed { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+
+/* Map credits: small and to one side, never over the map-style button. */
+.leaflet-control-attribution { font-size: 9px !important; line-height: 1.3 !important; max-width: 62%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top-left-radius: 6px; }
