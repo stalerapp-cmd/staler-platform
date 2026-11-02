@@ -47,12 +47,15 @@ export default function Apps() {
             </div>
           </motion.div>
         ) : (
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="grid h-12 w-12 place-items-center rounded-full bg-gold/15 text-gold">
-              <KeyRound className="h-6 w-6" />
-            </span>
-            <p className="min-w-0 flex-1 text-muted">{t.apps.codeLead}</p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-start gap-3.5">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-gold/15 text-gold">
+                <KeyRound className="h-6 w-6" />
+              </span>
+              <p className="min-w-0 flex-1 pt-1 leading-relaxed text-muted">{t.apps.codeLead}</p>
+            </div>
             <Button
+              className="w-full shrink-0 sm:w-auto"
               loading={busy}
               disabled={!primary}
               onClick={async () => {
@@ -80,7 +83,7 @@ export default function Apps() {
           <ul className="space-y-3">
             {apps.data.apps.map((a) => (
               <li key={a.id} className="card flex flex-wrap items-center gap-4 p-5">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 basis-56">
                   <p className="font-display text-xl">{a.client_name}</p>
                   <p className="text-sm text-muted">
                     {t.apps.lastUsed}: {a.last_used_at ? relative(a.last_used_at, lang) : t.apps.never} · {t.apps.expiresIn} {date(a.expires_at, lang, false)}

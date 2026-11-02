@@ -32,3 +32,23 @@ export function forgetUser(id: string | null | undefined) {
 export function forgetAllUsers() {
   cache.clear();
 }
+
+/**
+ * Sessions signed out on purpose (one device). Their access tokens would stay
+ * valid for up to 10 minutes; remembering the family here refuses them at once.
+ */
+const revoked = new Map<string, number>();
+export function revokeSessionNow(sid: string) {
+  revoked.set(sid, Date.now() + 11 * 60_000);
+  if (revoked.size > 10_000) for (const [k, until] of revoked) if (until < Date.now()) revoked.delete(k);
+}
+export function isSessionRevoked(sid: string | undefined) {
+  if (!sid) return false;
+  const until = revoked.get(sid);
+  if (!until) return false;
+  if (until < Date.now()) {
+    revoked.delete(sid);
+    return false;
+  }
+  return true;
+}

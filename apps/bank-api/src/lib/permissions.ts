@@ -4,6 +4,7 @@ import { forbidden } from './errors.js';
 /** Everything an administrator can be allowed to do. The super admin can do all of it, plus manage admins. */
 export const PERMISSIONS = [
   'customers.view',
+  'customers.devices',
   'customers.edit',
   'customers.password',
   'customers.status',

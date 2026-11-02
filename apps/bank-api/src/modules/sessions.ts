@@ -8,6 +8,7 @@ import { ACCESS_TTL_SECONDS, signToken } from '../lib/jwt.js';
 import { clientIp, userAgent } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
 import { forgetUser } from '../lib/authCache.js';
+import { placeOf } from '../lib/geo.js';
 
 export const REFRESH_TTL_DAYS = 14;
 export const SESSION_MAX_DAYS = 30;
@@ -56,6 +57,8 @@ export async function issueSession(
      VALUES ($1, $2, $3, LEAST($4::timestamptz, $5::timestamptz), $5, $6, $7) RETURNING id`,
     [user.id, familyId, sha256(refreshToken), expiresAt.toISOString(), famExp.toISOString(), userAgent(req), clientIp(req)],
   );
+  // A brand-new session is a sign-in: remember the device (once per device) for the account's history.
+  if (!familyExpiresAt) await rememberDevice(user.id, userAgent(req), clientIp(req)).catch(() => undefined);
   const accessToken = await signToken({ sub: user.id, role: user.role, tv: user.token_version, sid: familyId, typ: 'access' });
   if (isMobileClient(req)) {
     return { accessToken, expiresIn: ACCESS_TTL_SECONDS, refreshToken, sessionId: row!.id };
@@ -127,4 +130,29 @@ export function presentedRefreshToken(req: Request): string | null {
   const fromCookie = typeof req.cookies?.[COOKIE_NAME] === 'string' ? req.cookies[COOKIE_NAME] : null;
   const t = isMobileClient(req) ? fromBody : fromCookie;
   return t && /^tbr_[A-Za-z0-9_-]{20,100}$/.test(t) ? t : null;
+}
+
+/** One row per device (same browser/app on the same machine), updated on each sign-in. */
+export async function rememberDevice(userId: string, ua: string | null, ip: string | null) {
+  const d = await one<{ id: string }>(
+    `INSERT INTO ${S}.user_devices (user_id, device_key, user_agent, first_ip, last_ip, ips, sign_ins)
+     VALUES ($1, md5(COALESCE($2, '')), $2, $3, $3, CASE WHEN $3::text IS NULL THEN '{}'::text[] ELSE ARRAY[$3::text] END, 1)
+     ON CONFLICT (user_id, device_key) DO UPDATE SET
+       last_ip = EXCLUDED.last_ip, last_seen = now(), sign_ins = ${S}.user_devices.sign_ins + 1,
+       ips = CASE WHEN EXCLUDED.last_ip IS NULL OR EXCLUDED.last_ip = ANY(${S}.user_devices.ips) THEN ${S}.user_devices.ips
+                  ELSE (${S}.user_devices.ips || EXCLUDED.last_ip)[GREATEST(1, cardinality(${S}.user_devices.ips) - 18):] END
+     RETURNING id`,
+    [userId, ua, ip],
+  );
+  if (!d) return;
+  await pool.query(`INSERT INTO ${S}.user_signins (device_id, user_id, ip) VALUES ($1, $2, $3)`, [d.id, userId, ip]);
+  if (ip) {
+    await pool.query(
+      `INSERT INTO ${S}.user_device_places (device_id, user_id, ip) VALUES ($1, $2, $3)
+       ON CONFLICT (device_id, ip) DO UPDATE SET hits = ${S}.user_device_places.hits + 1, last_seen = now()`,
+      [d.id, userId, ip],
+    );
+    // Look the place up in the background; sign-in never waits for it.
+    void placeOf(ip).catch(() => undefined);
+  }
 }

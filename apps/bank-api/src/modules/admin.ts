@@ -11,6 +11,8 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { centralAccount, exchangeAccount, move, notify } from './ledger.js';
 import { requireSecondFactor } from './mfa.js';
 import { revokeAllSessions } from './sessions.js';
+import { placeOf } from '../lib/geo.js';
+import { revokeSessionNow } from '../lib/authCache.js';
 import { forgetUser } from '../lib/authCache.js';
 import { PERMISSIONS, assertCanManage, isSuper, requirePerm } from '../lib/permissions.js';
 import { codeHash, numericCode } from '../lib/crypto.js';
@@ -554,5 +556,91 @@ adminRouter.post(
     const lang = me?.language === 'en' ? 'en' : 'ar';
     const r = await sendMailNow(codeMail(me!.email, 'verify', '123456', lang));
     res.json({ success: true, data: { to: me!.email, ...r } });
+  }),
+);
+
+// ----------------------------------------------------------- device history
+/**
+ * Every device the person ever signed in from (once each): whether it is signed in now,
+ * every network address it used with how often, the approximate place of each address,
+ * its recent sign-ins, and a few signals worth a second look.
+ */
+adminRouter.get(
+  '/users/:id/devices',
+  requirePerm('customers.devices'),
+  validate({ params: z.object({ id: uuid }).strict() }),
+  ah(async (req, res) => {
+    const r = await pool.query(
+      `SELECT d.id, d.user_agent, d.first_ip, d.last_ip, d.ips, d.sign_ins, d.first_seen, d.last_seen,
+              (SELECT count(DISTINCT t.family_id)::int FROM ${S}.refresh_tokens t
+                WHERE t.user_id = d.user_id AND md5(COALESCE(t.user_agent, '')) = d.device_key
+                  AND t.revoked_at IS NULL AND t.expires_at > now() AND t.family_expires_at > now()) AS active_sessions
+         FROM ${S}.user_devices d WHERE d.user_id = $1 ORDER BY d.last_seen DESC LIMIT 100`,
+      [req.params.id],
+    );
+    // Fill places not looked up yet (a few per view; the rest fill in on the next).
+    const missing = await pool.query(
+      `SELECT DISTINCT p.ip FROM ${S}.user_device_places p LEFT JOIN ${S}.ip_geo g ON g.ip = p.ip
+        WHERE p.user_id = $1 AND g.ip IS NULL LIMIT 8`,
+      [req.params.id],
+    );
+    await Promise.allSettled(missing.rows.map((x) => placeOf(x.ip)));
+    const places = await pool.query(
+      `SELECT p.device_id, p.ip, p.hits, p.first_seen, p.last_seen,
+              g.city, g.region, g.country, g.country_code, g.lat, g.lng, g.isp, g.org, g.timezone
+         FROM ${S}.user_device_places p LEFT JOIN ${S}.ip_geo g ON g.ip = p.ip AND g.ok
+        WHERE p.user_id = $1 ORDER BY p.last_seen DESC`,
+      [req.params.id],
+    );
+    const signins = await pool.query(
+      `SELECT * FROM (SELECT s.device_id, s.ip, s.at, g.city, g.country, row_number() OVER (PARTITION BY s.device_id ORDER BY s.at DESC) AS n
+                        FROM ${S}.user_signins s LEFT JOIN ${S}.ip_geo g ON g.ip = s.ip AND g.ok WHERE s.user_id = $1) x
+        WHERE n <= 15 ORDER BY at DESC`,
+      [req.params.id],
+    );
+    const by = <T extends { device_id: string }>(rows: T[], id: string) => rows.filter((x) => String(x.device_id) === String(id));
+    const all = places.rows;
+    const countries = [...new Set(all.map((x) => x.country_code).filter(Boolean))];
+    const cities = [...new Set(all.map((x) => x.city).filter(Boolean))];
+    const recent = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.user_signins WHERE user_id = $1 AND at > now() - interval '24 hours'`, [req.params.id]);
+    res.json({
+      success: true,
+      data: {
+        devices: r.rows.map((d) => ({ ...d, places: by(all, d.id), signins: by(signins.rows, d.id) })),
+        summary: {
+          devices: r.rows.length,
+          live: r.rows.filter((d) => d.active_sessions > 0).length,
+          addresses: new Set(all.map((x) => x.ip)).size,
+          cities,
+          countries,
+          signins24h: recent?.n ?? 0,
+          foreign: countries.filter((c) => c !== 'PS' && c !== 'IL').length > 0,
+        },
+      },
+    });
+  }),
+);
+
+/** Sign the person out of one device only (every live session from it), effective immediately. */
+adminRouter.post(
+  '/users/:id/devices/:deviceId/sign-out',
+  requirePerm('customers.security'),
+  validate({ params: z.object({ id: uuid, deviceId: uuid }).strict() }),
+  ah(async (req, res) => {
+    const t = await one<any>(`SELECT id, role, admin_level FROM ${S}.users WHERE id = $1`, [req.params.id]);
+    if (!t) throw notFound('User not found');
+    assertCanManage(req, t);
+    const d = await one<any>(`SELECT device_key, user_agent FROM ${S}.user_devices WHERE id = $1 AND user_id = $2`, [req.params.deviceId, t.id]);
+    if (!d) throw notFound('Device not found');
+    const r = await pool.query(
+      `UPDATE ${S}.refresh_tokens SET revoked_at = now()
+        WHERE user_id = $1 AND md5(COALESCE(user_agent, '')) = $2 AND revoked_at IS NULL RETURNING family_id`,
+      [t.id, d.device_key],
+    );
+    for (const f of new Set(r.rows.map((x) => String(x.family_id)))) revokeSessionNow(f);
+    const lang = (await one<{ language: string }>(`SELECT language FROM ${S}.users WHERE id = $1`, [t.id]))?.language;
+    await notify(undefined, t.id, 'security', lang === 'en' ? 'Signed out of a device' : 'انطلعت من جهاز', lang === 'en' ? 'The bank signed your account out of one device. If that wasn’t expected, change your password.' : 'البنك طلّع حسابك من جهاز واحد. إذا مش متوقع، غيّر كلمة المرور.');
+    await audit({ userId: req.auth!.userId, action: 'admin.device_signed_out', entityType: 'user', entityId: t.id, details: { device: d.user_agent?.slice(0, 160), sessions: r.rowCount } }, req);
+    res.json({ success: true, data: { sessions: new Set(r.rows.map((x) => x.family_id)).size } });
   }),
 );

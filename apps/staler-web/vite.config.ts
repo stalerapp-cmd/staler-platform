@@ -16,7 +16,8 @@ function nativeCsp(apiUrl: string): Plugin {
         "script-src 'self'",
         "style-src 'self' 'unsafe-inline'",
         "font-src 'self' data:",
-        `img-src 'self' data: blob: ${api} https://*.supabase.co`,
+        // Map tiles (MapView): Esri first in the app, OpenStreetMap as fallback.
+        `img-src 'self' data: blob: ${api} https://*.supabase.co https://server.arcgisonline.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org`,
         `connect-src 'self' ${api}`,
         "media-src 'self' blob:",
         "object-src 'none'",

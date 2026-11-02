@@ -7,6 +7,7 @@ import { useData } from '../lib/hooks';
 import { usePerm } from '../lib/perm';
 import { AMOUNT_RE, date, fill, money, relative } from '../lib/format';
 import { fmtIban } from '../components/Bank';
+import { AdminDevicesPanel } from '../components/AdminDevices';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
 import { useSecureAction } from '../components/SecureAction';
@@ -301,6 +302,7 @@ export function AdminCustomer() {
               </div>
             </section>
           )}
+          {can('customers.devices') && <AdminDevicesPanel userId={data.user?.id ?? id!} canSignOut={can('customers.security')} />}
           <section className="card p-4">
             <h2 className="mb-2 px-1 text-xl">{t.nav.transactions}</h2>
             <ul className="divide-y divide-line text-sm">
@@ -452,7 +454,7 @@ export function AdminAdmins() {
               <section key={a.id} className={cx('card p-5', sup && 'border-gold/50')}>
                 <div className="flex flex-wrap items-center gap-4">
                   <Avatar name={a.full_name} size={44} />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-44">
                     <p className="flex flex-wrap items-center gap-2 font-medium">
                       {a.full_name}
                       {sup && (

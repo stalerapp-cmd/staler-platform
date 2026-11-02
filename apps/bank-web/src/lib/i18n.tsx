@@ -149,7 +149,7 @@ const en = {
       permsT: 'Update {name}’s permissions?', permsB: 'The change applies the next time they open a page.', permsOk: 'Update',
     },
     perm: {
-      'customers.view': 'See customers and their accounts', 'customers.edit': 'Edit names, e-mails, usernames and phones', 'customers.password': 'Set or reset passwords',
+      'customers.view': 'See customers and their accounts', 'customers.devices': 'See customers’ devices and where they signed in from', 'customers.edit': 'Edit names, e-mails, usernames and phones', 'customers.password': 'Set or reset passwords',
       'customers.status': 'Suspend and reactivate customers', 'customers.delete': 'Close customer accounts', 'customers.security': 'Sign customers out, reset 2FA',
       'accounts.freeze': 'Freeze accounts', teller: 'Teller desk (cash in and out)', 'ledger.view': 'See every transaction', notify: 'Send notifications and announcements',
       'exchange.view': 'See the exchange and reserves', 'audit.view': 'Read the audit log', 'settings.manage': 'Change bank settings', support: 'Answer support chats',
@@ -306,7 +306,7 @@ const ar: Dict = {
       permsT: 'تحديث صلاحيات {name}؟', permsB: 'التغيير بيسري من أول صفحة بيفتحها.', permsOk: 'حدّث',
     },
     perm: {
-      'customers.view': 'عرض العملاء وحساباتهم', 'customers.edit': 'تعديل الأسماء والإيميلات وأسماء المستخدمين والأرقام', 'customers.password': 'تعيين وإعادة تعيين كلمات المرور',
+      'customers.view': 'عرض العملاء وحساباتهم', 'customers.devices': 'عرض أجهزة العملاء ومن وين دخلوا', 'customers.edit': 'تعديل الأسماء والإيميلات وأسماء المستخدمين والأرقام', 'customers.password': 'تعيين وإعادة تعيين كلمات المرور',
       'customers.status': 'إيقاف العملاء وإعادة تفعيلهم', 'customers.delete': 'إغلاق حسابات العملاء', 'customers.security': 'تسجيل خروج العملاء وإلغاء التحقق بخطوتين',
       'accounts.freeze': 'تجميد الحسابات', teller: 'شبّاك الصرّاف (إيداع وسحب نقدي)', 'ledger.view': 'عرض كل الحركات', notify: 'إرسال إشعارات وإعلانات',
       'exchange.view': 'عرض الصرّاف والاحتياطي', 'audit.view': 'قراءة سجل التدقيق', 'settings.manage': 'تغيير إعدادات البنك', support: 'الرد على محادثات الدعم',

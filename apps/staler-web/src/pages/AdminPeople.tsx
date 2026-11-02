@@ -510,7 +510,7 @@ export function AdminAdmins() {
               <section key={a.id} className={cx('card p-5', sup && 'border-gold/40')}>
                 <div className="flex flex-wrap items-center gap-4">
                   <Avatar name={a.full_name} size={44} />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-44">
                     <p className="flex items-center gap-2 font-medium">
                       {a.full_name} {sup && <Badge tone="warn"><Crown className="h-3.5 w-3.5" /> {t.people.superAdmin}</Badge>}
                     </p>
