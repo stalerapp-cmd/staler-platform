@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowDownToLine, ArrowUpFromLine, CircleCheck, Clock, Hourglass, LocateFixed, MapPin, PauseCircle, Phone, Store, type LucideIcon } from 'lucide-react';
-import { put } from '../lib/api';
+import { get, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
@@ -24,7 +24,7 @@ const W = {
     locate: 'حط المؤشر على مكاني',
     locating: 'عم نحدد موقعك…',
     noGeo: 'ما قدرنا نحدد موقعك. اكبس على الخريطة بمكان محلك.',
-    pinHint: 'اكبس على الخريطة بالمكان اللي الناس بتلاقيك فيه بالضبط.',
+    pinHint: 'دوّر على مكانك بالبحث فوق الخريطة، أو اكبس على الخريطة بالمكان اللي الناس بتلاقيك فيه بالضبط.',
     noPin: 'لسا ما حطيت مكانك على الخريطة',
     hoursQuick: ['السبت–الخميس 9:00–20:00', 'كل يوم 8:00–22:00', '24 ساعة'],
     status: {
@@ -47,7 +47,7 @@ const W = {
     locate: 'Put the pin where I am',
     locating: 'Finding you…',
     noGeo: 'Couldn’t find your location. Tap the map where your shop is.',
-    pinHint: 'Tap the map exactly where people can find you.',
+    pinHint: 'Search for your place above the map, or tap the map exactly where people can find you.',
     noPin: 'You haven’t placed yourself on the map yet',
     hoursQuick: ['Sat–Thu 9:00–20:00', 'Every day 8:00–22:00', '24 hours'],
     status: {
@@ -91,6 +91,25 @@ export function AgentProfileEditor() {
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focus, setFocus] = useState<{ key: string; lat: number; lng: number; zoom?: number; bbox?: [number, number, number, number] | null } | null>(null);
+  const touched = useRef(false);
+  // Choosing a city or typing the address moves the map there (the pin stays where it is until you tap).
+  useEffect(() => {
+    if (!f || !touched.current) return;
+    const q = [f.address?.trim(), f.city?.trim()].filter(Boolean).join('، ');
+    if (q.length < 2) return;
+    const h = setTimeout(async () => {
+      try {
+        const r = await get<{ results: { lat: number; lng: number; bbox: [number, number, number, number] | null }[] }>(`/api/geo/search?q=${encodeURIComponent(q)}`);
+        const top = r.results?.[0];
+        if (top) setFocus({ key: `${q}|${Date.now()}`, lat: top.lat, lng: top.lng, zoom: f.address?.trim() ? 17 : 14, bbox: f.address?.trim() ? null : top.bbox });
+      } catch {
+        /* the map just stays */
+      }
+    }, 600);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f?.city, f?.address]);
   useEffect(() => {
     if (data.data && !f) {
       const p = data.data.profile;
@@ -101,7 +120,10 @@ export function AgentProfileEditor() {
   const status: string = data.data?.profile.status ?? 'pending';
   const look = STATUS_LOOK[status] ?? STATUS_LOOK.pending!;
   const [sTitle, sLead] = w.status[status] ?? w.status.pending!;
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (k === 'address') touched.current = true;
+    setF({ ...f, [k]: e.target.value });
+  };
   const gov = f.city ? govOf(f.city) : undefined;
   const placeLine = [f.city, gov && gov.ar !== f.city ? (lang === 'ar' ? gov.ar : gov.en) : null, f.address].filter(Boolean).join(' · ');
 
@@ -192,7 +214,14 @@ export function AgentProfileEditor() {
       <Block icon={MapPin} title={w.where} tone="bg-stitch/10 text-stitch">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t.agent.displayName} value={f.displayName} onChange={set('displayName')} required minLength={2} maxLength={60} className="sm:col-span-2" />
-          <TownField label={t.mstore.city} value={f.city} onChange={(v) => setF({ ...f, city: v })} />
+          <TownField
+            label={t.mstore.city}
+            value={f.city}
+            onChange={(v) => {
+              touched.current = true;
+              setF({ ...f, city: v });
+            }}
+          />
           <Field label={t.mstore.address} value={f.address} onChange={set('address')} maxLength={160} />
         </div>
         <div className="mt-5">
@@ -208,6 +237,9 @@ export function AgentProfileEditor() {
             zoom={15}
             pins={f.lat != null && f.lng != null ? [{ lat: f.lat, lng: f.lng, kind: 'store', id: 'me', label: f.displayName }] : []}
             onPick={(p) => setF({ ...f, lat: p.lat, lng: p.lng })}
+            search
+            onSearchPick={(p) => setF((x: any) => ({ ...x, lat: p.lat, lng: p.lng }))}
+            focus={focus}
           />
           <p className="mt-2 text-xs text-muted">{w.pinHint}</p>
         </div>

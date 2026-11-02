@@ -82,7 +82,7 @@ export function noStore(_req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-function limiter(opts: Partial<Options>) {
+export function limiter(opts: Partial<Options>) {
   return rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,

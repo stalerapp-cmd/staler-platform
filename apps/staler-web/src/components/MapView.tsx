@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Layers } from 'lucide-react';
+import { get } from '../lib/api';
+import { Layers, MapPin, Search, X } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { cx } from './ui';
 import { isNative } from '../lib/api';
@@ -93,6 +94,9 @@ export function MapView({
   fitKey,
   className,
   zoom = 13,
+  search = false,
+  onSearchPick,
+  focus,
 }: {
   pins: Pin[];
   trail?: boolean;
@@ -104,6 +108,11 @@ export function MapView({
   fitKey?: unknown;
   className?: string;
   zoom?: number;
+  /** Show a place search box on the map (type an address, the map goes there). */
+  search?: boolean;
+  onSearchPick?: (p: { lat: number; lng: number; label: string }) => void;
+  /** Move the map here whenever `key` changes (e.g. after choosing a city). */
+  focus?: { key: string; lat: number; lng: number; zoom?: number; bbox?: [number, number, number, number] | null } | null;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
@@ -259,6 +268,24 @@ export function MapView({
   useEffect(draw, [pins, trail, selectedId]);
   useEffect(drawMe, [me]);
   useEffect(fit, [fitKey, me]);
+  // Go to a place chosen outside the map (a city, an address).
+  useEffect(() => {
+    if (!focus || !map.current || !L.current) return;
+    if (focus.bbox) map.current.flyToBounds(L.current.latLngBounds([focus.bbox[0], focus.bbox[1]], [focus.bbox[2], focus.bbox[3]]), { maxZoom: 17, duration: 0.8 });
+    else map.current.flyTo([focus.lat, focus.lng], focus.zoom ?? 15, { duration: 0.8 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.key]);
+  const goTo = (p: SearchHit) => {
+    if (!map.current || !L.current) return;
+    if (p.bbox && (p.bbox[2] - p.bbox[0] > 0.002 || p.bbox[3] - p.bbox[1] > 0.002)) {
+      map.current.flyToBounds(L.current.latLngBounds([p.bbox[0], p.bbox[1]], [p.bbox[2], p.bbox[3]]), { maxZoom: 17, duration: 0.8 });
+    } else map.current.flyTo([p.lat, p.lng], 17, { duration: 0.8 });
+    onSearchPick?.({ lat: +p.lat.toFixed(5), lng: +p.lng.toFixed(5), label: p.label });
+  };
+  const center = () => {
+    const c = map.current?.getCenter();
+    return c ? { lat: c.lat as number, lng: c.lng as number } : null;
+  };
   // Fly to the chosen pin.
   useEffect(() => {
     if (!map.current || !selectedId) return;
@@ -276,6 +303,7 @@ export function MapView({
   return (
     <div dir="ltr" lang={lang} className={cx('relative z-0 h-64 w-full overflow-hidden rounded-2xl border border-line bg-sunk', className)}>
       <div ref={box} className={cx('absolute inset-0', onPick && 'cursor-crosshair')} />
+      {search && <MapSearch onPick={goTo} center={center} />}
       {/* Map style switcher (bottom-left, like a maps app) */}
       <div className="absolute bottom-2.5 left-2.5 z-[500] flex flex-col-reverse items-start gap-2">
         <button
@@ -315,6 +343,118 @@ export function MapView({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+interface SearchHit {
+  label: string;
+  sub: string;
+  lat: number;
+  lng: number;
+  bbox: [number, number, number, number] | null;
+}
+
+/** A search box over the map: suggestions as you type, letter by letter, like a maps app. */
+function MapSearch({ onPick, center }: { onPick: (p: SearchHit) => void; center: () => { lat: number; lng: number } | null }) {
+  const { lang } = useI18n();
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [active, setActive] = useState(0);
+  const seq = useRef(0);
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      setHits([]);
+      return;
+    }
+    const n = ++seq.current;
+    const h = setTimeout(async () => {
+      setBusy(true);
+      try {
+        const c = center();
+        const r = await get<{ results: SearchHit[] }>(`/api/geo/search?q=${encodeURIComponent(term)}${c ? `&lat=${c.lat.toFixed(4)}&lng=${c.lng.toFixed(4)}` : ''}`);
+        if (n === seq.current) {
+          setHits(r.results ?? []);
+          setActive(0);
+          setOpen(true);
+        }
+      } catch {
+        if (n === seq.current) setHits([]);
+      } finally {
+        if (n === seq.current) setBusy(false);
+      }
+    }, 280);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+  const pick = (h: SearchHit) => {
+    onPick(h);
+    setQ(h.label);
+    setOpen(false);
+  };
+  const ar = lang === 'ar';
+  return (
+    <div dir={ar ? 'rtl' : 'ltr'} className="absolute left-14 right-2.5 top-2.5 z-[600]">
+      <div className="relative">
+        <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5B6383]" />
+        <input
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => hits.length && setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') (e.preventDefault(), setActive((a) => Math.min(a + 1, hits.length - 1)));
+            else if (e.key === 'ArrowUp') (e.preventDefault(), setActive((a) => Math.max(a - 1, 0)));
+            else if (e.key === 'Enter') {
+              e.preventDefault();
+              if (hits[active]) pick(hits[active]!);
+            } else if (e.key === 'Escape') setOpen(false);
+          }}
+          placeholder={ar ? 'دوّر على شارع، معلم، حي أو بلدة' : 'Search a street, landmark, area or town'}
+          className="h-11 w-full rounded-xl border-0 bg-white/95 pe-9 ps-9 text-sm text-[#141B3D] shadow-[0_6px_18px_-6px_rgba(0,0,0,0.45)] outline-none ring-1 ring-black/5 placeholder:text-[#5B6383]/80 focus:ring-2 focus:ring-[#4070D6]/50"
+          type="search"
+          enterKeyHint="search"
+          aria-label={ar ? 'بحث على الخريطة' : 'Search the map'}
+        />
+        {busy ? (
+          <span className="absolute end-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-[#4070D6] border-t-transparent" />
+        ) : (
+          q && (
+            <button type="button" onClick={() => (setQ(''), setHits([]))} className="absolute end-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[#5B6383] hover:bg-black/5" aria-label={ar ? 'امسح' : 'Clear'}>
+              <X className="h-4 w-4" />
+            </button>
+          )
+        )}
+      </div>
+      {open && q.trim().length >= 2 && !busy && (
+        <ul className="mt-1.5 max-h-64 overflow-y-auto rounded-xl bg-white py-1 text-[#141B3D] shadow-[0_14px_34px_-12px_rgba(0,0,0,0.5)] ring-1 ring-black/5" role="listbox">
+          {hits.length ? (
+            hits.map((h, i) => (
+              <li key={`${h.label}-${h.lat}-${h.lng}`} role="option" aria-selected={i === active}>
+                <button
+                  type="button"
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => pick(h)}
+                  className={cx('flex w-full items-start gap-2.5 px-3 py-2 text-start transition', i === active ? 'bg-[#141B3D]/[0.06]' : '')}
+                >
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#C8344A]" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{h.label}</span>
+                    {h.sub && <span className="block truncate text-xs text-[#5B6383]">{h.sub}</span>}
+                  </span>
+                </button>
+              </li>
+            ))
+          ) : (
+            <li className="px-3 py-3 text-center text-xs text-[#5B6383]">{ar ? 'ما لقينا هالمكان — جرّب اسم ثاني أو اكبس على الخريطة.' : 'No match — try another name or tap the map.'}</li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }

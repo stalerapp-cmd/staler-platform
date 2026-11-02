@@ -357,7 +357,7 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
               {t.shop.useLocation}
             </Button>
           </div>
-          <MapView pins={f.lat != null ? [{ lat: f.lat, lng: f.lng, kind: 'store', label: f.storeName }] : []} onPick={(p) => setF((x: any) => ({ ...x, ...p }))} className="h-52" />
+          <MapView pins={f.lat != null ? [{ lat: f.lat, lng: f.lng, kind: 'store', label: f.storeName }] : []} onPick={(p) => setF((x: any) => ({ ...x, ...p }))} search onSearchPick={(p) => setF((x: any) => ({ ...x, lat: p.lat, lng: p.lng }))} className="h-64" />
           <p className="mt-1 text-xs text-muted">{t.mstore.pinHint}</p>
         </div>
         <ErrorNote>{error}</ErrorNote>
@@ -1375,7 +1375,7 @@ export function MerchantPickup() {
             <Toggle checked={form.active} onChange={(v) => setForm({ ...form, active: v })} label={t.pick.active} />
             <div>
               <p className="mb-2 text-sm font-medium text-ink/80">{t.mstore.pin}</p>
-              <MapView pins={form.lat != null ? [{ lat: form.lat, lng: form.lng, kind: 'store', label: form.name }] : []} onPick={(p) => setForm((f: any) => ({ ...f, ...p }))} className="h-52 rounded-2xl" />
+              <MapView pins={form.lat != null ? [{ lat: form.lat, lng: form.lng, kind: 'store', label: form.name }] : []} onPick={(p) => setForm((f: any) => ({ ...f, ...p }))} search onSearchPick={(p) => setForm((f: any) => ({ ...f, lat: p.lat, lng: p.lng }))} className="h-64 rounded-2xl" />
             </div>
             <ErrorNote>{error}</ErrorNote>
             <Button block size="lg" loading={busy}>

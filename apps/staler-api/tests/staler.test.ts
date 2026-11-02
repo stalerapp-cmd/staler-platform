@@ -437,6 +437,15 @@ describe('marketplace', () => {
     expect(await walletBalance(app, buyer)).toBe('100.00');
   });
 
+  it('map place search: signed-in only, sensible queries', async () => {
+    const u = await walletUser(app, 'Map Searcher');
+    expect((await request(app).get('/api/geo/search?q=nablus')).status).toBe(401);
+    expect((await request(app).get('/api/geo/search?q=n').set(auth(u.token))).status).toBe(400);
+    const r = await request(app).get('/api/geo/search?q=%D9%86%D8%A7%D8%A8%D9%84%D8%B3&lat=32.22&lng=35.26').set(auth(u.token));
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body.data.results)).toBe(true);
+  });
+
   it('store owners suggest a category; once approved everyone can pick it', async () => {
     const m = await walletUser(app, 'Pet Shop Owner', 'merchant');
     expect((await request(app).post('/api/merchant/stores').set(auth(m.token)).send({ storeName: 'Paws', category: 'nope' })).status).toBe(400);

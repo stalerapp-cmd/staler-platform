@@ -16,6 +16,7 @@ import { publicFile } from './lib/storage.js';
 import { cors, globalLimiter, noStore, permissionsPolicy, requestId, securityHeaders } from './middleware/security.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { authRouter } from './modules/auth.js';
+import { geoRouter } from './modules/geo.js';
 import { notificationsRouter, walletRouter } from './modules/wallet.js';
 import { bankRouter, webhookRouter } from './modules/bank.js';
 import { exchangeRouter } from './modules/exchange.js';
@@ -113,6 +114,7 @@ export function createApp(): Express {
   });
 
   app.use('/api/auth', noStore, authRouter);
+  app.use('/api/geo', noStore, geoRouter);
   app.use('/api/wallet', noStore, walletRouter);
   app.use('/api/notifications', noStore, notificationsRouter);
   app.use('/api/bank/webhook', noStore, webhookRouter);
