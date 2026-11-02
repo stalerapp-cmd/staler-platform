@@ -535,7 +535,7 @@ function SuggestedCategories() {
                   <span className="font-semibold">{c.name_ar}</span>
                   {c.name_en !== c.name_ar && <span className="text-muted" dir="ltr">{c.name_en}</span>}
                   <span className="text-xs text-muted">
-                    · {fill(X.from, { store: c.store_name ?? '—' })} · {date(c.created_at, lang)}
+                    · <bdi>{fill(X.from, { store: c.store_name ?? '—' })}</bdi> · <bdi>{date(c.created_at, lang)}</bdi>
                   </span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
