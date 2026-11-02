@@ -4,7 +4,6 @@ import { migrate } from './db/migrate.js';
 import { bootstrap } from './db/bootstrap.js';
 import { logger } from './lib/logger.js';
 import { checkMailSetup } from './lib/mailer.js';
-import { setupTelegramWebhook } from './lib/telegram.js';
 import { pool, warmPool } from './lib/db.js';
 import { reconcilePending } from './modules/bank.js';
 import { housekeeping } from './modules/housekeeping.js';
@@ -14,7 +13,6 @@ async function main() {
   await bootstrap();
   await warmPool();
   void checkMailSetup();
-  void setupTelegramWebhook(env.PUBLIC_URL).catch((err) => logger.warn({ err }, 'telegram webhook setup failed'));
   // Keep pooled connections alive between visits.
   setInterval(() => void warmPool(2), 60_000).unref();
   const app = createApp();

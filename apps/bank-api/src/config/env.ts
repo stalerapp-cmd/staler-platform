@@ -65,10 +65,6 @@ const schema = z.object({
   TWILIO_ACCOUNT_SID: z.string().regex(/^AC[0-9a-f]{32}$/).optional(),
   TWILIO_AUTH_TOKEN: z.string().min(16).optional(),
   TWILIO_VERIFY_SID: z.string().regex(/^VA[0-9a-f]{32}$/).optional(),
-  /** Telegram bot (from @BotFather) — enables sign-up codes by Telegram, free and without a phone number. */
-  TELEGRAM_BOT_TOKEN: z.preprocess((v) => (v === '' ? undefined : v), z.string().regex(/^\d{5,15}:[A-Za-z0-9_-]{30,60}$/).optional()),
-  /** The bot's username without @, e.g. TalerBankCodesBot. */
-  TELEGRAM_BOT_USERNAME: z.preprocess((v) => (v === '' ? undefined : String(v).replace(/^@/, '')), z.string().regex(/^[A-Za-z0-9_]{5,32}$/).optional()),
   MAIL_RELAY_URL: z.string().url().optional(),
   MAIL_RELAY_SECRET: z.string().min(16).optional(),
   /** API key for MAIL_MODE=brevo or resend. */

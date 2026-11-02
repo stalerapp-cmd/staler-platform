@@ -69,7 +69,6 @@ const AR: Record<string, string> = {
   'This is already your e-mail': 'هاد إيميلك أصلًا',
   'SMS codes are not available yet': 'رموز الـ SMS مش متاحة لسا',
   'SMS codes are not available — use e-mail': 'رموز الـ SMS مش متاحة — استخدم الإيميل',
-  'Telegram codes are not available — use e-mail': 'الرموز على تيليجرام مش متاحة هلأ — استخدم الإيميل',
   'Could not send the SMS code. Check the number or use e-mail.': 'ما قدرنا نبعت رسالة SMS. افحص الرقم أو استخدم الإيميل.',
   'The SMS code is not right': 'رمز الـ SMS غلط',
   'Google sign-in is not enabled': 'الدخول بـ Google مش مفعّل',

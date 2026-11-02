@@ -3,7 +3,6 @@ import { Router, type Request, type Response } from 'express';
 import QRCode from 'qrcode';
 import { z } from 'zod';
 import { env } from '../config/env.js';
-import { logger } from '../lib/logger.js';
 import { one, pool, S, tx } from '../lib/db.js';
 import { codeHash, decrypt, encrypt, numericCode, randomToken } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, forbidden, notFound, tooMany, unauthorized } from '../lib/errors.js';
@@ -12,7 +11,6 @@ import { signToken, verifyToken } from '../lib/jwt.js';
 import { codeMail, existingAccountMail, noticeMail, securityNotice, sendMail } from '../lib/mailer.js';
 import { verifyGoogleCredential } from '../lib/google.js';
 import { checkSmsCode, sendSmsCode, smsEnabled } from '../lib/sms.js';
-import { botLink, codeText, sendTelegram, startToken, telegramEnabled, webhookSecret } from '../lib/telegram.js';
 import { hashPassword, needsRehash, passwordSchema, verifyPassword } from '../lib/passwords.js';
 import { generateTotpSecret, otpauthUrl, verifyTotp } from '../lib/totp.js';
 import { email, fullName, otpCode, totpCode, username, validate, uuid } from '../lib/validate.js';
@@ -97,14 +95,13 @@ authRouter.post(
         password: passwordSchema,
         language: lang,
         phone: z.string().trim().regex(/^\+?[0-9 ()-]{7,20}$/).optional(),
-        method: z.enum(['email', 'sms', 'telegram']).default('email'),
+        method: z.enum(['email', 'sms']).default('email'),
       })
       .strict(),
   }),
   ah(async (req, res) => {
     const { fullName: name, email: mail, username: uname, password, language, phone, method } = req.body;
     if (method === 'sms' && (!phone || !smsEnabled())) throw badRequest('SMS_DISABLED', 'SMS codes are not available — use e-mail');
-    if (method === 'telegram' && !telegramEnabled()) throw badRequest('TELEGRAM_DISABLED', 'Telegram codes are not available — use e-mail');
     const setting = await one<{ value: unknown }>(`SELECT value FROM ${S}.settings WHERE key = 'allow_registrations'`);
     if (setting && setting.value === false) throw forbidden('Registrations are currently closed', 'REGISTRATION_CLOSED');
     if (password.toLowerCase().includes(uname) || password.toLowerCase().includes(mail.split('@')[0]!)) {
@@ -112,13 +109,7 @@ authRouter.post(
     }
 
     const taken = await one<any>(`SELECT id, status, role, language FROM ${S}.users WHERE lower(email) = $1`, [mail]);
-    // Telegram: the code goes out once they open the bot from this link.
-    const tgToken = method === 'telegram' ? startToken() : null;
-    const generic = {
-      success: true,
-      message: 'If this e-mail can be registered, a verification code has been sent.',
-      ...(tgToken ? { data: { telegramLink: botLink(tgToken) } } : {}),
-    };
+    const generic = { success: true, message: 'If this e-mail can be registered, a verification code has been sent.' };
     if (taken) {
       // Don't reveal whether the e-mail exists; give the real owner a code that works instead.
       if (taken.status === 'active' && taken.role !== 'exchange') await sendMail(existingAccountMail(mail, await newResetCode(taken.id, mail), taken.language ?? language));
@@ -132,16 +123,16 @@ authRouter.post(
 
     const code = numericCode(6);
     await pool.query(
-      `INSERT INTO ${S}.pending_users (full_name, email, username, password_hash, role, verification_code, code_expires_at, expires_at, attempts, language, phone, verification_method, telegram_token, telegram_chat_id)
-       VALUES ($1, $2, $3, $4, 'user', $5, now() + interval '${CODE_TTL_MIN} minutes', now() + interval '24 hours', 0, $6, $7, $8, $9, NULL)
+      `INSERT INTO ${S}.pending_users (full_name, email, username, password_hash, role, verification_code, code_expires_at, expires_at, attempts, language, phone, verification_method)
+       VALUES ($1, $2, $3, $4, 'user', $5, now() + interval '${CODE_TTL_MIN} minutes', now() + interval '24 hours', 0, $6, $7, $8)
        ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, username = EXCLUDED.username,
          password_hash = EXCLUDED.password_hash, verification_code = EXCLUDED.verification_code,
          code_expires_at = EXCLUDED.code_expires_at, expires_at = EXCLUDED.expires_at, attempts = 0, language = EXCLUDED.language,
-         phone = EXCLUDED.phone, verification_method = EXCLUDED.verification_method, telegram_token = EXCLUDED.telegram_token, telegram_chat_id = NULL`,
-      [name, mail, uname, await hashPassword(password), codeHash('verify', mail, code), language, phone ?? null, method, tgToken],
+         phone = EXCLUDED.phone, verification_method = EXCLUDED.verification_method`,
+      [name, mail, uname, await hashPassword(password), codeHash('verify', mail, code), language, phone ?? null, method],
     );
     if (method === 'sms') await sendSmsCode(phone!, language);
-    else if (method === 'email') await sendMail(codeMail(mail, 'verify', code, language));
+    else await sendMail(codeMail(mail, 'verify', code, language));
     res.status(201).json(generic);
   }),
 );
@@ -173,7 +164,6 @@ authRouter.post(
       language: p.language ?? 'en',
       phone: p.phone ?? null,
     });
-    if (p.telegram_chat_id) await pool.query(`UPDATE ${S}.users SET telegram_chat_id = $2 WHERE id = $1`, [user.id, p.telegram_chat_id]);
     await audit({ userId: user.id, action: 'auth.registered' }, req);
     const session = await issueSession(req, res, user);
     res.status(201).json({ success: true, data: { ...session, user: await publicUser(user.id) } });
@@ -185,7 +175,7 @@ authRouter.post(
   codeLimiter,
   validate({ body: z.object({ email }).strict() }),
   ah(async (req, res) => {
-    const p = await one<any>(`SELECT id, language, phone, verification_method, telegram_chat_id FROM ${S}.pending_users WHERE lower(email) = $1 AND expires_at > now()`, [req.body.email]);
+    const p = await one<any>(`SELECT id, language, phone, verification_method FROM ${S}.pending_users WHERE lower(email) = $1 AND expires_at > now()`, [req.body.email]);
     if (p) {
       const code = numericCode(6);
       await pool.query(
@@ -193,10 +183,7 @@ authRouter.post(
         [p.id, codeHash('verify', req.body.email, code)],
       );
       if (p.verification_method === 'sms' && p.phone && smsEnabled()) await sendSmsCode(p.phone, p.language ?? 'ar');
-      else if (p.verification_method === 'telegram') {
-        // Only once they have opened the bot; until then the bot link sends the code.
-        if (p.telegram_chat_id) await sendTelegram(p.telegram_chat_id, codeText(code, p.language ?? 'ar', 'TalerBank'));
-      } else await sendMail(codeMail(req.body.email, 'verify', code, p.language ?? 'en'));
+      else await sendMail(codeMail(req.body.email, 'verify', code, p.language ?? 'en'));
     }
     if (!p) {
       const u = await one<any>(`SELECT id, language, role FROM ${S}.users WHERE lower(email) = $1 AND status = 'active'`, [req.body.email]);
@@ -670,44 +657,3 @@ authRouter.post(
     res.json({ success: true });
   }),
 );
-
-// ------------------------------------------------------------------ telegram
-/**
- * Telegram calls this when someone writes to our bot. "/start <token>" from a
- * sign-up link: remember their chat and send the code there.
- */
-export const telegramRouter = Router();
-telegramRouter.post('/webhook', async (req, res) => {
-  // Only Telegram knows the secret (we gave it when setting the webhook).
-  if (!telegramEnabled() || req.get('x-telegram-bot-api-secret-token') !== webhookSecret()) return res.status(404).end();
-  try {
-    const msg = req.body?.message;
-    const chatId = msg?.chat?.id;
-    const text = String(msg?.text ?? '').trim();
-    if (!chatId || msg?.chat?.type !== 'private') return void res.json({ ok: true });
-    const token = /^\/start\s+([A-Za-z0-9_-]{16,64})$/.exec(text)?.[1];
-    const p = token
-      ? await one<any>(
-          `SELECT id, email, language FROM ${S}.pending_users WHERE telegram_token = $1 AND verification_method = 'telegram' AND (expires_at IS NULL OR expires_at > now())`,
-          [token],
-        )
-      : null;
-    if (!p) {
-      await sendTelegram(
-        chatId,
-        `👋 ${'TalerBank'}\n\nهاد البوت بيبعت رموز التسجيل. افتحه من زر «استلم الرمز على تيليجرام» بصفحة التسجيل.\nThis bot sends sign-up codes — open it from the “Get the code on Telegram” button on the sign-up page.`,
-      );
-      return void res.json({ ok: true });
-    }
-    const code = numericCode(6);
-    await pool.query(
-      `UPDATE ${S}.pending_users SET telegram_chat_id = $2, verification_code = $3, code_expires_at = now() + interval '${CODE_TTL_MIN} minutes', attempts = 0 WHERE id = $1`,
-      [p.id, chatId, codeHash('verify', p.email, code)],
-    );
-    await sendTelegram(chatId, codeText(code, p.language ?? 'ar', 'TalerBank'));
-  } catch (e) {
-    logger.warn({ err: (e as Error).message }, 'telegram webhook failed');
-  }
-  // Always "ok": a failure here must not make Telegram retry the same update forever.
-  if (!res.headersSent) res.json({ ok: true });
-});

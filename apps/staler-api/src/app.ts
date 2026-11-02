@@ -8,7 +8,6 @@ import { join, resolve } from 'node:path';
 import { makeIndexRenderer, mountReleaseRoute, mountSeoFiles } from './lib/site.js';
 import { site } from './config/site.js';
 import { smsEnabled } from './lib/sms.js';
-import { telegramEnabled } from './lib/telegram.js';
 import { z } from 'zod';
 import { env } from './config/env.js';
 import { logger } from './lib/logger.js';
@@ -16,7 +15,7 @@ import { one, pool, S } from './lib/db.js';
 import { publicFile } from './lib/storage.js';
 import { cors, globalLimiter, noStore, permissionsPolicy, requestId, securityHeaders } from './middleware/security.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
-import { authRouter, telegramRouter } from './modules/auth.js';
+import { authRouter } from './modules/auth.js';
 import { notificationsRouter, walletRouter } from './modules/wallet.js';
 import { bankRouter, webhookRouter } from './modules/bank.js';
 import { exchangeRouter } from './modules/exchange.js';
@@ -95,7 +94,6 @@ export function createApp(): Express {
         bankUrl: env.BANK_PUBLIC_URL ?? env.BANK_API_URL,
         googleClientId: env.GOOGLE_CLIENT_ID ?? null,
         sms: smsEnabled(),
-        telegram: telegramEnabled(),
         supportEmail: env.SMTP_USER?.includes('@') ? env.SMTP_USER : null,
         allowRegistrations: s.allow_registrations ?? true,
         maintenance: s.maintenance_mode ?? false,
@@ -114,7 +112,6 @@ export function createApp(): Express {
     next();
   });
 
-  app.use('/api/telegram', noStore, telegramRouter);
   app.use('/api/auth', noStore, authRouter);
   app.use('/api/wallet', noStore, walletRouter);
   app.use('/api/notifications', noStore, notificationsRouter);
