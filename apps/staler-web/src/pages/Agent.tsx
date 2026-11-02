@@ -314,6 +314,9 @@ function metres(a: { lat: number; lng: number }, b: { lat: number; lng: number }
 
 export function AgentsMap() {
   const { t, lang } = useI18n();
+  const { user } = useAuth();
+  const you = lang === 'ar' ? '(أنت)' : '(you)';
+  const mine = (a: any) => !!user && a.id === user.id;
   const toast = useToast();
   const data = useData<{ agents: any[] }>('/api/exchange/agents');
   const [q, setQ] = useState('');
@@ -339,7 +342,7 @@ export function AgentsMap() {
     return me ? list.sort((x, y) => (x.dist ?? Infinity) - (y.dist ?? Infinity)) : list;
   }, [all, q, wanted, service, me]);
   const pins = useMemo(
-    () => agents.filter((a) => a.lat != null && a.lng != null).map((a) => ({ id: a.id, lat: Number(a.lat), lng: Number(a.lng), kind: 'agent' as const, label: a.display_name })),
+    () => agents.filter((a) => a.lat != null && a.lng != null).map((a) => ({ id: a.id, lat: Number(a.lat), lng: Number(a.lng), kind: 'agent' as const, label: mine(a) ? `${a.display_name} ${you}` : a.display_name })),
     [agents],
   );
   // Re-frame the map whenever the set of agents shown changes.
@@ -434,7 +437,10 @@ export function AgentsMap() {
                   <div className="flex items-start gap-3">
                     <Avatar name={chosen.display_name} src={chosen.logo_url} size={44} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{chosen.display_name}</p>
+                      <p className="flex min-w-0 items-center gap-1.5 font-semibold">
+                        <span className="truncate">{chosen.display_name}</span>
+                        {mine(chosen) && <span className="shrink-0 rounded-full bg-stitch/10 px-2 py-0.5 text-[11px] font-semibold text-stitch">{you}</span>}
+                      </p>
                       <p className="truncate text-xs text-muted">{[chosen.city, chosen.address].filter(Boolean).join(' · ') || '—'}</p>
                       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                         {chosen.dist != null && (
@@ -539,7 +545,10 @@ export function AgentsMap() {
                     <Avatar name={a.display_name} src={a.logo_url} size={52} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="truncate font-semibold">{a.display_name}</p>
+                        <p className="flex min-w-0 items-center gap-1.5 font-semibold">
+                          <span className="truncate">{a.display_name}</span>
+                          {mine(a) && <span className="shrink-0 rounded-full bg-stitch/10 px-2 py-0.5 text-[11px] font-semibold text-stitch">{you}</span>}
+                        </p>
                         {a.dist != null && <span className="shrink-0 rounded-full bg-sky/10 px-2 py-0.5 text-xs font-medium text-sky">{fmtDist(a.dist)}</span>}
                       </div>
                       <p className="truncate text-sm text-muted">{[a.city, a.address].filter(Boolean).join(' · ') || '—'}</p>

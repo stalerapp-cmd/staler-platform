@@ -71,7 +71,7 @@
 }
 
 /* Page entrance: CSS only, so a slow screen can never block navigation. */
-@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes page-in { from { opacity: 0.75; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .page-in { animation: page-in 0.22s ease-out both; }
 
 /* Notch / rounded corners / Android gesture bar on every device. */
@@ -196,3 +196,11 @@ nav a:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--line)
   100% { transform: scale(2.2); opacity: 0; }
 }
 .leaflet-container { font: inherit; }
+
+/* Installed app: no backdrop blur (Android WebView flickers with it while scrolling). */
+html.native *, html.native *::before, html.native *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html.native .hdr-glass { background: rgb(255 255 255 / 0.96); }
+html.native[data-theme='dark'] .hdr-glass { background: rgb(22 29 69 / 0.97); }
+html.native[data-theme='dark'] .hdr-cuff { background-color: rgb(34 43 96); }
+/* Keep fixed and sticky bars on their own layer so they don't repaint with the page. */
+header.sticky, .fixed { -webkit-backface-visibility: hidden; backface-visibility: hidden; }

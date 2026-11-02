@@ -20,9 +20,21 @@ import { ToastProvider } from './components/Toast';
 import { ConfirmProvider } from './components/Confirm';
 import { CartProvider } from './components/Commerce';
 import { apiUrl, isNative } from './lib/api';
+import { preloadPages } from './components/Boundary';
 
 // The app talks to a server that may be asleep (free hosting sleeps when idle).
 // Wake it as soon as the app opens, so it's ready by the time a form is sent.
+// Theme and direction before anything paints (no light/LTR flash on open).
+try {
+  const th = localStorage.getItem('st.theme') ?? localStorage.getItem('tb.theme');
+  if (th === 'dark' || th === 'light') document.documentElement.dataset.theme = th;
+} catch {
+  /* storage blocked */
+}
+// Android WebView repaints blurred (frosted) layers unevenly while scrolling, which shows as
+// flicker; inside the app those layers get a solid tint instead.
+if (isNative) document.documentElement.classList.add('native');
+
 if (isNative) {
   const warm = () => void fetch(apiUrl('/health'), { cache: 'no-store' }).catch(() => {});
   warm();
@@ -45,6 +57,8 @@ if (isNative) {
     if (m) location.assign(`/app/claim?v=${m[1]}`);
   });
 }
+
+window.addEventListener('load', () => setTimeout(preloadPages, 1500), { once: true });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

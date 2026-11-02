@@ -1,5 +1,5 @@
 import { serverTextAr, serverTextEn } from './serverText';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 
 const en = {
   brand: { name: 'S-Taler', tagline: 'Your Palestinian wallet' },
@@ -730,7 +730,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       /* private mode */
     }
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   }, [lang]);

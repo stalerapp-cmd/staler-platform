@@ -8,7 +8,20 @@ const isArabic = () => document.documentElement.lang === 'ar';
  * was published while the app was open) or the network blipped, retry once,
  * then reload the page a single time to fetch the new bundle.
  */
+const pageLoaders: (() => Promise<unknown>)[] = [];
+/**
+ * Fetch every page's code quietly once the app is idle, so moving between
+ * screens never flashes a loading spinner.
+ */
+export function preloadPages() {
+  const run = () => pageLoaders.forEach((l, i) => setTimeout(() => void l().catch(() => undefined), i * 40));
+  const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+  if (w.requestIdleCallback) w.requestIdleCallback(run, { timeout: 4000 });
+  else setTimeout(run, 2500);
+}
+
 export function lazyRetry<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
+  pageLoaders.push(load);
   return lazy(async () => {
     try {
       return await load();

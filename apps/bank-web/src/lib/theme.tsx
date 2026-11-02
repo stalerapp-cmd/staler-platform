@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from 'react';
 
 type Theme = 'light' | 'dark';
 const Ctx = createContext<{ theme: Theme; setTheme: (t: Theme) => void }>({ theme: 'light', setTheme: () => {} });
@@ -13,7 +13,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     return 'light'; // Arabic + light is the default for everyone
   });
-  useEffect(() => {
+  // Before the first paint, so a dark-mode user never sees one light frame on open.
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0A1613' : '#0C1A17');
   }, [theme]);
