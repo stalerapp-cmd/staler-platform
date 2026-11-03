@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Analytics, MyReviews, Sections, Wholesale } from './MerchantCRM2';
+import { ReportSheet } from '../components/Feedback';
 import { motion } from 'framer-motion';
 import {
+  BarChart3,
+  Flag,
+  Layers,
+  Star,
+  Truck,
   BadgePercent,
   BellOff,
   BellRing,
@@ -32,7 +40,7 @@ const W = {
   ar: {
     title: 'زباينك',
     lead: 'مين بشتري منك، مين زباينك المميزين، العروض والهدايا، والإشعارات اللي بتوصل لزباينك.',
-    tabs: { glance: 'نظرة عامة', people: 'الزباين', perks: 'الولاء والعروض', news: 'إشعارات لزباينك' } as Record<string, string>,
+    tabs: { glance: 'نظرة عامة', analytics: 'تحليلات', people: 'الزباين', sections: 'الأقسام', perks: 'الولاء والعروض', wholesale: 'الجملة', reviews: 'التقييمات', news: 'إشعارات لزباينك' } as Record<string, string>,
     customers: 'زباين', repeat: 'رجعوا اشتروا', loyal: 'زباين مميزين', rev30: 'مبيعات آخر 30 يوم', disc30: 'خصومات آخر 30 يوم', followers: 'مفعّلين إشعاراتك', muted: 'سكّروا إشعاراتك',
     topSpend: 'الأكثر صرفًا', topFreq: 'الأكثر طلبات', ordersN: '{n} طلب', none: 'لسا ما في زباين — أول ما حدا يشتري منك بيبين هون.',
     findPh: 'دوّر على زبون بالاسم', sort: { spent: 'الأكثر صرفًا', orders: 'الأكثر طلبات', recent: 'آخر من اشترى' } as Record<string, string>,
@@ -55,7 +63,7 @@ const W = {
   en: {
     title: 'Your customers',
     lead: 'Who buys from you, your best customers, offers and gifts, and notifications to your customers.',
-    tabs: { glance: 'Overview', people: 'Customers', perks: 'Loyalty & offers', news: 'Notify customers' } as Record<string, string>,
+    tabs: { glance: 'Overview', analytics: 'Analytics', people: 'Customers', sections: 'Sections', perks: 'Loyalty & offers', wholesale: 'Wholesale', reviews: 'Reviews', news: 'Notify customers' } as Record<string, string>,
     customers: 'Customers', repeat: 'Came back', loyal: 'Loyal customers', rev30: 'Sales, last 30 days', disc30: 'Discounts, last 30 days', followers: 'Following you', muted: 'Muted you',
     topSpend: 'Top spenders', topFreq: 'Most orders', ordersN: '{n} orders', none: 'No customers yet — they show here after their first order.',
     findPh: 'Find a customer by name', sort: { spent: 'Most spent', orders: 'Most orders', recent: 'Most recent' } as Record<string, string>,
@@ -77,8 +85,8 @@ const W = {
   },
 };
 
-type Tab = 'glance' | 'people' | 'perks' | 'news';
-const TAB_ICON: Record<Tab, LucideIcon> = { glance: TrendingUp, people: Users, perks: BadgePercent, news: Megaphone };
+type Tab = 'glance' | 'analytics' | 'people' | 'sections' | 'perks' | 'wholesale' | 'reviews' | 'news';
+const TAB_ICON: Record<Tab, LucideIcon> = { glance: TrendingUp, analytics: BarChart3, people: Users, sections: Layers, perks: BadgePercent, wholesale: Truck, reviews: Star, news: Megaphone };
 
 function Card({ title, icon: Icon, tone, children, aside }: { title: string; icon: LucideIcon; tone: string; children: ReactNode; aside?: ReactNode }) {
   return (
@@ -101,12 +109,14 @@ function Card({ title, icon: Icon, tone, children, aside }: { title: string; ico
 export function MerchantCRM() {
   const { lang } = useI18n();
   const w = W[lang === 'ar' ? 'ar' : 'en'];
-  const [tab, setTab] = useState<Tab>('glance');
+  const [sp, setSp] = useSearchParams();
+  const tab = ((sp.get('tab') as Tab) || 'glance') as Tab;
+  const setTab = (k: Tab) => setSp(k === 'glance' ? {} : { tab: k }, { replace: true });
   const [picked, setPicked] = useState<any[]>([]);
   return (
     <div>
       <PageHeader title={w.title} lead={w.lead} />
-      <div role="tablist" className="mb-5 grid grid-cols-4 gap-1.5 rounded-3xl bg-surface p-1.5 shadow-card">
+      <div role="tablist" className="-mx-4 mb-5 flex gap-1.5 overflow-x-auto bg-surface p-1.5 px-4 shadow-card [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:rounded-3xl sm:px-1.5">
         {(Object.keys(w.tabs) as Tab[]).map((k) => {
           const Icon = TAB_ICON[k];
           const on = tab === k;
@@ -116,7 +126,7 @@ export function MerchantCRM() {
               role="tab"
               aria-selected={on}
               onClick={() => setTab(k)}
-              className={cx('relative flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[12px] transition sm:flex-row sm:justify-center sm:gap-2 sm:text-sm', on ? 'text-white' : 'text-muted hover:text-ink')}
+              className={cx('relative flex shrink-0 items-center gap-2 rounded-2xl px-3.5 py-2 text-sm transition sm:flex-1 sm:justify-center', on ? 'text-white' : 'text-muted hover:text-ink')}
             >
               {on && <motion.span layoutId="crm-tab" className="absolute inset-0 rounded-2xl bg-night shadow-lift dark:bg-white/15" transition={{ type: 'spring', bounce: 0.2, duration: 0.45 }} />}
               <Icon className="relative h-[18px] w-[18px]" />
@@ -134,7 +144,11 @@ export function MerchantCRM() {
           }}
         />
       )}
+      {tab === 'analytics' && <Analytics />}
+      {tab === 'sections' && <Sections />}
       {tab === 'perks' && <Perks />}
+      {tab === 'wholesale' && <Wholesale />}
+      {tab === 'reviews' && <MyReviews />}
       {tab === 'news' && <News picked={picked} setPicked={setPicked} />}
     </div>
   );
@@ -200,6 +214,7 @@ function Glance() {
 
 // ------------------------------------------------------------------ people
 function People({ onNotify }: { onNotify: (list: any[]) => void }) {
+  const [report, setReport] = useState<any>(null);
   const { lang } = useI18n();
   const w = W[lang === 'ar' ? 'ar' : 'en'];
   const [q, setQ] = useState('');
@@ -215,6 +230,8 @@ function People({ onNotify }: { onNotify: (list: any[]) => void }) {
   const rows = (data?.customers ?? []).filter((c) => !needle || needle === qq.toLowerCase() || c.full_name?.toLowerCase().includes(needle));
   const pickedList = Object.values(sel);
   return (
+    <>
+      {report && <ReportSheet open onClose={() => setReport(null)} target={{ userId: report.id, name: report.full_name }} />}
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <label className="relative block flex-1">
@@ -286,6 +303,18 @@ function People({ onNotify }: { onNotify: (list: any[]) => void }) {
                     <span className="num block text-sm font-bold">{money(c.spent, lang)}</span>
                     <span className="block text-[11px] text-muted">{w.spent}</span>
                   </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReport(c);
+                    }}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted transition hover:bg-stitch/10 hover:text-stitch"
+                    title={lang === 'ar' ? 'بلّغ عن هالزبون' : 'Report this customer'}
+                  >
+                    <Flag className="h-4 w-4" />
+                  </span>
                 </button>
               </li>
             );
@@ -293,6 +322,7 @@ function People({ onNotify }: { onNotify: (list: any[]) => void }) {
         </ul>
       )}
     </div>
+    </>
   );
 }
 
@@ -554,7 +584,7 @@ function News({ picked, setPicked }: { picked: any[]; setPicked: (v: any[]) => v
   const toast = useToast();
   const confirm = useConfirm();
   const hist = useData<{ items: any[] }>('/api/merchant/crm/announcements');
-  const [audience, setAudience] = useState<'all' | 'loyal' | 'people'>(picked.length ? 'people' : 'all');
+  const [audience, setAudience] = useState<'all' | 'loyal' | 'people' | 'wholesale'>(picked.length ? 'people' : 'all');
   const [tone, setTone] = useState<'news' | 'offer' | 'gift'>('news');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -617,11 +647,12 @@ function News({ picked, setPicked }: { picked: any[]; setPicked: (v: any[]) => v
         <Card title={w.newsTitle} icon={Megaphone} tone="bg-stitch/10 text-stitch">
           <p className="mb-4 text-sm text-muted">{w.newsLead}</p>
           <p className="mb-2 text-sm font-medium text-ink/80">{w.who}</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {([
               ['all', w.aAll, Users],
               ['loyal', w.aLoyal, Crown],
               ['people', w.aPeople, Heart],
+              ['wholesale', lang === 'ar' ? 'تجار الجملة' : 'Wholesale buyers', Truck],
             ] as const).map(([k, label, Icon]) => (
               <button key={k} type="button" onClick={() => setAudience(k)} className={cx('flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-center text-xs transition sm:text-sm', audience === k ? 'bg-night text-white shadow-lift dark:bg-white/15' : 'bg-sunk text-ink/80 hover:text-ink')}>
                 <Icon className="h-5 w-5" />

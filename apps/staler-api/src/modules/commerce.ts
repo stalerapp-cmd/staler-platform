@@ -20,7 +20,8 @@ import { personalise } from '../lib/watermark.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { moneyLimiter } from '../middleware/security.js';
 import { requireSecondFactor } from './mfa.js';
-import { discountCents, perksFor } from './crm.js';
+import { discountCents, perksFor, wholesaleFor } from './crm.js';
+import { publicReviews } from './feedback.js';
 import { assertDailyLimit, assertMaxTransfer, credit, debit, notifyBi, walletOfUser, writeLine } from './walletCore.js';
 
 /** Ids of legacy rows may be UUIDs or integers. */
@@ -54,7 +55,8 @@ async function suggestCategory(userId: string, merchantId: string, r: z.infer<ty
 
 // Columns that are safe to show to anyone. digital_file_url is NEVER public.
 const PUBLIC_PRODUCT_COLS = `p.id, p.merchant_id, p.name, p.description, p.price, p.compare_at_price, p.image_url, p.stock, p.is_digital, p.digital_mode,
-  p.category, p.deposit_percent, p.deposit_refundable, p.created_at, m.store_name, m.slug AS store_slug, m.branch_name, m.logo_url AS store_logo`;
+  p.category, p.section_ids, p.deposit_percent, p.deposit_refundable, p.created_at, m.store_name, m.slug AS store_slug, m.branch_name, m.logo_url AS store_logo,
+  (p.wholesale_price IS NOT NULL) AS has_wholesale`;
 
 const ACTIVE = (a: string) => `COALESCE(${a}.status,'active') = 'active'`;
 
@@ -195,8 +197,15 @@ storeRouter.get(
           .optional()
           .transform((v) => (v ? v.split(',').filter((x) => /^[a-z][a-z0-9_]{1,39}$/.test(x)) : undefined)),
         places: z.string().trim().max(3000).optional(),
-        type: z.enum(['digital', 'physical', 'deposit', 'deals']).optional(),
-        sort: z.enum(['new', 'price_asc', 'price_desc', 'name']).default('new'),
+        /** The store's own sections (comma separated ids): products in any of them. */
+        sections: z
+          .string()
+          .trim()
+          .max(800)
+          .optional()
+          .transform((v) => (v ? v.split(',').filter((x) => /^[0-9a-f-]{36}$/i.test(x)) : undefined)),
+        type: z.enum(['digital', 'physical', 'deposit', 'deals', 'wholesale', 'instock']).optional(),
+        sort: z.enum(['new', 'price_asc', 'price_desc', 'name', 'popular']).default('new'),
       })
       .strict(),
   }),
@@ -232,10 +241,22 @@ storeRouter.get(
       params.push(f.storeCategory);
       where.push(`COALESCE((SELECT pm.category FROM ${S}.merchants pm WHERE pm.id = m.parent_id), m.category, 'other') = ANY($${params.length}::text[])`);
     }
+    if (f.sections?.length) {
+      params.push(f.sections);
+      where.push(`p.section_ids && $${params.length}::uuid[]`);
+    }
     if (f.type === 'deals') where.push('p.compare_at_price IS NOT NULL AND p.compare_at_price > p.price');
+    else if (f.type === 'wholesale') where.push('p.wholesale_price IS NOT NULL');
+    else if (f.type === 'instock') where.push('(COALESCE(p.is_digital,false) OR p.stock > 0)');
     else if (f.type === 'deposit') where.push('p.deposit_percent > 0 AND NOT COALESCE(p.is_digital,false)');
     else if (f.type) where.push(f.type === 'digital' ? 'p.is_digital' : 'NOT COALESCE(p.is_digital,false)');
-    const order = { new: 'p.created_at DESC', price_asc: 'p.price ASC', price_desc: 'p.price DESC', name: 'p.name ASC' }[f.sort as 'new'];
+    const order = {
+      new: 'p.created_at DESC',
+      price_asc: 'p.price ASC',
+      price_desc: 'p.price DESC',
+      name: 'p.name ASC',
+      popular: `(SELECT COALESCE(sum(oi.quantity), 0) FROM ${S}.order_items oi WHERE oi.product_id = p.id) DESC`,
+    }[f.sort as 'new'];
     params.push(f.limit, f.offset);
     const r = await pool.query(
       `SELECT ${PUBLIC_PRODUCT_COLS}, COUNT(*) OVER() AS total FROM ${S}.products p JOIN ${S}.merchants m ON m.id = p.merchant_id
@@ -379,11 +400,30 @@ storeRouter.get(
       tiktok: x.tiktok ?? null,
       facebook: x.facebook ?? null,
     });
+    const branchIds = branches.rows.map((b) => b.id);
+    // The store's own sections, with how many products each has and a picture (its own or a product's).
+    const sections = await pool.query(
+      `SELECT s.id, s.name, s.icon, s.image_url, s.sort,
+              (SELECT count(*)::int FROM ${S}.products p WHERE s.id = ANY(p.section_ids) AND p.merchant_id = ANY($2) AND COALESCE(p.status,'active') = 'active') AS count,
+              (SELECT p.image_url FROM ${S}.products p WHERE s.id = ANY(p.section_ids) AND p.merchant_id = ANY($2) AND COALESCE(p.status,'active') = 'active' AND p.image_url IS NOT NULL
+                ORDER BY p.created_at DESC LIMIT 1) AS cover
+         FROM ${S}.store_sections s WHERE s.merchant_id = $1 ORDER BY s.sort, s.created_at`,
+      [mainId, branchIds],
+    );
+    const counts = await one<any>(
+      `SELECT count(*) FILTER (WHERE compare_at_price > price)::int AS deals, count(*) FILTER (WHERE wholesale_price IS NOT NULL)::int AS wholesale, count(*)::int AS total
+         FROM ${S}.products WHERE merchant_id = ANY($1) AND COALESCE(status,'active') = 'active'`,
+      [branchIds],
+    );
     res.json({
       success: true,
       data: {
-        store: { ...pub(m), owner_name: m.owner_name, main: pub(main) },
+        store: { ...pub(m), owner_name: m.owner_name, owner_id: m.user_id, main: pub(main) },
         branches: branches.rows,
+        sections: sections.rows,
+        counts,
+        wholesale: main.wholesale_enabled ? { terms: main.wholesale_terms ?? null } : null,
+        reviews: await publicReviews(mainId),
         ads: ads.rows,
         pickupPoints: (
           await pool.query(
@@ -434,7 +474,7 @@ storeRouter.post(
       const checkoutRef = crypto.randomUUID();
       const result = await tx(async (c) => {
         const r = await c.query<any>(
-          `SELECT p.id, p.merchant_id, p.name, p.price, p.stock, p.is_digital, p.digital_file_url, p.deposit_percent, p.deposit_refundable,
+          `SELECT p.id, p.merchant_id, p.name, p.price, p.stock, p.is_digital, p.digital_file_url, p.deposit_percent, p.deposit_refundable, p.wholesale_price, p.wholesale_min_qty,
                   COALESCE(p.status,'active') AS status, m.user_id AS merchant_user_id, COALESCE(m.status,'active') AS merchant_status,
                   m.offers_pickup, m.offers_delivery, COALESCE(m.parent_id, m.id) AS main_id
              FROM ${S}.products p JOIN ${S}.merchants m ON m.id = p.merchant_id
@@ -442,17 +482,24 @@ storeRouter.post(
           [Array.from(qty.keys())],
         );
         if (r.rowCount !== qty.size) throw notFound('One of the products no longer exists', 'PRODUCT_NOT_FOUND');
-        type G = { full: bigint; now: bigint; lines: any[]; digitalOnly: boolean; depositRefundable: boolean; merchantUser: string; mainId: string; off: bigint; note: string | null; gifts: string[] };
+        type G = { full: bigint; now: bigint; lines: any[]; digitalOnly: boolean; depositRefundable: boolean; merchantUser: string; mainId: string; off: bigint; note: string | null; gifts: string[]; wholesale: boolean };
         const groups = new Map<string, G>();
+        // Approved wholesale buyers pay the wholesale price from its minimum quantity.
+        const trade = await wholesaleFor(c, userId, [...new Set(r.rows.map((x: any) => String(x.main_id)))]);
         for (const p of r.rows) {
           const q = qty.get(String(p.id))!;
+          if (p.wholesale_price != null && trade.has(String(p.main_id)) && q >= Number(p.wholesale_min_qty ?? 1)) {
+            p.price = p.wholesale_price;
+            p.wholesale = true;
+          }
           if (p.status !== 'active' || p.merchant_status !== 'active') throw conflict('PRODUCT_UNAVAILABLE', `${p.name} is not available`);
           if (String(p.merchant_user_id) === String(userId)) throw badRequest('OWN_PRODUCT', 'You cannot buy your own product');
           if (p.is_digital && q !== 1) throw badRequest('DIGITAL_QUANTITY', `${p.name} is digital — quantity must be 1`);
           if (!p.is_digital && Number(p.stock) < q) throw conflict('OUT_OF_STOCK', `Only ${p.stock} left of ${p.name}`);
           if (!p.is_digital && b.fulfillment === 'pickup' && p.offers_pickup === false) throw badRequest('NO_PICKUP', 'This store does not offer pickup');
           if (!p.is_digital && b.fulfillment === 'delivery' && p.offers_delivery === false) throw badRequest('NO_DELIVERY', 'This store does not deliver');
-          const g: G = groups.get(String(p.merchant_id)) ?? { full: 0n, now: 0n, lines: [], digitalOnly: true, depositRefundable: true, merchantUser: p.merchant_user_id, mainId: String(p.main_id), off: 0n, note: null, gifts: [] };
+          const g: G = groups.get(String(p.merchant_id)) ?? { full: 0n, now: 0n, lines: [], digitalOnly: true, depositRefundable: true, merchantUser: p.merchant_user_id, mainId: String(p.main_id), off: 0n, note: null, gifts: [], wholesale: false };
+          if (p.wholesale) g.wholesale = true;
           const line = toCents(p.price) * BigInt(q);
           const dep = !p.is_digital && Number(p.deposit_percent) > 0 ? (line * BigInt(p.deposit_percent) + 99n) / 100n : line;
           g.full += line;
@@ -464,6 +511,8 @@ storeRouter.post(
         }
         // The store's own perks: the best discount (occasion offer or loyalty) and any gifts.
         for (const g of groups.values()) {
+          // Wholesale prices are already the store's trade terms: retail offers don't stack on them.
+          if (g.wholesale) continue;
           const pk = await perksFor(c, g.mainId, userId, g.full);
           g.gifts = pk.gifts;
           const off = discountCents(g.full, pk.percent);
@@ -532,6 +581,7 @@ storeRouter.post(
           );
           const pt = pickup.get(merchantId);
           if (pt) await c.query(`UPDATE ${S}.orders SET pickup_point_id = $2, pickup_info = $3 WHERE id = $1`, [order.id, pt.id, JSON.stringify(pt)]);
+          if (g.wholesale) await c.query(`UPDATE ${S}.orders SET is_wholesale = true WHERE id = $1`, [order.id]);
           if (g.off > 0n || g.gifts.length)
             await c.query(`UPDATE ${S}.orders SET discount_amount = $2, discount_note = $3, gifts = $4 WHERE id = $1`, [order.id, fromCents(g.off), g.note, JSON.stringify(g.gifts)]);
           for (const l of g.lines) {
@@ -574,7 +624,7 @@ async function ordersWithItems(where: string, params: unknown[], opts: { buyer?:
     `SELECT o.id, o.user_id, o.merchant_id, o.total_amount, o.amount_paid, o.balance_due, o.balance_paid_via, o.deposit_refundable, o.status,
             o.payment_status, o.escrow_status, o.created_at, o.paid_at, o.accepted_at, o.shipped_at, o.delivered_at, o.completed_at,
             o.fulfillment, o.delivery_address, o.delivery_phone, o.delivery_lat, o.delivery_lng, o.buyer_note, o.dispute_status, o.dispute_reason,
-            o.cancel_reason, o.pickup_info, o.discount_amount, o.discount_note, o.gifts, ${opts.buyer ? 'o.handover_code,' : ''}
+            o.cancel_reason, o.pickup_info, o.discount_amount, o.discount_note, o.gifts, o.is_wholesale, ${opts.buyer ? 'o.handover_code,' : ''}
             m.store_name, m.branch_name, m.slug AS store_slug, m.logo_url AS store_logo, m.lat AS store_lat, m.lng AS store_lng, m.address AS store_address,
             m.user_id AS merchant_user_id, u.full_name AS buyer_name,
             COALESCE((SELECT json_agg(json_build_object('kind', e.kind, 'actor', e.actor, 'note', e.note, 'lat', e.lat, 'lng', e.lng, 'at', e.created_at) ORDER BY e.created_at)
@@ -1094,11 +1144,23 @@ const productBody = z
     downloadLimit: z.number().int().min(1).max(20).default(3),
     depositPercent: z.number().int().min(0).max(90).default(0),
     depositRefundable: z.boolean().default(true),
+    /** The store's own sections this product sits in. */
+    sectionIds: z.array(idParam).max(10).optional(),
+    /** A lower price for approved wholesale buyers, from a minimum quantity. */
+    wholesalePrice: amountSchema.optional().nullable(),
+    wholesaleMinQty: z.number().int().min(1).max(100000).default(1),
   })
   .strict();
 
 const PRODUCT_COLS = `id, name, description, price, compare_at_price, image_url, stock, is_digital, category, COALESCE(status,'active') AS status, created_at,
-  (digital_file_url IS NOT NULL) AS has_file, digital_mode, download_limit, deposit_percent, deposit_refundable`;
+  (digital_file_url IS NOT NULL) AS has_file, digital_mode, download_limit, deposit_percent, deposit_refundable, section_ids, wholesale_price, wholesale_min_qty`;
+
+/** Only this store's own sections. */
+async function ownSections(mainId: string, ids: string[] | undefined) {
+  if (!ids?.length) return [];
+  const r = await pool.query(`SELECT id FROM ${S}.store_sections WHERE merchant_id = $1 AND id = ANY($2::uuid[])`, [mainId, ids]);
+  return r.rows.map((x) => String(x.id));
+}
 
 merchantRouter.get(
   '/products',
@@ -1119,8 +1181,8 @@ merchantRouter.post(
     if (b.digitalFileRef) await assertOwnFileRef(req.auth!.userId, b.digitalFileRef);
     const p = await one(
       `INSERT INTO ${S}.products (merchant_id, name, description, price, compare_at_price, image_url, stock, is_digital, digital_file_url, category, status,
-                                  digital_mode, download_limit, deposit_percent, deposit_refundable)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', $11, $12, $13, $14) RETURNING ${PRODUCT_COLS}`,
+                                  digital_mode, download_limit, deposit_percent, deposit_refundable, section_ids, wholesale_price, wholesale_min_qty)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', $11, $12, $13, $14, $15::uuid[], $16, $17) RETURNING ${PRODUCT_COLS}`,
       [
         m.id,
         b.name,
@@ -1136,6 +1198,9 @@ merchantRouter.post(
         b.downloadLimit,
         b.isDigital ? 0 : b.depositPercent,
         b.depositRefundable,
+        await ownSections(String(m.parent_id ?? m.id), b.sectionIds),
+        b.wholesalePrice ?? null,
+        b.wholesaleMinQty,
       ],
     );
     res.status(201).json({ success: true, data: { product: p } });
@@ -1152,7 +1217,8 @@ merchantRouter.put(
     const r = await pool.query(
       `UPDATE ${S}.products SET name = $3, description = $4, price = $5, image_url = $6, stock = $7, is_digital = $8,
               digital_file_url = COALESCE($9, digital_file_url), category = $10, status = COALESCE($11, status), compare_at_price = $12,
-              digital_mode = $13, download_limit = $14, deposit_percent = $15, deposit_refundable = $16, updated_at = now()
+              digital_mode = $13, download_limit = $14, deposit_percent = $15, deposit_refundable = $16,
+              section_ids = COALESCE($17::uuid[], section_ids), wholesale_price = $18, wholesale_min_qty = $19, updated_at = now()
         WHERE id = $1 AND merchant_id = $2 AND COALESCE(status,'active') <> 'deleted'`,
       [
         req.params.id,
@@ -1171,6 +1237,9 @@ merchantRouter.put(
         b.downloadLimit,
         b.isDigital ? 0 : b.depositPercent,
         b.depositRefundable,
+        b.sectionIds ? await ownSections(String(m.parent_id ?? m.id), b.sectionIds) : null,
+        b.wholesalePrice ?? null,
+        b.wholesaleMinQty,
       ],
     );
     if (r.rowCount === 0) throw notFound('Product not found');

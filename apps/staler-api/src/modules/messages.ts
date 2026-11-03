@@ -3,13 +3,14 @@ import { z } from 'zod';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
 import { decrypt, encrypt, legacyDecrypt } from '../lib/crypto.js';
-import { badRequest, forbidden, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { validate } from '../lib/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 import { moneyLimiter } from '../middleware/security.js';
 import { idParam } from './commerce.js';
 import { notifyBi } from './walletCore.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 /**
  * Messages are encrypted at rest: every message is AES-256-GCM encrypted
@@ -41,6 +42,44 @@ async function participant(conversationId: string, userId: string) {
   if (!p) throw notFound('Conversation not found');
 }
 
+// ------------------------------------------------------------------ support
+/** What a support request is about, and the permission an admin needs to take it. */
+export const SUPPORT_TOPICS = {
+  wallet: 'users.money',
+  bank: 'bank.ops',
+  orders: 'orders.disputes',
+  stores: 'stores.manage',
+  agents: 'agents.manage',
+  account: 'users.security',
+  report: 'reports.manage',
+  other: null,
+} as const;
+export type SupportTopic = keyof typeof SUPPORT_TOPICS;
+
+type AdminRow = { id: string; admin_level: string | null; admin_permissions: string[] | null };
+/**
+ * Who may take a request: the super admin always; others need "support" and the topic's permission.
+ * Without a topic (or "other"), only admins who hold every permission.
+ */
+export function canTake(a: AdminRow, topic: string | null) {
+  if (a.admin_level === 'super_admin') return true;
+  const perms = a.admin_permissions ?? [];
+  if (!perms.includes('support')) return false;
+  const need = topic ? SUPPORT_TOPICS[topic as SupportTopic] : null;
+  return need ? perms.includes(need) : PERMISSIONS.every((p) => perms.includes(p));
+}
+async function adminRow(id: string) {
+  return one<AdminRow & { role: string; full_name: string }>(`SELECT id, role, admin_level, admin_permissions, full_name FROM ${S}.users WHERE id = $1`, [id]);
+}
+/** Readers of a chat: its participants, and the super admin for any support chat (to review the team). */
+async function canRead(conversationId: string, userId: string) {
+  if (await one(`SELECT 1 FROM ${S}.conversation_participants WHERE conversation_id = $1 AND user_id = $2`, [conversationId, userId])) return 'participant';
+  const c = await one<any>(`SELECT type FROM ${S}.conversations WHERE id = $1`, [conversationId]);
+  const a = await adminRow(userId);
+  if (c?.type === 'support' && a?.role === 'admin' && a.admin_level === 'super_admin') return 'supervisor';
+  throw notFound('Conversation not found');
+}
+
 const LINK_RE = /https?:\/\/[^\s]+/;
 
 /** Stores an (encrypted) message and tells the other participants — one notification per chat until they read it. */
@@ -55,7 +94,11 @@ export async function postMessage(conversationId: string, me: string, text: stri
      RETURNING id, created_at, reply_to, kind, meta, reactions`,
     [conversationId, me, encrypt(text, `msg:${conversationId}`), o.replyTo ?? null, kind, o.meta ? JSON.stringify(o.meta) : null],
   );
-  await pool.query(`UPDATE ${S}.conversations SET updated_at = now(), last_message_at = now() WHERE id = $1`, [conversationId]);
+  await pool.query(
+    `UPDATE ${S}.conversations SET updated_at = now(), last_message_at = now(),
+            first_reply_at = CASE WHEN type = 'support' AND first_reply_at IS NULL AND assigned_to = $2 THEN now() ELSE first_reply_at END WHERE id = $1`,
+    [conversationId, me],
+  );
   await pool.query(`UPDATE ${S}.conversation_participants SET last_read_at = now() WHERE conversation_id = $1 AND user_id = $2`, [conversationId, me]);
   const sender = await one<{ full_name: string }>(`SELECT full_name FROM ${S}.users WHERE id = $1`, [me]);
   const others = await pool.query(
@@ -157,7 +200,9 @@ messagesRouter.get(
   ah(async (req, res) => {
     const me = req.auth!.userId;
     const r = await pool.query(
-      `SELECT c.id, c.type, c.title, c.status, c.created_at, c.updated_at, c.created_by,
+      `SELECT c.id, c.type, c.title, c.status, c.created_at, c.updated_at, c.created_by, c.topic, c.assigned_to, c.closed_at,
+              (SELECT full_name FROM ${S}.users WHERE id = c.assigned_to) AS assigned_name,
+              (SELECT json_build_object('stars', r.stars, 'comment', r.comment, 'declined', r.declined) FROM ${S}.support_ratings r WHERE r.conversation_id = c.id AND r.user_id = $1) AS my_rating,
               lm.content AS last_content, lm.created_at AS last_at, lm.sender_id AS last_sender,
               (SELECT count(*)::int FROM ${S}.messages m WHERE m.conversation_id = c.id AND m.sender_id IS DISTINCT FROM $1
                  AND NOT COALESCE(m.is_deleted,false) AND m.created_at > COALESCE(cp.last_read_at, 'epoch')) AS unread,
@@ -190,33 +235,44 @@ messagesRouter.post(
   validate({
     body: z
       // 'direct' is accepted from older app versions; it is stored as the database's 'user_to_user'.
-      .object({ type: z.enum(['direct', 'user_to_user', 'support']), recipientId: idParam.optional(), title: z.string().trim().max(80).optional() })
+      .object({
+        type: z.enum(['direct', 'user_to_user', 'support']),
+        recipientId: idParam.optional(),
+        title: z.string().trim().max(80).optional(),
+        topic: z.enum(Object.keys(SUPPORT_TOPICS) as [SupportTopic, ...SupportTopic[]]).optional(),
+      })
       .strict(),
   }),
   ah(async (req, res) => {
     const me = req.auth!.userId;
     const { type, recipientId, title } = req.body;
     if (type === 'support') {
+      const topic = req.body.topic ?? null;
       const existing = await one<any>(
-        `SELECT c.id FROM ${S}.conversations c JOIN ${S}.conversation_participants p ON p.conversation_id = c.id
+        `SELECT c.id, c.topic FROM ${S}.conversations c JOIN ${S}.conversation_participants p ON p.conversation_id = c.id
           WHERE p.user_id = $1 AND c.type = 'support' AND c.status = 'active' AND c.created_by = $1 LIMIT 1`,
         [me],
       );
-      if (existing) return res.json({ success: true, data: { conversationId: existing.id, existing: true } });
+      if (existing) {
+        if (topic && !existing.topic) await pool.query(`UPDATE ${S}.conversations SET topic = $2 WHERE id = $1`, [existing.id, topic]);
+        return res.json({ success: true, data: { conversationId: existing.id, existing: true } });
+      }
+      // Nobody is added yet: the request waits in the queue of the admins who may take it.
       const id = await tx(async (c) => {
         const conv = await one<any>(
-          `INSERT INTO ${S}.conversations (type, title, created_by, status) VALUES ('support', $2, $1, 'active') RETURNING id`,
-          [me, title || 'Support request'],
+          `INSERT INTO ${S}.conversations (type, title, created_by, status, topic) VALUES ('support', $2, $1, 'active', $3) RETURNING id`,
+          [me, title || 'Support request', topic],
           c,
         );
-        await c.query(
-          `INSERT INTO ${S}.conversation_participants (conversation_id, user_id)
-           SELECT $1::uuid, id FROM ${S}.users WHERE role = 'admin' AND status = 'active' AND id <> $2::uuid
-           UNION SELECT $1::uuid, $2::uuid`,
-          [conv.id, me],
-        );
+        await c.query(`INSERT INTO ${S}.conversation_participants (conversation_id, user_id) VALUES ($1, $2)`, [conv.id, me]);
         return conv.id;
       });
+      const admins = await pool.query<AdminRow>(`SELECT id, admin_level, admin_permissions FROM ${S}.users WHERE role = 'admin' AND status = 'active' AND id <> $1`, [me]);
+      const who = await one<any>(`SELECT full_name FROM ${S}.users WHERE id = $1`, [me]);
+      for (const a of admins.rows.filter((x) => canTake(x, topic)))
+        await notifyBi(undefined, a.id, 'support_new', ['New support request', `${who?.full_name ?? ''} is waiting for help.`], ['طلب دعم جديد', `${who?.full_name ?? ''} بستنى مساعدة.`], {
+          link: '/app/messages?queue=1',
+        });
       return res.status(201).json({ success: true, data: { conversationId: id, existing: false } });
     }
     if (!recipientId) throw badRequest('RECIPIENT_REQUIRED', 'Choose who to message');
@@ -248,7 +304,15 @@ messagesRouter.patch(
     if (!conv) throw notFound('Conversation not found');
     await participant(req.params.id!, req.auth!.userId);
     if (String(conv.created_by) !== String(req.auth!.userId) && req.auth!.role !== 'admin') throw forbidden();
-    await pool.query(`UPDATE ${S}.conversations SET status = 'closed', updated_at = now() WHERE id = $1`, [req.params.id]);
+    const c = await one<any>(
+      `UPDATE ${S}.conversations SET status = 'closed', updated_at = now(), closed_at = now(), closed_by = $2 WHERE id = $1 RETURNING type, created_by, assigned_to`,
+      [req.params.id, req.auth!.userId],
+    );
+    // A support chat closed by the team: ask the customer how it went (they may say no).
+    if (c?.type === 'support' && c.assigned_to && String(c.created_by) !== String(req.auth!.userId))
+      await notifyBi(undefined, c.created_by, 'support_closed', ['Your support chat was closed', 'How did we do? Rate the help you got.'], ['انسكّرت محادثة الدعم', 'كيف كانت المساعدة؟ قيّمها إذا حابب.'], {
+        conversationId: req.params.id,
+      });
     res.json({ success: true });
   }),
 );
@@ -261,7 +325,7 @@ messagesRouter.get(
   }),
   ah(async (req, res) => {
     const me = req.auth!.userId;
-    await participant(req.params.id!, me);
+    const as = await canRead(req.params.id!, me);
     const q = req.query as any;
     const r = await pool.query(
       `SELECT m.id, m.content, m.created_at, m.is_edited, COALESCE(m.is_deleted,false) AS is_deleted, m.sender_id, m.reactions, m.kind, m.meta, m.reply_to,
@@ -274,10 +338,11 @@ messagesRouter.get(
         ORDER BY m.created_at DESC LIMIT $3`,
       [req.params.id, q.before ?? null, q.limit],
     );
-    await pool.query(`UPDATE ${S}.conversation_participants SET last_read_at = now() WHERE conversation_id = $1 AND user_id = $2`, [req.params.id, me]);
+    if (as === 'participant') await pool.query(`UPDATE ${S}.conversation_participants SET last_read_at = now() WHERE conversation_id = $1 AND user_id = $2`, [req.params.id, me]);
     res.json({
       success: true,
       data: {
+        readOnly: as === 'supervisor',
         messages: r.rows.reverse().map(({ reply_content, reply_name, reply_deleted, ...m }) => ({
           ...m,
           content: m.is_deleted ? '' : readMessage(m.content, String(req.params.id)),
@@ -323,6 +388,130 @@ messagesRouter.delete(
     const r = await pool.query(`UPDATE ${S}.messages SET is_deleted = true, content = '[deleted]', meta = NULL, reactions = '{}'::jsonb WHERE id = $1 AND sender_id = $2 AND NOT COALESCE(is_deleted,false)`, [req.params.id, req.auth!.userId]);
     if (r.rowCount === 0) throw notFound('Message not found');
     res.json({ success: true });
+  }),
+);
+
+// ------------------------------------------------------------ support desk
+async function requireSupportAdmin(userId: string) {
+  const a = await adminRow(userId);
+  if (!a || a.role !== 'admin' || (a.admin_level !== 'super_admin' && !(a.admin_permissions ?? []).includes('support'))) throw forbidden('You do not have permission for this action', 'NO_PERMISSION');
+  return a;
+}
+const supportCols = `c.id, c.topic, c.status, c.created_at, c.claimed_at, c.first_reply_at, c.closed_at, c.assigned_to,
+  u.id AS customer_id, u.full_name AS customer_name, u.profile_image AS customer_image, u.role AS customer_role,
+  (SELECT content FROM ${S}.messages m WHERE m.conversation_id = c.id AND NOT COALESCE(m.is_deleted,false) ORDER BY m.created_at DESC LIMIT 1) AS last_content,
+  (SELECT count(*)::int FROM ${S}.messages m WHERE m.conversation_id = c.id AND NOT COALESCE(m.is_deleted,false)) AS messages`;
+
+/** Requests nobody has taken yet that this admin may take. */
+messagesRouter.get(
+  '/support/queue',
+  ah(async (req, res) => {
+    const a = await requireSupportAdmin(req.auth!.userId);
+    const r = await pool.query(
+      `SELECT ${supportCols} FROM ${S}.conversations c JOIN ${S}.users u ON u.id = c.created_by
+        WHERE c.type = 'support' AND c.status = 'active' AND c.assigned_to IS NULL AND c.created_by <> $1
+        ORDER BY c.created_at LIMIT 100`,
+      [a.id],
+    );
+    const items = r.rows
+      .filter((x) => canTake(a, x.topic))
+      .map(({ last_content, ...x }) => ({ ...x, last: last_content ? readMessage(last_content, String(x.id)).slice(0, 120) : null }));
+    res.json({ success: true, data: { items } });
+  }),
+);
+
+/** Take a request: it becomes yours alone and leaves everyone else's queue. */
+messagesRouter.post(
+  '/support/:id/claim',
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const a = await requireSupportAdmin(req.auth!.userId);
+    const conv = await one<any>(`SELECT topic, created_by FROM ${S}.conversations WHERE id = $1 AND type = 'support'`, [req.params.id]);
+    if (!conv) throw notFound('Conversation not found');
+    if (!canTake(a, conv.topic)) throw forbidden('This request is for another team', 'NOT_YOUR_TOPIC');
+    const ok = await one(
+      `UPDATE ${S}.conversations SET assigned_to = $2, claimed_at = now() WHERE id = $1 AND assigned_to IS NULL AND status = 'active' RETURNING id`,
+      [req.params.id, a.id],
+    );
+    if (!ok) throw conflict('ALREADY_TAKEN', 'Someone else already took this request');
+    await pool.query(
+      `INSERT INTO ${S}.conversation_participants (conversation_id, user_id) SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM ${S}.conversation_participants WHERE conversation_id = $1 AND user_id = $2)`,
+      [req.params.id, a.id],
+    );
+    await notifyBi(undefined, conv.created_by, 'support_claimed', ['Someone is helping you', `${a.full_name} took your support request.`], ['في حدا عم يساعدك', `${a.full_name} استلم طلب الدعم تبعك.`], {
+      conversationId: req.params.id,
+    });
+    res.json({ success: true, data: { conversationId: req.params.id } });
+  }),
+);
+
+/** Give a request back to the queue (e.g. it needs another team). */
+messagesRouter.post(
+  '/support/:id/release',
+  validate({
+    params: z.object({ id: idParam }).strict(),
+    body: z.object({ topic: z.enum(Object.keys(SUPPORT_TOPICS) as [SupportTopic, ...SupportTopic[]]).optional() }).strict(),
+  }),
+  ah(async (req, res) => {
+    const me = req.auth!.userId;
+    const a = await requireSupportAdmin(me);
+    const r = await one(
+      `UPDATE ${S}.conversations SET assigned_to = NULL, claimed_at = NULL, topic = COALESCE($3, topic)
+        WHERE id = $1 AND type = 'support' AND status = 'active' AND (assigned_to = $2 OR $4) RETURNING id`,
+      [req.params.id, me, req.body.topic ?? null, a.admin_level === 'super_admin'],
+    );
+    if (!r) throw notFound('Conversation not found');
+    await pool.query(
+      `DELETE FROM ${S}.conversation_participants p USING ${S}.users u, ${S}.conversations c
+        WHERE p.conversation_id = $1 AND u.id = p.user_id AND u.role = 'admin' AND c.id = p.conversation_id AND p.user_id <> c.created_by`,
+      [req.params.id],
+    );
+    res.json({ success: true });
+  }),
+);
+
+/** The customer rates the help they got (or says they'd rather not). One rating per chat; it can be changed. */
+messagesRouter.post(
+  '/conversations/:id/rate',
+  validate({
+    params: z.object({ id: idParam }).strict(),
+    body: z
+      .object({ stars: z.number().int().min(1).max(5).optional(), comment: z.string().trim().max(500).optional(), declined: z.boolean().default(false) })
+      .strict()
+      .refine((b) => b.declined || b.stars, 'Choose a number of stars'),
+  }),
+  ah(async (req, res) => {
+    const me = req.auth!.userId;
+    const c = await one<any>(`SELECT created_by, assigned_to FROM ${S}.conversations WHERE id = $1 AND type = 'support'`, [req.params.id]);
+    if (!c || String(c.created_by) !== String(me)) throw notFound('Conversation not found');
+    if (!c.assigned_to) throw badRequest('NOT_HANDLED', 'Nobody has answered this request yet');
+    await pool.query(
+      `INSERT INTO ${S}.support_ratings (conversation_id, admin_id, user_id, stars, comment, declined) VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (conversation_id) DO UPDATE SET stars = EXCLUDED.stars, comment = EXCLUDED.comment, declined = EXCLUDED.declined, updated_at = now()`,
+      [req.params.id, c.assigned_to, me, req.body.declined ? null : req.body.stars, req.body.declined ? null : req.body.comment || null, req.body.declined],
+    );
+    res.json({ success: true });
+  }),
+);
+
+/** Super admin: every support chat, who handled it and how it was rated. */
+messagesRouter.get(
+  '/support/all',
+  validate({ query: z.object({ admin: idParam.optional(), status: z.enum(['waiting', 'active', 'closed']).optional() }).strict() }),
+  ah(async (req, res) => {
+    const a = await adminRow(req.auth!.userId);
+    if (a?.admin_level !== 'super_admin') throw forbidden('Only the super admin can see every support chat', 'SUPER_ONLY');
+    const q = req.query as any;
+    const r = await pool.query(
+      `SELECT ${supportCols}, h.full_name AS admin_name, h.profile_image AS admin_image, sr.stars, sr.comment, sr.declined
+         FROM ${S}.conversations c JOIN ${S}.users u ON u.id = c.created_by
+         LEFT JOIN ${S}.users h ON h.id = c.assigned_to LEFT JOIN ${S}.support_ratings sr ON sr.conversation_id = c.id
+        WHERE c.type = 'support' AND ($1::uuid IS NULL OR c.assigned_to = $1)
+          AND ($2::text IS NULL OR ($2 = 'waiting' AND c.assigned_to IS NULL AND c.status = 'active') OR ($2 = 'active' AND c.assigned_to IS NOT NULL AND c.status = 'active') OR ($2 = 'closed' AND c.status = 'closed'))
+        ORDER BY COALESCE(c.last_message_at, c.created_at) DESC LIMIT 200`,
+      [q.admin ?? null, q.status ?? null],
+    );
+    res.json({ success: true, data: { items: r.rows.map(({ last_content, ...x }) => ({ ...x, last: last_content ? readMessage(last_content, String(x.id)).slice(0, 120) : null })) } });
   }),
 );
 

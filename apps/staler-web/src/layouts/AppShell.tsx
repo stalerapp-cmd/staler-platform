@@ -29,6 +29,8 @@ import {
   Package,
   QrCode,
   Scale,
+  Flag,
+  Trophy,
   ScanLine,
   Send,
   ShieldCheck,
@@ -161,12 +163,14 @@ function useNav() {
       { to: '/app/admin/stores', label: t.nav.stores, icon: Store, perm: 'stores.manage' },
       { to: '/app/admin/agents', label: t.ctl.agents, icon: HandCoins, perm: 'agents.manage' },
       { to: '/app/admin/disputes', label: t.nav.disputes, icon: Scale, perm: 'orders.disputes' },
+      { to: '/app/admin/reports', label: t.nav.reports, icon: Flag, perm: 'reports.manage' },
       { to: '/app/admin/pending', label: t.nav.pending, icon: UserPlus, perm: 'pending.manage' },
       { to: '/app/admin/bank', label: t.nav.bankOps, icon: Landmark, perm: 'bank.ops' },
       { to: '/app/admin/notify', label: t.nav.notify, icon: Megaphone, perm: 'notify' },
       { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
       { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
       { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },
+      { to: '/app/admin/team', label: t.nav.team, icon: Trophy, perm: 'admins.manage' },
     ];
     groups.unshift({ id: 'admin', label: t.navg.admin, items: items.filter((i) => !i.perm || can(i.perm)) });
   }

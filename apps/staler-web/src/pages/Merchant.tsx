@@ -35,6 +35,7 @@ import { useData } from '../lib/hooks';
 import { AMOUNT_RE, date, fill, money, relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
+import { sectionIcon } from '../components/StoreSections';
 import { AreaChart, BarList } from '../components/Chart';
 import { MapView, type Pin } from '../components/MapView';
 import { ShareSheet } from '../components/Share';
@@ -649,6 +650,9 @@ interface ProductForm {
   depositPercent: string;
   depositRefundable: boolean;
   status?: 'active' | 'hidden';
+  sectionIds: string[];
+  wholesalePrice: string;
+  wholesaleMinQty: string;
 }
 const emptyForm: ProductForm = {
   name: '',
@@ -664,6 +668,9 @@ const emptyForm: ProductForm = {
   downloadLimit: '3',
   depositPercent: '0',
   depositRefundable: true,
+  sectionIds: [],
+  wholesalePrice: '',
+  wholesaleMinQty: '1',
 };
 
 export function MerchantProducts() {
@@ -672,6 +679,7 @@ export function MerchantProducts() {
   const confirm = useConfirm();
   const st = useStores();
   const { data, loading, reload } = useData<{ products: any[] }>(st.current ? '/api/merchant/products' : null, [st.current?.id]);
+  const sections = useData<{ sections: any[] }>(st.current ? '/api/merchant/crm/sections' : null, [st.current?.id]);
   const [form, setForm] = useState<ProductForm | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -711,6 +719,9 @@ export function MerchantProducts() {
       downloadLimit: Math.min(20, Math.max(1, Number(form.downloadLimit) || 3)),
       depositPercent: form.isDigital ? 0 : Math.min(90, Math.max(0, Number(form.depositPercent) || 0)),
       depositRefundable: form.depositRefundable,
+      sectionIds: form.sectionIds,
+      wholesalePrice: AMOUNT_RE.test(form.wholesalePrice) && Number(form.wholesalePrice) > 0 ? form.wholesalePrice : null,
+      wholesaleMinQty: Math.max(1, Number(form.wholesaleMinQty) || 1),
       ...(form.id && form.status ? { status: form.status } : {}),
     };
     try {
@@ -773,6 +784,9 @@ export function MerchantProducts() {
                       depositPercent: String(p.deposit_percent ?? 0),
                       depositRefundable: p.deposit_refundable ?? true,
                       status: p.status === 'hidden' ? 'hidden' : 'active',
+                      sectionIds: p.section_ids ?? [],
+                      wholesalePrice: p.wholesale_price ? Number(p.wholesale_price).toFixed(2) : '',
+                      wholesaleMinQty: String(p.wholesale_min_qty ?? 1),
                     })
                   }
                 >
@@ -810,7 +824,42 @@ export function MerchantProducts() {
               </div>
               <Toggle checked={form.isDigital} onChange={(v) => setForm({ ...form, isDigital: v })} label={t.merchant.digital} />
               {!form.isDigital && <Field label={t.merchant.stock} type="number" min={0} max={1000000} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />}
-              <Field label={`${t.merchant.category} (${t.common.optional})`} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} maxLength={40} />
+              <div>
+                <p className="mb-1.5 flex items-center justify-between text-sm font-medium text-ink/80">
+                  {lang === 'ar' ? 'بأي قسم؟' : 'Which sections?'}
+                  <Link to="/app/merchant/customers?tab=sections" className="text-xs font-semibold text-sky">
+                    {lang === 'ar' ? 'رتّب الأقسام' : 'Manage sections'}
+                  </Link>
+                </p>
+                {!(sections.data?.sections ?? []).length ? (
+                  <p className="rounded-2xl bg-sunk/70 px-3 py-2.5 text-xs text-muted">{lang === 'ar' ? 'اعمل أقسام لمتجرك (مخبوزات، رجالي، إكسسوارات…) لتبين منتجاتك مرتبة بصفحتك.' : 'Create sections (Bakery, Men, Accessories…) so your products show neatly on your page.'}</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {sections.data!.sections.map((x: any) => {
+                      const on = form.sectionIds.includes(x.id);
+                      const I = sectionIcon(x.icon);
+                      return (
+                        <button
+                          key={x.id}
+                          type="button"
+                          onClick={() => setForm({ ...form, sectionIds: on ? form.sectionIds.filter((y) => y !== x.id) : [...form.sectionIds, x.id] })}
+                          className={cx('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition', on ? 'bg-night text-white dark:bg-white/20' : 'bg-sunk text-ink/80 hover:text-ink')}
+                        >
+                          <I className="h-4 w-4" /> {x.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-3 rounded-2xl border border-[#1F4D3A]/30 bg-[#1F4D3A]/[0.04] p-4">
+                <p className="font-medium">{lang === 'ar' ? 'سعر الجملة (اختياري)' : 'Wholesale price (optional)'}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <AmountInput label={lang === 'ar' ? 'سعر القطعة جملة' : 'Unit price, wholesale'} value={form.wholesalePrice} onChange={(v) => setForm({ ...form, wholesalePrice: v })} />
+                  <Field label={lang === 'ar' ? 'من كمية' : 'From quantity'} type="number" min={1} value={form.wholesaleMinQty} onChange={(e) => setForm({ ...form, wholesaleMinQty: e.target.value })} />
+                </div>
+                <p className="text-xs text-muted">{lang === 'ar' ? 'بيشوفه بس تجار الجملة اللي قبلتهم، وبينحسب لحاله لما يطلبوا هالكمية أو أكثر.' : 'Only approved wholesale buyers see it; it applies from this quantity.'}</p>
+              </div>
               {!form.isDigital && (
                 <div className="space-y-3 rounded-2xl border border-gold/40 bg-gold/5 p-4">
                   <p className="font-medium">{t.mstore.deposit}</p>

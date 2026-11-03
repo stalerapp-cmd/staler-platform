@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
+import { FlipHorizontal2, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { Button, Sheet, cx } from './ui';
 
@@ -16,6 +16,9 @@ export function ImageCropper({ file, shape = 'circle', onCancel, onConfirm }: { 
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [rot, setRot] = useState(0);
+  // Mirror, and a small tilt to straighten a crooked photo.
+  const [flip, setFlip] = useState(false);
+  const [tilt, setTilt] = useState(0);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [busy, setBusy] = useState(false);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
@@ -28,6 +31,8 @@ export function ImageCropper({ file, shape = 'circle', onCancel, onConfirm }: { 
     setUrl(u);
     setZoom(1);
     setRot(0);
+    setFlip(false);
+    setTilt(0);
     setPos({ x: 0, y: 0 });
     const i = new Image();
     i.onload = () => setImg(i);
@@ -42,7 +47,10 @@ export function ImageCropper({ file, shape = 'circle', onCancel, onConfirm }: { 
   const turned = rot % 180 !== 0;
   const iw = img ? (turned ? img.naturalHeight : img.naturalWidth) : 1;
   const ih = img ? (turned ? img.naturalWidth : img.naturalHeight) : 1;
-  const base = Math.max(frameW / iw, frameH / ih);
+  const tr = (tilt * Math.PI) / 180;
+  // A tilted picture must grow a little so it still covers the frame's corners.
+  const tiltGrow = Math.abs(Math.cos(tr)) + Math.abs(Math.sin(tr)) * Math.max(frameW / frameH, frameH / frameW);
+  const base = Math.max(frameW / iw, frameH / ih) * tiltGrow;
   const scale = base * zoom;
   const clamp = (p: { x: number; y: number }, z = zoom) => {
     const s = base * z;
@@ -68,7 +76,8 @@ export function ImageCropper({ file, shape = 'circle', onCancel, onConfirm }: { 
     g.fillStyle = '#ffffff';
     if (shape !== 'circle') g.fillRect(0, 0, outW, outH);
     g.translate(outW / 2 + pos.x * k, outH / 2 + pos.y * k);
-    g.rotate((rot * Math.PI) / 180);
+    g.rotate(((rot + tilt) * Math.PI) / 180);
+    if (flip) g.scale(-1, 1);
     const s = scale * k;
     g.drawImage(img, (-img.naturalWidth * s) / 2, (-img.naturalHeight * s) / 2, img.naturalWidth * s, img.naturalHeight * s);
     const blob = await new Promise<Blob | null>((r) => c.toBlob(r, shape === 'circle' ? 'image/png' : 'image/jpeg', 0.9));
@@ -122,7 +131,7 @@ export function ImageCropper({ file, shape = 'circle', onCancel, onConfirm }: { 
             style={{
               width: img.naturalWidth * scale,
               height: img.naturalHeight * scale,
-              transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) rotate(${rot}deg)`,
+              transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) rotate(${rot + tilt}deg)${flip ? ' scaleX(-1)' : ''}`,
             }}
           />
         )}
@@ -142,17 +151,56 @@ export function ImageCropper({ file, shape = 'circle', onCancel, onConfirm }: { 
         <button onClick={() => setZ(zoom + 0.2)} className="grid h-9 w-9 place-items-center rounded-full bg-sunk text-muted hover:text-ink" aria-label={t.crop.zoomIn}>
           <ZoomIn className="h-4 w-4" />
         </button>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          onClick={() => {
+            setRot((r) => (r + 270) % 360);
+            setPos({ x: 0, y: 0 });
+          }}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sunk text-muted hover:text-ink"
+          aria-label={t.crop.rotate}
+          title={t.crop.rotate}
+        >
+          <RotateCcw className="h-4 w-4" />
+        </button>
         <button
           onClick={() => {
             setRot((r) => (r + 90) % 360);
             setPos({ x: 0, y: 0 });
           }}
-          className="grid h-9 w-9 place-items-center rounded-full bg-sunk text-muted hover:text-ink"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sunk text-muted hover:text-ink"
           aria-label={t.crop.rotate}
           title={t.crop.rotate}
         >
           <RotateCw className="h-4 w-4" />
         </button>
+        <button
+          onClick={() => setFlip((f) => !f)}
+          aria-pressed={flip}
+          className={cx('grid h-9 w-9 shrink-0 place-items-center rounded-full transition', flip ? 'bg-night text-white dark:bg-white/20' : 'bg-sunk text-muted hover:text-ink')}
+          aria-label="⇋"
+          title="⇋"
+        >
+          <FlipHorizontal2 className="h-4 w-4" />
+        </button>
+        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-sunk px-3 py-1.5">
+          <span className="num w-9 shrink-0 text-center text-xs text-muted">{tilt > 0 ? `+${tilt}` : tilt}°</span>
+          <input
+            type="range"
+            min={-20}
+            max={20}
+            step={0.5}
+            value={tilt}
+            onChange={(e) => {
+              setTilt(Number(e.target.value));
+              setPos((p) => clamp(p));
+            }}
+            onDoubleClick={() => setTilt(0)}
+            className="min-w-0 flex-1 accent-[rgb(var(--stitch))]"
+            aria-label="tilt"
+          />
+        </label>
       </div>
     </Sheet>
   );

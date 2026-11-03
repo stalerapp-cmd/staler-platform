@@ -8,6 +8,7 @@ import { hmac, randomToken, safeEqual } from '../lib/crypto.js';
 import { badRequest, conflict, forbidden, notFound, tooMany } from '../lib/errors.js';
 import { putFile } from '../lib/storage.js';
 import { areaOf, inPlaces, mentionOf, placeKeys } from '../lib/audience.js';
+import { mergePlaces } from './crm.js';
 import { ah } from '../lib/http.js';
 import { amountSchema } from '../lib/money.js';
 import { totpCode, uuid, validate } from '../lib/validate.js';
@@ -216,7 +217,7 @@ exchangeRouter.get(
   ah(async (_req, res) => {
     const r = await pool.query(
       `SELECT a.user_id AS id, a.display_name, a.city, a.address, a.lat, a.lng, a.hours, COALESCE(a.logo_url, u.profile_image) AS logo_url, a.cash_in, a.cash_out, a.phone,
-              a.media, a.directions,
+              a.media, a.directions, ${PLACES('a.user_id')} AS places,
               (SELECT jsonb_build_object('kind', p.kind, 'title', p.title, 'body', p.body, 'at', p.created_at)
                  FROM ${S}.agent_posts p WHERE p.agent_id = a.user_id AND p.status = 'sent' AND p.show_until > now()
                 ORDER BY p.created_at DESC LIMIT 1) AS update
@@ -229,10 +230,10 @@ exchangeRouter.get(
 );
 
 async function profileOf(userId: string) {
-  const p = await one<any>(`SELECT * FROM ${S}.agent_profiles WHERE user_id = $1`, [userId]);
+  const p = await one<any>(`SELECT a.*, ${PLACES('a.user_id')} AS places FROM ${S}.agent_profiles a WHERE a.user_id = $1`, [userId]);
   if (p) return p;
   const u = await one<any>(`SELECT full_name, phone_number FROM ${S}.users WHERE id = $1`, [userId]);
-  return { user_id: userId, display_name: u?.full_name ?? '', phone: u?.phone_number ?? null, city: null, address: null, lat: null, lng: null, hours: null, logo_url: null, cash_in: true, cash_out: true, status: 'pending', media: [], directions: null, missing: true };
+  return { user_id: userId, display_name: u?.full_name ?? '', phone: u?.phone_number ?? null, city: null, address: null, lat: null, lng: null, hours: null, logo_url: null, cash_in: true, cash_out: true, status: 'pending', media: [], directions: null, places: [], missing: true };
 }
 
 exchangeRouter.get(
@@ -262,6 +263,24 @@ export const agentProfileBody = z
       .optional(),
     /** How to find the shop: "Next to the mosque, first floor". */
     directions: optText(400),
+    /** Other places the agent works from, and on which days (0 = Sunday … 6 = Saturday; none = every day). */
+    places: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(2).max(60),
+            city: optText(60),
+            address: optText(160),
+            lat: z.number().min(-90).max(90).nullable().optional(),
+            lng: z.number().min(-180).max(180).nullable().optional(),
+            days: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+            hours: optText(120),
+            directions: optText(400),
+          })
+          .strict(),
+      )
+      .max(6)
+      .optional(),
   })
   .strict();
 
@@ -284,7 +303,19 @@ export async function saveAgentProfile(userId: string, b: z.infer<typeof agentPr
       b.logoUrl !== undefined, b.directions !== undefined,
     ],
   );
+  if (b.places) {
+    await pool.query(`DELETE FROM ${S}.agent_places WHERE agent_id = $1`, [userId]);
+    for (const [i, p] of b.places.entries())
+      await pool.query(
+        `INSERT INTO ${S}.agent_places (agent_id, name, city, address, lat, lng, days, hours, directions, sort) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [userId, p.name, p.city ?? null, p.address ?? null, p.lat ?? null, p.lng ?? null, [...new Set(p.days)].sort(), p.hours ?? null, p.directions ?? null, i],
+      );
+  }
 }
+
+const PLACES = (agent: string) =>
+  `(SELECT COALESCE(json_agg(json_build_object('id', ap.id, 'name', ap.name, 'city', ap.city, 'address', ap.address, 'lat', ap.lat, 'lng', ap.lng,
+     'days', ap.days, 'hours', ap.hours, 'directions', ap.directions) ORDER BY ap.sort), '[]') FROM ${S}.agent_places ap WHERE ap.agent_id = ${agent})`;
 
 exchangeRouter.put(
   '/profile',
@@ -444,6 +475,67 @@ exchangeRouter.get(
     );
     const w = await walletOfUser(id);
     res.json({ success: true, data: { ...v, ...o, balance: w.balance } });
+  }),
+);
+
+/**
+ * What helps an agent plan: how much cash moves in and out, which days and hours are
+ * busy, how many people come back, and where they come from.
+ */
+exchangeRouter.get(
+  '/insights',
+  requireRole('exchange'),
+  validate({ query: z.object({ days: z.coerce.number().int().min(0).max(3650).default(30) }).strict() }),
+  ah(async (req, res) => {
+    const id = req.auth!.userId;
+    const days = Number(req.query.days);
+    // Every finished operation: vouchers claimed (cash in) and cash-outs paid (cash out).
+    const ops = `(SELECT 'in'::text AS kind, v.amount, v.claimed_at AS at, v.claimed_by AS uid FROM ${S}.exchange_vouchers v
+                   WHERE v.exchange_user_id = $1 AND v.status = 'claimed' AND ($2::int = 0 OR v.claimed_at > now() - make_interval(days => $2::int))
+                  UNION ALL
+                  SELECT 'out', c.amount, c.paid_at, c.paid_by FROM ${S}.agent_cashouts c
+                   WHERE c.agent_id = $1 AND c.status = 'paid' AND ($2::int = 0 OR c.paid_at > now() - make_interval(days => $2::int))) x`;
+    const P = [id, days];
+    const [totals, weekdays, hours, series, people, places] = await Promise.all([
+      one<any>(
+        `SELECT count(*) FILTER (WHERE kind = 'in')::int AS in_count, COALESCE(sum(amount) FILTER (WHERE kind = 'in'), 0)::text AS in_total,
+                count(*) FILTER (WHERE kind = 'out')::int AS out_count, COALESCE(sum(amount) FILTER (WHERE kind = 'out'), 0)::text AS out_total,
+                count(DISTINCT uid)::int AS customers, COALESCE(round(avg(amount), 2), 0)::text AS avg_amount, COALESCE(max(amount), 0)::text AS max_amount
+           FROM ${ops}`,
+        P,
+      ),
+      pool.query(`SELECT extract(dow FROM at)::int AS d, count(*)::int AS n, COALESCE(sum(amount), 0)::text AS total FROM ${ops} GROUP BY 1 ORDER BY 1`, P),
+      pool.query(`SELECT extract(hour FROM at AT TIME ZONE 'Asia/Hebron')::int AS h, count(*)::int AS n FROM ${ops} GROUP BY 1 ORDER BY 1`, P),
+      pool.query(
+        `SELECT to_char(date_trunc('day', at), 'YYYY-MM-DD') AS day, COALESCE(sum(amount) FILTER (WHERE kind = 'in'), 0)::text AS cash_in,
+                COALESCE(sum(amount) FILTER (WHERE kind = 'out'), 0)::text AS cash_out FROM ${ops} GROUP BY 1 ORDER BY 1`,
+        P,
+      ),
+      pool.query(
+        `SELECT x.uid, u.full_name, u.profile_image, count(*)::int AS ops, COALESCE(sum(x.amount), 0)::text AS total, max(x.at) AS last_at
+           FROM ${ops} JOIN ${S}.users u ON u.id = x.uid GROUP BY x.uid, u.full_name, u.profile_image ORDER BY ops DESC, total DESC LIMIT 10`,
+        P,
+      ),
+      pool.query(
+        `SELECT place, count(DISTINCT uid)::int AS customers, count(*)::int AS orders FROM (
+           SELECT x.uid, COALESCE(NULLIF(btrim(u.home_city), ''),
+                    (SELECT g.city FROM ${S}.user_device_places dp JOIN ${S}.ip_geo g ON g.ip = dp.ip AND g.ok WHERE dp.user_id = u.id ORDER BY dp.last_seen DESC LIMIT 1)) AS place
+             FROM ${ops} JOIN ${S}.users u ON u.id = x.uid) t GROUP BY place ORDER BY 2 DESC`,
+        P,
+      ),
+    ]);
+    const repeat = await one<{ n: number }>(`SELECT count(*)::int AS n FROM (SELECT uid FROM ${ops} GROUP BY uid HAVING count(*) > 1) r`, P);
+    res.json({
+      success: true,
+      data: {
+        totals: { ...totals, repeat: repeat?.n ?? 0 },
+        weekdays: weekdays.rows,
+        hours: hours.rows,
+        series: series.rows,
+        top: people.rows.map((p) => ({ ...p, full_name: maskName(p.full_name) })),
+        places: mergePlaces(places.rows),
+      },
+    });
   }),
 );
 

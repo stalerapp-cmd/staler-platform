@@ -17,6 +17,8 @@ import { Button, EmptyState, Skeleton, cx } from '../components/ui';
 import { PublicShell } from '../layouts/PublicShell';
 import { CATEGORY_ICONS, StoreCover, StoreLogo, accentOf } from './Stores';
 import { useCategories } from '../lib/categories';
+import { SectionsShowcase, StoreFeedbackBar, WholesaleCard, WholesaleChip, type Section } from '../components/StoreSections';
+import { StoreReviewsBlock } from '../components/Feedback';
 
 interface Branch {
   id: string;
@@ -77,7 +79,10 @@ export default function StorePage() {
   const { t, err, lang } = useI18n();
   const { user } = useAuth();
   const { count } = useCart();
-  const [data, setData] = useState<{ store: any; branches: Branch[]; ads: Ad[]; pickupPoints?: any[] } | null>(null);
+  const [data, setData] = useState<{ store: any; branches: Branch[]; ads: Ad[]; pickupPoints?: any[]; sections?: Section[]; counts?: { deals: number; wholesale: number; total: number }; wholesale?: { terms: string | null } | null; reviews?: any } | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [sort, setSort] = useState('new');
+  const [perks, setPerks] = useState<any>(null);
   const [missing, setMissing] = useState(false);
   const [products, setProducts] = useState<Product[] | null>(null);
   const [q, setQ] = useState('');
@@ -104,9 +109,13 @@ export default function StorePage() {
     let alive = true;
     const h = setTimeout(async () => {
       try {
-        const p = new URLSearchParams({ store: slug, limit: '100' });
+        const p = new URLSearchParams({ store: slug, limit: '100', sort });
         if (q.trim()) p.set('q', q.trim());
-        if (type !== 'all') p.set('type', type);
+        const secs = picked.filter((k) => k !== 'deals' && k !== 'wholesale');
+        if (secs.length) p.set('sections', secs.join(','));
+        // The "Offers" and "Wholesale" tiles act as filters of their own.
+        const t2 = picked.includes('deals') ? 'deals' : picked.includes('wholesale') ? 'wholesale' : type !== 'all' ? type : null;
+        if (t2) p.set('type', t2);
         const d = await get<{ products: Product[] }>(`/api/store/products?${p}`);
         if (alive) setProducts(d.products);
       } catch (e) {
@@ -118,7 +127,7 @@ export default function StorePage() {
       alive = false;
       clearTimeout(h);
     };
-  }, [slug, q, type, err]);
+  }, [slug, q, type, err, picked, sort]);
 
   // ?p=<id> opens a shared product directly.
   useEffect(() => {
@@ -313,7 +322,17 @@ export default function StorePage() {
             )}
           </AnimatePresence>
 
-          {user && <StorePerks merchantId={String(s.main?.id ?? s.id)} />}
+          {user && <StorePerks merchantId={String(s.main?.id ?? s.id)} onPerks={setPerks} />}
+          {user && perks?.wholesale && String(user.id) !== String(s.owner_id ?? '') && (
+            <div className="mt-3 sm:mx-8">
+              <WholesaleCard merchantId={String(s.main?.id ?? s.id)} ws={perks.wholesale} onChange={() => setPerks({ ...perks, reload: Date.now() })} />
+            </div>
+          )}
+          {data!.reviews && (
+            <div className="mt-6 sm:mx-8">
+              <StoreReviewsBlock reviews={data!.reviews} />
+            </div>
+          )}
 
           {/* --------------------------------------------------------- ads */}
           {data!.ads.length > 0 && (
@@ -381,6 +400,15 @@ export default function StorePage() {
             </section>
           )}
 
+          <SectionsShowcase
+            sections={data!.sections ?? []}
+            deals={data!.counts?.deals ?? 0}
+            wholesale={perks?.wholesale?.status === 'approved' ? (data!.counts?.wholesale ?? 0) : null}
+            picked={picked}
+            accent={accent}
+            onToggle={(k) => setPicked((x) => (x.includes(k) ? x.filter((y) => y !== k) : [...x, k]))}
+          />
+
           {/* ----------------------------------------------------- products */}
           <section className="mt-9">
             <div className="mb-3 flex items-center gap-2.5">
@@ -413,6 +441,28 @@ export default function StorePage() {
                 ))}
               </ScrollRow>
             </div>
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {picked.map((k) => {
+                const name = k === 'deals' ? (lang === 'ar' ? 'عروض وخصومات' : 'On offer') : k === 'wholesale' ? (lang === 'ar' ? 'أسعار الجملة' : 'Wholesale') : (data!.sections ?? []).find((x) => x.id === k)?.name;
+                return (
+                  <button key={k} type="button" onClick={() => setPicked(picked.filter((x) => x !== k))} className="inline-flex items-center gap-1.5 rounded-full py-1.5 pe-2 ps-3 text-sm font-medium text-white" style={{ background: accent }}>
+                    {name} <span className="grid h-5 w-5 place-items-center rounded-full bg-white/20 text-[11px]">✕</span>
+                  </button>
+                );
+              })}
+              {picked.length > 1 && (
+                <button type="button" onClick={() => setPicked([])} className="text-sm text-muted underline-offset-2 hover:underline">
+                  {lang === 'ar' ? 'امسح الكل' : 'Clear all'}
+                </button>
+              )}
+              <select value={sort} onChange={(e) => setSort(e.target.value)} className="field ms-auto h-9 w-auto rounded-full py-0 text-sm" aria-label={lang === 'ar' ? 'رتّب' : 'Sort'}>
+                <option value="new">{lang === 'ar' ? 'الأحدث' : 'Newest'}</option>
+                <option value="popular">{lang === 'ar' ? 'الأكثر مبيعًا' : 'Best selling'}</option>
+                <option value="price_asc">{lang === 'ar' ? 'السعر: من الأقل' : 'Price: low to high'}</option>
+                <option value="price_desc">{lang === 'ar' ? 'السعر: من الأعلى' : 'Price: high to low'}</option>
+                <option value="name">{lang === 'ar' ? 'الاسم' : 'Name'}</option>
+              </select>
+            </div>
             {!products ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -421,14 +471,21 @@ export default function StorePage() {
               </div>
             ) : products.length ? (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
-                {products.map((p, i) => (
-                  <ProductCard key={p.id} p={p} index={i} showStore={false} onOpen={() => setParams({ p: p.id }, { replace: true })} />
-                ))}
+                {products.map((p, i) => {
+                  const ws = perks?.wholesale?.prices?.[p.id];
+                  return (
+                    <div key={p.id} className="flex flex-col">
+                      <ProductCard p={p} index={i} showStore={false} onOpen={() => setParams({ p: p.id }, { replace: true })} />
+                      {ws && <WholesaleChip price={ws.price} min={ws.min} />}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <EmptyState icon={<Package className="h-6 w-6" />} title={t.store.noProducts} />
             )}
           </section>
+          {user && String(user.id) !== String(s.owner_id ?? '') && <StoreFeedbackBar storeId={String(s.main?.id ?? s.id)} storeName={s.store_name} />}
         </div>
       )}
 
@@ -466,7 +523,7 @@ export default function StorePage() {
  * What this store gives me: its running offer, my way to "loyal customer", and a
  * bell to turn its news on or off.
  */
-function StorePerks({ merchantId }: { merchantId: string }) {
+function StorePerks({ merchantId, onPerks }: { merchantId: string; onPerks?: (p: any) => void }) {
   const { lang } = useI18n();
   const toast = useToast();
   const ar = lang === 'ar';
@@ -474,7 +531,11 @@ function StorePerks({ merchantId }: { merchantId: string }) {
   useEffect(() => {
     let alive = true;
     get<any>(`/api/store/me/perks/${merchantId}`)
-      .then((d) => alive && setP(d))
+      .then((d) => {
+        if (!alive) return;
+        setP(d);
+        onPerks?.(d);
+      })
       .catch(() => undefined);
     return () => {
       alive = false;

@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   'stores.delete',
   'agents.manage',
   'orders.disputes',
+  'reports.manage',
   'pending.manage',
   'notify',
   'support',

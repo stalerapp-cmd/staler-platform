@@ -36,7 +36,7 @@ const phone = z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, 'Invalid phone number
 
 export async function publicUser(userId: string) {
   return one(
-    `SELECT u.id, u.email, u.full_name, u.role, u.admin_level, u.admin_permissions, u.profile_image, u.phone_number, u.language, u.theme, u.home_city,
+    `SELECT u.id, u.email, u.full_name, u.role, u.admin_level, u.admin_permissions, u.profile_image, u.profile_image_original, u.phone_number, u.language, u.theme, u.home_city,
             u.totp_enabled, u.email_verified, u.created_at, u.last_login_at,
             COALESCE(cardinality(u.totp_recovery_hashes), 0) AS recovery_codes_left,
             w.wallet_id, w.balance, w.currency, w.is_frozen AS wallet_frozen,
@@ -578,18 +578,36 @@ authRouter.post(
   }),
 );
 
-const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 3 * 1024 * 1024, files: 1 } });
+const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 2 } });
 
 authRouter.post(
   '/me/avatar',
   requireAuth,
-  avatarUpload.single('image'),
+  avatarUpload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'original', maxCount: 1 },
+  ]),
   ah(async (req, res) => {
-    if (!req.file) throw badRequest('NO_FILE', 'Choose an image');
-    const type = await fileTypeFromBuffer(req.file.buffer);
-    if (!type || !['image/jpeg', 'image/png', 'image/webp'].includes(type.mime)) throw badRequest('INVALID_IMAGE', 'Only JPEG, PNG or WebP images are allowed');
-    const stored = await putFile('avatars', req.auth!.userId, type.ext, type.mime, req.file.buffer, req.file.originalname);
-    await pool.query(`UPDATE ${S}.users SET profile_image = $2 WHERE id = $1`, [req.auth!.userId, stored.url]);
+    // "image" is the cropped photo people see; "original" (optional) is the full picture it was cut
+    // from, kept so the photo can be turned or re-framed later without uploading it again.
+    const files = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
+    const img = files.image?.[0];
+    if (!img) throw badRequest('NO_FILE', 'Choose an image');
+    const ok = ['image/jpeg', 'image/png', 'image/webp'];
+    const type = await fileTypeFromBuffer(img.buffer);
+    if (!type || !ok.includes(type.mime)) throw badRequest('INVALID_IMAGE', 'Only JPEG, PNG or WebP images are allowed');
+    const stored = await putFile('avatars', req.auth!.userId, type.ext, type.mime, img.buffer, img.originalname);
+    let original: string | null | undefined;
+    const orig = files.original?.[0];
+    if (orig) {
+      const ot = await fileTypeFromBuffer(orig.buffer);
+      if (!ot || !ok.includes(ot.mime)) throw badRequest('INVALID_IMAGE', 'Only JPEG, PNG or WebP images are allowed');
+      original = (await putFile('avatars', req.auth!.userId, ot.ext, ot.mime, orig.buffer, orig.originalname)).url;
+    } else if (req.body?.keepOriginal !== '1') original = null;
+    await pool.query(
+      `UPDATE ${S}.users SET profile_image = $2, profile_image_original = CASE WHEN $4 THEN $3 ELSE profile_image_original END WHERE id = $1`,
+      [req.auth!.userId, stored.url, original ?? null, original !== undefined],
+    );
     res.json({ success: true, data: { profileImage: stored.url } });
   }),
 );
@@ -598,7 +616,7 @@ authRouter.delete(
   '/me/avatar',
   requireAuth,
   ah(async (req, res) => {
-    await pool.query(`UPDATE ${S}.users SET profile_image = NULL WHERE id = $1`, [req.auth!.userId]);
+    await pool.query(`UPDATE ${S}.users SET profile_image = NULL, profile_image_original = NULL WHERE id = $1`, [req.auth!.userId]);
     res.json({ success: true });
   }),
 );

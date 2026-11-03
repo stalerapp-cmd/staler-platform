@@ -475,6 +475,43 @@ adminRouter.get(
   }),
 );
 
+// ------------------------------------------------------------- team review
+/**
+ * Super admin only: how each admin is doing — support chats taken and closed, how fast
+ * they answer, what customers rated them (with comments), disputes and reports settled.
+ */
+adminRouter.get(
+  '/team',
+  validate({ query: z.object({ days: z.coerce.number().int().min(1).max(3650).default(90) }).strict() }),
+  ah(async (req, res) => {
+    if (!isSuper(req)) throw forbidden('Only the super admin can see this', 'SUPER_ONLY');
+    const days = Number(req.query.days);
+    const r = await pool.query(
+      `SELECT u.id, u.full_name, u.email, u.profile_image, u.admin_level, u.admin_permissions, u.last_login_at, u.status,
+              (SELECT count(*)::int FROM ${S}.conversations c WHERE c.assigned_to = u.id AND c.claimed_at > now() - make_interval(days => $1)) AS taken,
+              (SELECT count(*)::int FROM ${S}.conversations c WHERE c.assigned_to = u.id AND c.status = 'active') AS open_now,
+              (SELECT count(*)::int FROM ${S}.conversations c WHERE c.assigned_to = u.id AND c.closed_at > now() - make_interval(days => $1)) AS closed,
+              (SELECT round(avg(extract(epoch FROM (c.first_reply_at - c.created_at)) / 60)::numeric, 1) FROM ${S}.conversations c
+                WHERE c.assigned_to = u.id AND c.first_reply_at IS NOT NULL AND c.created_at > now() - make_interval(days => $1)) AS reply_minutes,
+              (SELECT round(avg(r.stars)::numeric, 2) FROM ${S}.support_ratings r WHERE r.admin_id = u.id AND NOT r.declined AND r.updated_at > now() - make_interval(days => $1)) AS rating,
+              (SELECT count(*)::int FROM ${S}.support_ratings r WHERE r.admin_id = u.id AND NOT r.declined AND r.updated_at > now() - make_interval(days => $1)) AS ratings,
+              (SELECT count(*)::int FROM ${S}.support_ratings r WHERE r.admin_id = u.id AND r.declined AND r.updated_at > now() - make_interval(days => $1)) AS declined,
+              (SELECT COALESCE(json_object_agg(stars, n), '{}') FROM (SELECT r.stars, count(*)::int AS n FROM ${S}.support_ratings r
+                 WHERE r.admin_id = u.id AND NOT r.declined AND r.updated_at > now() - make_interval(days => $1) GROUP BY r.stars) d) AS stars,
+              (SELECT count(*)::int FROM ${S}.audit_log l WHERE l.user_id = u.id AND l.action LIKE 'admin.dispute_%' AND l.created_at > now() - make_interval(days => $1)) AS disputes,
+              (SELECT count(*)::int FROM ${S}.reports rp WHERE rp.assigned_to = u.id AND rp.status IN ('resolved', 'dismissed') AND rp.resolved_at > now() - make_interval(days => $1)) AS reports,
+              (SELECT count(*)::int FROM ${S}.audit_log l WHERE l.user_id = u.id AND l.action LIKE 'admin.%' AND l.created_at > now() - make_interval(days => $1)) AS actions,
+              (SELECT COALESCE(json_agg(x ORDER BY x.at DESC), '[]') FROM (
+                 SELECT r.stars, r.comment, r.updated_at AS at, r.conversation_id, cu.full_name AS customer
+                   FROM ${S}.support_ratings r LEFT JOIN ${S}.users cu ON cu.id = r.user_id
+                  WHERE r.admin_id = u.id AND NOT r.declined AND r.comment IS NOT NULL ORDER BY r.updated_at DESC LIMIT 6) x) AS comments
+         FROM ${S}.users u WHERE u.role = 'admin' ORDER BY (u.admin_level = 'super_admin') DESC, u.full_name`,
+      [days],
+    );
+    res.json({ success: true, data: { admins: r.rows } });
+  }),
+);
+
 // ---------------------------------------------------------- administrators
 /** The list of permissions the UI can offer. */
 adminRouter.get('/permissions', (_req, res) => res.json({ success: true, data: { permissions: PERMISSIONS } }));

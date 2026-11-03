@@ -10,12 +10,16 @@ import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { Avatar, Button, EmptyState, PageHeader, Sheet, Skeleton, cx } from '../components/ui';
 import { useConfirm } from '../components/Confirm';
+import { SupportQueue, SupportRating, SupportTopics, topicOf } from '../components/SupportDesk';
+import { useAuth } from '../lib/auth';
+import { usePerm } from '../lib/perm';
 
 const EMOJIS = ['❤️', '😂', '👍', '🙏', '😮', '😢', '🔥', '🎉', '👏', '😍', '🤝', '✅', '💰', '🛍️', '📦', '🚚', '😊', '😅', '🤔', '👌', '🌙', '☕', '🌹', '💯'];
 const QUICK = EMOJIS.slice(0, 6);
 
-function title(c: any, t: any) {
-  if (c.type === 'support') return t.messages.supportTitle;
+function title(c: any, t: any, staff = false) {
+  // The team sees who asked; the customer sees "Support" (and the topic).
+  if (c.type === 'support') return staff ? (c.participants?.find((p: any) => p.role !== 'admin')?.full_name ?? t.messages.supportTitle) : t.messages.supportTitle;
   return c.participants?.[0]?.full_name ?? c.title ?? '—';
 }
 
@@ -422,9 +426,7 @@ function NewChat({ open, onClose }: { open: boolean; onClose: () => void }) {
   const mine = (contacts.data?.contacts ?? []).filter((c) => !q.trim() || `${c.nickname ?? ''} ${c.full_name}`.toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <Sheet open={open} onClose={onClose} title={t.messages.newChat}>
-      <Button block variant="secondary" icon={<LifeBuoy className="h-5 w-5" />} onClick={() => start({ type: 'support' })}>
-        {t.messages.support}
-      </Button>
+      <SupportTopics onPick={(topic) => start({ type: 'support', topic })} />
       <div className="my-5 border-t border-dashed border-line" />
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.messages.searchPeopleAny} className="field" autoFocus />
       <div className="mt-3 max-h-80 overflow-y-auto">
@@ -471,6 +473,14 @@ export default function Messages() {
   }, []);
   const other = current?.type !== 'support' ? current?.participants?.[0] : null;
   const wide = useWide();
+  const { user } = useAuth();
+  const { can } = usePerm();
+  const staff = user?.role === 'admin';
+  const desk = staff && can('support');
+  const topicLabel = (c: any) => {
+    const T = topicOf(c?.topic);
+    return T ? (lang === 'ar' ? T.ar : T.en) : null;
+  };
 
   return (
     <div>
@@ -484,6 +494,7 @@ export default function Messages() {
       />
       <div className="card grid overflow-hidden lg:grid-cols-[320px_1fr]">
         <aside className={cx('border-line lg:border-e', id && 'hidden lg:block')}>
+          {desk && <SupportQueue open={sp.get('queue') === '1'} onClaimed={() => void convs.reload()} />}
           {!convs.data ? (
             <div className="space-y-3 p-4">
               {[0, 1, 2].map((i) => (
@@ -509,7 +520,10 @@ export default function Messages() {
                     )}
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">
-                        <span className={cx('truncate', c.unread > 0 ? 'font-semibold' : 'font-medium')}>{title(c, t)}</span>
+                        <span className={cx('truncate', c.unread > 0 ? 'font-semibold' : 'font-medium')}>
+                          {title(c, t, staff)}
+                          {c.type === 'support' && topicLabel(c) && <span className="ms-1.5 text-[11px] font-normal text-muted">· {topicLabel(c)}</span>}
+                        </span>
                         {c.lastMessage && <span className="shrink-0 text-[11px] text-muted">{relative(c.lastMessage.created_at, lang)}</span>}
                       </span>
                       <span className="flex items-center justify-between gap-2">
@@ -534,7 +548,14 @@ export default function Messages() {
                     <ArrowLeft className="h-5 w-5 flip-rtl" />
                   </Link>
                   {current && (current.type === 'support' ? <LifeBuoy className="h-6 w-6 text-olive" /> : <Avatar name={title(current, t)} src={other?.profile_image} size={36} />)}
-                  <p className="truncate font-medium">{current ? title(current, t) : '…'}</p>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{current ? title(current, t, staff) : '…'}</p>
+                    {current?.type === 'support' && (
+                      <p className="truncate text-xs text-muted">
+                        {[topicLabel(current), !staff ? (current.assigned_name ? `${lang === 'ar' ? 'معك' : 'With'} ${current.assigned_name}` : lang === 'ar' ? 'بستنى حدا من الفريق يستلم' : 'Waiting for the team') : null].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   {other && (
@@ -554,6 +575,24 @@ export default function Messages() {
                       <span className="hidden sm:inline">{t.messages.saveContact}</span>
                     </button>
                   )}
+                  {staff && current?.status === 'active' && current.type === 'support' && String(current.assigned_to) === String(user?.id) && (
+                    <button
+                      className="rounded-xl px-2.5 py-2 text-sm text-muted hover:text-ink"
+                      title={lang === 'ar' ? 'رجّع الطلب لطابور الفريق' : 'Give it back to the team queue'}
+                      onClick={async () => {
+                        try {
+                          await post(`/api/messages/support/${id}/release`, {});
+                          toast(lang === 'ar' ? 'رجع الطلب للطابور' : 'Back in the queue');
+                          nav('/app/messages', { replace: true });
+                          void convs.reload();
+                        } catch (e) {
+                          toast(err(e), 'error');
+                        }
+                      }}
+                    >
+                      {lang === 'ar' ? 'رجّعه للطابور' : 'Release'}
+                    </button>
+                  )}
                   {current?.status === 'active' && current.type === 'support' && (
                     <button
                       className="rounded-xl px-2.5 py-2 text-sm text-muted hover:text-stitch"
@@ -570,6 +609,9 @@ export default function Messages() {
               </div>
               {current?.status === 'closed' && <p className="bg-sunk px-4 py-2 text-center text-sm text-muted">{t.messages.closed}</p>}
               <Chat id={id} conv={current} />
+              {!staff && current?.type === 'support' && current.status === 'closed' && current.assigned_to && (
+                <SupportRating conversationId={id} rating={current.my_rating} onDone={() => void convs.reload()} />
+              )}
             </>
           ) : (
             <div className="grid h-full min-h-[420px] place-items-center p-6 text-center text-muted">

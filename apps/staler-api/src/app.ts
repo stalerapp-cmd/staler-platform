@@ -24,6 +24,7 @@ import { exchangeRouter } from './modules/exchange.js';
 import { merchantRouter, storeRouter } from './modules/commerce.js';
 import { messagesRouter } from './modules/messages.js';
 import { contactsRouter } from './modules/contacts.js';
+import { feedbackRouter } from './modules/feedback.js';
 import { adminRouter } from './modules/admin.js';
 
 let settingsCache = { at: 0, value: null as any };
@@ -127,6 +128,7 @@ export function createApp(): Express {
   app.use('/api/merchant', noStore, merchantRouter);
   app.use('/api/messages', noStore, messagesRouter);
   app.use('/api/contacts', noStore, contactsRouter);
+  app.use('/api/feedback', noStore, feedbackRouter);
   app.use('/api/admin', noStore, adminRouter);
 
   // Public images stored in the database (when Supabase Storage isn't configured).

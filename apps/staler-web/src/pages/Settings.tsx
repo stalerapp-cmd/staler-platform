@@ -3,8 +3,8 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AgentProfileEditor } from '../components/AgentProfileEditor';
 import { StoreLogo } from './Stores';
-import { AtSign, BellRing, Camera, HandCoins, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Palette, ShieldAlert, ShieldCheck, Trash2, UserRound, type LucideIcon } from 'lucide-react';
-import { applySession, del, patch, post, put, upload } from '../lib/api';
+import { AtSign, BellRing, Camera, HandCoins, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Palette, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { applySession, assetUrl, del, patch, post, put, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
 import { BioToggle } from '../components/AppLock';
@@ -61,6 +61,36 @@ export default function Settings() {
     setParams(k === 'profile' ? {} : { tab: k }, { replace: true });
   };
   const [cropFile, setCropFile] = useState<File | null>(null);
+  // Editing the current photo: reopen the original it was cut from (or the photo itself) — no new upload.
+  const [editing, setEditing] = useState(false);
+  const editPhoto = async () => {
+    const src = assetUrl((user as any)?.profile_image_original ?? user?.profile_image);
+    if (!src) return;
+    try {
+      const b = await (await fetch(src)).blob();
+      setEditing(true);
+      setCropFile(new File([b], 'photo', { type: b.type || 'image/png' }));
+    } catch {
+      toast(lang === 'ar' ? 'ما قدرنا نفتح الصورة' : 'Couldn’t open the photo', 'error');
+    }
+  };
+  /** The full picture, made smaller if huge, kept so the photo can be edited later. */
+  const shrink = (f: File) =>
+    new Promise<Blob>((resolve) => {
+      const i = new Image();
+      const u = URL.createObjectURL(f);
+      i.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(i.naturalWidth, i.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.round(i.naturalWidth * k);
+        c.height = Math.round(i.naturalHeight * k);
+        c.getContext('2d')!.drawImage(i, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(u);
+        c.toBlob((b) => resolve(b ?? f), 'image/jpeg', 0.88);
+      };
+      i.onerror = () => resolve(f);
+      i.src = u;
+    });
 
   const [name, setName] = useState(user?.full_name ?? '');
   const [phone, setPhone] = useState(user?.phone_number ?? '');
@@ -136,7 +166,10 @@ export default function Settings() {
               hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) setCropFile(f);
+                if (f) {
+                  setEditing(false);
+                  setCropFile(f);
+                }
                 e.target.value = '';
               }}
             />
@@ -148,6 +181,8 @@ export default function Settings() {
                 act('avatar', async () => {
                   const fd = new FormData();
                   fd.append('image', blob, 'photo.png');
+                  if (editing) fd.append('keepOriginal', '1');
+                  else if (cropFile) fd.append('original', await shrink(cropFile), 'original.jpg');
                   await upload('/api/auth/me/avatar', fd);
                   await reload();
                   setCropFile(null);
@@ -159,6 +194,11 @@ export default function Settings() {
               <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 transition hover:bg-white/20">
                 <Camera className="h-3.5 w-3.5" /> {user?.profile_image ? t.settings.changePhoto2 : t.settings.addPhoto}
               </button>
+              {user?.profile_image && (
+                <button onClick={editPhoto} className="flex items-center gap-1.5 border-s border-white/25 px-3 py-1.5 transition hover:bg-white/20">
+                  <SlidersHorizontal className="h-3.5 w-3.5" /> {lang === 'ar' ? 'عدّلها' : 'Adjust'}
+                </button>
+              )}
               {user?.profile_image && (
                 <button
                   onClick={async () => {

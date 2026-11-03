@@ -576,6 +576,134 @@ describe('marketplace', () => {
     expect((await request(app).get('/api/store/categories')).body.data.categories).not.toContain(slug);
   });
 
+  it('store sections, wholesale buyers, reviews (one per person) and reports', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const m = await walletUser(app, 'Sections Shop', 'merchant');
+    const st = await request(app).post('/api/merchant/stores').set(auth(m.token)).send({ storeName: 'Sections Shop', category: 'food' });
+    const sid = st.body.data.store.id;
+    const slug = st.body.data.store.slug;
+    const as = (r: any) => r.set(auth(m.token)).set('x-store-id', sid);
+    const sec = await as(request(app).post('/api/merchant/crm/sections')).send({ name: 'Bakery', icon: 'croissant' });
+    expect(sec.status).toBe(201);
+    const secId = sec.body.data.section.id;
+    const p1 = await as(request(app).post('/api/merchant/products')).send({ name: 'Bread', price: '10', stock: 100, sectionIds: [secId], wholesalePrice: '6', wholesaleMinQty: 10 });
+    const p2 = await as(request(app).post('/api/merchant/products')).send({ name: 'Milk', price: '5', stock: 100 });
+    expect(p1.body.data.product.section_ids).toEqual([secId]);
+    const inSec = await request(app).get(`/api/store/products?store=${slug}&sections=${secId}`);
+    expect(inSec.body.data.products.map((x: any) => x.name)).toEqual(['Bread']);
+    const page = await request(app).get(`/api/store/s/${slug}`);
+    expect(page.body.data.sections[0].count).toBe(1);
+    // wholesale: off → can't apply; on → apply, approve, cheaper from the minimum quantity
+    const buyer = await walletUser(app, 'Trade Buyer', 'merchant');
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: buyer.walletId, amount: '80' });
+    expect((await request(app).post(`/api/store/me/wholesale/${sid}`).set(auth(buyer.token)).send({ businessName: 'Corner Mart' })).status).toBe(400);
+    await as(request(app).put('/api/merchant/crm/wholesale')).send({ enabled: true, terms: 'Min 10 units' });
+    expect((await request(app).post(`/api/store/me/wholesale/${sid}`).set(auth(buyer.token)).send({ businessName: 'Corner Mart' })).body.data.status).toBe('pending');
+    const small = await request(app).post('/api/store/me/quote').set(auth(buyer.token)).send({ items: [{ productId: p1.body.data.product.id, quantity: 10 }] });
+    expect(small.body.data.stores[0].full).toBe('100.00');
+    await as(request(app).post(`/api/merchant/crm/wholesale/${buyer.userId}/approve`)).send({});
+    const perks = await request(app).get(`/api/store/me/perks/${sid}`).set(auth(buyer.token));
+    expect(perks.body.data.wholesale.status).toBe('approved');
+    const q = await request(app).post('/api/store/me/quote').set(auth(buyer.token)).send({ items: [{ productId: p1.body.data.product.id, quantity: 10 }] });
+    expect(q.body.data.stores[0].full).toBe('60.00');
+    const o = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [{ productId: p1.body.data.product.id, quantity: 10 }, { productId: p2.body.data.product.id, quantity: 1 }], fulfillment: 'pickup' });
+    expect(o.status).toBe(201);
+    expect(o.body.data.total).toBe('65.00');
+    // reviews: only after buying; writing again edits and keeps the old version
+    const stranger = await walletUser(app, 'Never Bought');
+    expect((await request(app).put(`/api/feedback/stores/${sid}/my-review`).set(auth(stranger.token)).send({ stars: 1 })).status).toBe(403);
+    expect((await request(app).put(`/api/feedback/stores/${sid}/my-review`).set(auth(buyer.token)).send({ stars: 2, body: 'Slow', anonymous: true })).status).toBe(200);
+    const again = await request(app).put(`/api/feedback/stores/${sid}/my-review`).set(auth(buyer.token)).send({ stars: 5, body: 'Sorted out, great now' });
+    expect(again.body.data.updated).toBe(true);
+    const adm = await request(app).get(`/api/admin/reviews/stores/${sid}`).set(auth(sup));
+    expect(adm.status).toBe(404);
+    const det = await request(app).get(`/api/feedback/admin/stores/${sid}`).set(auth(sup));
+    expect(det.body.data.reviews).toHaveLength(1);
+    expect(det.body.data.reviews[0].full_name).toBe('Trade Buyer');
+    expect(det.body.data.reviews[0].versions[0].stars).toBe(2);
+    // the owner sees nothing until the admins allow it; the public sees nothing until both agree
+    expect((await as(request(app).get('/api/feedback/merchant/reviews'))).body.data.summary).toBeNull();
+    await request(app).patch(`/api/feedback/admin/stores/${sid}/settings`).set(auth(sup)).send({ public: 'full', owner: 'anonymous' });
+    const own = await as(request(app).get('/api/feedback/merchant/reviews'));
+    expect(own.body.data.reviews[0].name).toBeNull();
+    expect((await request(app).get(`/api/store/s/${slug}`)).body.data.reviews).toBeNull();
+    await as(request(app).put('/api/feedback/merchant/reviews/show')).send({ show: true });
+    expect((await request(app).get(`/api/store/s/${slug}`)).body.data.reviews.avg).toBe(5);
+    // reports: anyone about anyone, an admin takes it and closes it
+    const rep = await request(app).post('/api/feedback/reports').set(auth(m.token)).send({ userId: stranger.userId, reason: 'abuse', details: 'Sent rude messages to my shop' });
+    expect(rep.status).toBe(201);
+    expect((await request(app).post('/api/feedback/reports').set(auth(m.token)).send({ userId: m.userId, reason: 'abuse', details: 'myself myself' })).status).toBe(400);
+    expect((await request(app).post(`/api/feedback/admin/reports/${rep.body.data.id}/claim`).set(auth(sup))).status).toBe(200);
+    expect((await request(app).post(`/api/feedback/admin/reports/${rep.body.data.id}/resolve`).set(auth(sup)).send({ outcome: 'resolved', resolution: 'Warned the person' })).status).toBe(200);
+    expect((await request(app).get('/api/feedback/reports/mine').set(auth(m.token))).body.data.reports[0].status).toBe('resolved');
+    // analytics for the store
+    const an = await as(request(app).get('/api/merchant/crm/analytics?days=0'));
+    expect(an.body.data.totals.orders).toBe(1);
+    expect(an.body.data.products[0].name).toBe('Bread');
+    expect(an.body.data.products[0].units).toBe(10);
+  });
+
+  it('support: routed by topic, one admin takes it, the customer rates it, the super admin sees the team', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const mk = async (perms: string[]) => {
+      const email = `${uniq('sa')}@x.com`;
+      await request(app).post('/api/admin/admins').set(auth(sup)).send({ fullName: 'Support Agent', email, password: STRONG, permissions: perms });
+      return login(app, email, STRONG);
+    };
+    const bankAdmin = await mk(['support', 'bank.ops']);
+    const shopAdmin = await mk(['support', 'stores.manage']);
+    const cust = await walletUser(app, 'Needs Help');
+    const c = await request(app).post('/api/messages/conversations').set(auth(cust.token)).send({ type: 'support', topic: 'bank' });
+    const cid = c.body.data.conversationId;
+    await request(app).post(`/api/messages/conversations/${cid}/messages`).set(auth(cust.token)).send({ content: 'My top-up is missing' });
+    const qBank = await request(app).get('/api/messages/support/queue').set(auth(bankAdmin));
+    expect(qBank.body.data.items.some((x: any) => x.id === cid)).toBe(true);
+    const qShop = await request(app).get('/api/messages/support/queue').set(auth(shopAdmin));
+    expect(qShop.body.data.items.some((x: any) => x.id === cid)).toBe(false);
+    expect((await request(app).post(`/api/messages/support/${cid}/claim`).set(auth(shopAdmin))).status).toBe(403);
+    // the customer can't rate before anyone answers
+    expect((await request(app).post(`/api/messages/conversations/${cid}/rate`).set(auth(cust.token)).send({ stars: 5 })).status).toBe(400);
+    const [a1, a2] = await Promise.all([request(app).post(`/api/messages/support/${cid}/claim`).set(auth(bankAdmin)), request(app).post(`/api/messages/support/${cid}/claim`).set(auth(sup))]);
+    expect([a1!.status, a2!.status].sort()).toEqual([200, 409]);
+    const owner = a1!.status === 200 ? bankAdmin : sup;
+    await request(app).post(`/api/messages/conversations/${cid}/messages`).set(auth(owner)).send({ content: 'Found it, sending now' });
+    // someone else can't read it; the super admin can (read only)
+    expect((await request(app).get(`/api/messages/conversations/${cid}/messages`).set(auth(shopAdmin))).status).toBe(404);
+    const view = await request(app).get(`/api/messages/conversations/${cid}/messages`).set(auth(sup));
+    expect(view.status).toBe(200);
+    await request(app).patch(`/api/messages/conversations/${cid}/close`).set(auth(owner));
+    expect((await request(app).post(`/api/messages/conversations/${cid}/rate`).set(auth(cust.token)).send({ stars: 4, comment: 'Quick and kind' })).status).toBe(200);
+    const all = await request(app).get('/api/messages/support/all').set(auth(sup));
+    expect(all.body.data.items.find((x: any) => x.id === cid).stars).toBe(4);
+    expect((await request(app).get('/api/messages/support/all').set(auth(bankAdmin))).status).toBe(403);
+    const team = await request(app).get('/api/admin/team').set(auth(sup));
+    expect(team.status).toBe(200);
+    expect((await request(app).get('/api/admin/team').set(auth(bankAdmin))).status).toBe(403);
+  });
+
+  it('cash agents: several places with days, and insights', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const email = `${uniq('pl')}@x.com`;
+    await request(app).post('/api/admin/users').set(auth(sup)).send({ fullName: 'Two Shops', email, password: STRONG, role: 'exchange' });
+    const agent = await login(app, email, STRONG);
+    const save = await request(app)
+      .put('/api/exchange/profile')
+      .set(auth(agent))
+      .send({ displayName: 'Two Shops', city: 'نابلس', places: [{ name: 'Market kiosk', city: 'حوارة', days: [0, 1, 2], hours: '9–14' }] });
+    expect(save.body.data.profile.places[0].days).toEqual([0, 1, 2]);
+    const me = await request(app).get('/api/auth/me').set(auth(agent));
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: me.body.data.user.wallet_id, amount: '15' });
+    const c1 = await walletUser(app, 'Cash Person');
+    for (const amt of ['5', '7']) {
+      const v = await request(app).post('/api/exchange/vouchers').set(auth(agent)).send({ amount: amt });
+      await request(app).post('/api/exchange/claim').set(auth(c1.token)).send({ voucher: v.body.data.voucher.uri });
+    }
+    const ins = await request(app).get('/api/exchange/insights?days=0').set(auth(agent));
+    expect(ins.body.data.totals.in_count).toBe(2);
+    expect(ins.body.data.totals.in_total).toBe('12.00');
+    expect(ins.body.data.totals.repeat).toBe(1);
+  });
+
   it('store CRM: loyalty, occasion offers, gifts, customer list, announcements and muting', async () => {
     const m = await walletUser(app, 'Loyal Bakery', 'merchant');
     const st = await request(app).post('/api/merchant/stores').set(auth(m.token)).send({ storeName: 'Loyal Bakery', category: 'food' });

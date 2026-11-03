@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowDownToLine, ArrowUpFromLine, Banknote, ChevronDown, Clock, LocateFixed, MapPin, Navigation, Phone, Search, Signpost, Ticket, XCircle } from 'lucide-react';
 import { AgentUpdates, POST_LOOK } from '../components/AgentUpdates';
+import { AgentInsights, daysLabel, isToday } from '../components/AgentPlaces';
 import { MediaViewer, PlaceStrip, ShotsChip, type PlaceShot } from '../components/PlaceMedia';
 import { del, newIdempotencyKey, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -183,6 +184,7 @@ export default function AgentDesk() {
       </section>
 
       <AgentProfileCard />
+      <AgentInsights />
       <AgentUpdates />
 
       <Sheet open={!!show} onClose={() => setShow(null)} title={t.agent.cashOut}>
@@ -284,13 +286,25 @@ export function AgentsMap() {
     const needle = q.trim().toLowerCase();
     const list = all
       .filter((a) => !needle || `${a.display_name} ${a.city ?? ''} ${a.address ?? ''} ${a.phone ?? ''}`.toLowerCase().includes(needle))
-      .filter((a) => !wanted.size || wanted.has(placeKey(a.city ?? '')))
+      .filter((a) => !wanted.size || [a.city, ...(a.places ?? []).map((p: any) => p.city)].some((c) => wanted.has(placeKey(c ?? ''))))
       .filter((a) => service === 'all' || (service === 'in' ? a.cash_in : a.cash_out))
-      .map((a) => ({ ...a, dist: from && a.lat != null ? metres(from, { lat: Number(a.lat), lng: Number(a.lng) }) : null }));
+      .map((a) => {
+        // Distance to the nearest of the agent's places.
+        const spots = [a, ...(a.places ?? [])].filter((x: any) => x.lat != null);
+        const dist = from && spots.length ? Math.min(...spots.map((x: any) => metres(from, { lat: Number(x.lat), lng: Number(x.lng) }))) : null;
+        return { ...a, dist };
+      });
     return from ? list.sort((x, y) => (x.dist ?? Infinity) - (y.dist ?? Infinity)) : list;
   }, [all, q, wanted, service, from]);
   const pins = useMemo(
-    () => agents.filter((a) => a.lat != null && a.lng != null).map((a) => ({ id: a.id, lat: Number(a.lat), lng: Number(a.lng), kind: 'agent' as const, label: mine(a) ? `${a.display_name} ${you}` : a.display_name })),
+    () =>
+      agents.flatMap((a) => [
+        ...(a.lat != null && a.lng != null ? [{ id: a.id, lat: Number(a.lat), lng: Number(a.lng), kind: 'agent' as const, label: mine(a) ? `${a.display_name} ${you}` : a.display_name }] : []),
+        // The agent's other places are pins of their own ("id:place"), all opening the same card.
+        ...(a.places ?? [])
+          .filter((p: any) => p.lat != null && p.lng != null)
+          .map((p: any) => ({ id: `${a.id}:${p.id}`, lat: Number(p.lat), lng: Number(p.lng), kind: 'agent' as const, label: `${a.display_name} · ${p.name}` })),
+      ]),
     [agents],
   );
   // Re-frame the map whenever the set of agents shown changes.
@@ -370,7 +384,10 @@ export function AgentsMap() {
               className="h-[340px] rounded-3xl shadow-lift sm:h-[440px] lg:h-[calc(100dvh-9rem)] lg:max-h-[720px]"
               pins={origin ? [...pins, { lat: origin.lat, lng: origin.lng, kind: 'home' as const, label: origin.label }] : pins}
               selectedId={sel}
-              onPinClick={(id) => choose(id === sel ? null : id)}
+              onPinClick={(pid) => {
+                const id = String(pid).split(':')[0]!;
+                choose(id === sel ? null : id);
+              }}
               me={me}
               fitKey={fitKey}
               zoom={9}
@@ -500,6 +517,31 @@ export function AgentsMap() {
                     </div>
                   </div>
                   {a.update && <AgentNote u={a.update} />}
+                  {a.places?.length > 0 && (
+                    <div className="mt-3 space-y-1.5">
+                      {a.places.map((p: any) => {
+                        const today = isToday(p.days);
+                        return (
+                          <div key={p.id} className="flex items-start gap-2 rounded-xl bg-bg/70 px-3 py-2 text-sm ring-1 ring-line">
+                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[rgb(150_105_10)] dark:text-gold" />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-1.5 font-medium">
+                                {p.name}
+                                {today && <span className="rounded-full bg-olive/15 px-1.5 py-px text-[10px] font-semibold text-olive">{ar ? 'اليوم هون' : 'Here today'}</span>}
+                              </span>
+                              <span className="block text-xs text-muted">{[p.city, p.address, daysLabel(p.days, lang), p.hours].filter(Boolean).join(' · ')}</span>
+                              {sel === a.id && p.directions && <span className="mt-0.5 block text-xs">{p.directions}</span>}
+                            </span>
+                            {p.lat != null && (
+                              <a href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0 rounded-full bg-sunk p-1.5 text-muted hover:text-ink" aria-label={t.agent.directions}>
+                                <Navigation className="h-3.5 w-3.5" />
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <AnimatePresence initial={false}>
                     {sel === a.id && (a.directions || a.media?.length > 0) && (
                       <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }} className="overflow-hidden">

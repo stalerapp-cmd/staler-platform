@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowDownToLine, ArrowUpFromLine, Camera, CircleCheck, Clock, Hourglass, ImagePlus, LocateFixed, MapPin, PauseCircle, Phone, Signpost, Store, Trash2, type LucideIcon } from 'lucide-react';
 import { get, put, upload } from '../lib/api';
 import { MediaViewer, PlaceStrip, ShotThumb, type PlaceShot } from './PlaceMedia';
+import { AgentPlacesEditor, type AgentPlace } from './AgentPlaces';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
@@ -134,7 +135,7 @@ export function AgentProfileEditor() {
   useEffect(() => {
     if (data.data && !f) {
       const p = data.data.profile;
-      setF({ displayName: p.display_name ?? '', city: p.city ?? '', address: p.address ?? '', phone: p.phone ?? '', hours: p.hours ?? '', lat: p.lat, lng: p.lng, cashIn: p.cash_in, cashOut: p.cash_out, media: (p.media ?? []) as PlaceShot[], directions: p.directions ?? '' });
+      setF({ displayName: p.display_name ?? '', city: p.city ?? '', address: p.address ?? '', phone: p.phone ?? '', hours: p.hours ?? '', lat: p.lat, lng: p.lng, cashIn: p.cash_in, cashOut: p.cash_out, media: (p.media ?? []) as PlaceShot[], directions: p.directions ?? '', places: (p.places ?? []) as AgentPlace[] });
     }
   }, [data.data, f]);
   if (!f) return <Skeleton className="h-96 rounded-3xl" />;
@@ -198,6 +199,9 @@ export function AgentProfileEditor() {
         cashOut: f.cashOut,
         media: f.media.map((m: PlaceShot) => ({ url: m.url, kind: m.kind, caption: (m.caption ?? '').trim() })),
         directions: f.directions.trim() || null,
+        places: f.places
+          .filter((x: AgentPlace) => x.name.trim().length >= 2)
+          .map((x: AgentPlace) => ({ name: x.name.trim(), city: x.city?.trim() || null, address: x.address?.trim() || null, lat: x.lat, lng: x.lng, days: x.days, hours: x.hours?.trim() || null, directions: x.directions?.trim() || null })),
       });
       toast(w.saved);
       void data.reload();
@@ -341,6 +345,14 @@ export function AgentProfileEditor() {
         <div className="mt-5">
           <TextArea label={w.directions} value={f.directions} onChange={(e) => setF({ ...f, directions: e.target.value })} placeholder={w.directionsPh} maxLength={400} rows={2} />
         </div>
+      </Block>
+
+      {/* Other places */}
+      <Block icon={MapPin} title={lang === 'ar' ? 'أماكن ثانية بتتواجد فيها' : 'Other places you work from'} tone="bg-gold/15 text-[rgb(150_105_10)] dark:text-gold">
+        <p className="-mt-2 mb-4 text-sm leading-relaxed text-muted">
+          {lang === 'ar' ? 'عندك محل ثاني، أو بتكون أيام هون وأيام هناك؟ أضف كل مكان مع أيامه — الناس بتشوفه على الخريطة ومعلّم عليه «اليوم هون».' : 'A second shop, or some days here and some there? Add each place with its days — people see it on the map marked “Here today”.'}
+        </p>
+        <AgentPlacesEditor value={f.places} onChange={(v) => setF({ ...f, places: v })} />
       </Block>
 
       {/* Contact and hours */}
