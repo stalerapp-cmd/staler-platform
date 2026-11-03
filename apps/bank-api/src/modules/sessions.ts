@@ -12,6 +12,8 @@ import { placeOf } from '../lib/geo.js';
 
 export const REFRESH_TTL_DAYS = 14;
 export const SESSION_MAX_DAYS = 30;
+/** Sign-out after this long without use (web, and administrators everywhere). */
+export const IDLE_MINUTES = 15;
 export const COOKIE_NAME = isProd ? '__Host-tb_rt' : 'tb_rt';
 
 export interface SessionUser {
@@ -78,11 +80,17 @@ export async function rotate(req: Request, res: Response, presented: string) {
   const refreshToken = `tbr_${randomToken(32)}`;
   const r = await one<any>(
     `WITH cur AS (
-        SELECT r.id, r.user_id, r.family_id, r.revoked_at, r.expires_at, r.family_expires_at, u.role, u.status, u.token_version
+        SELECT r.id, r.user_id, r.family_id, r.revoked_at, r.expires_at, r.family_expires_at, u.role, u.status, u.token_version,
+               -- Inactive too long: on the web (any account) and for administrators everywhere, a session
+               -- nobody used for IDLE minutes ends, even if the browser kept it (laptop shut, tab restored).
+               (($6::boolean OR u.role = 'admin') AND r.created_at < now() - make_interval(mins => $7)) AS idle
           FROM ${S}.refresh_tokens r JOIN ${S}.users u ON u.id = r.user_id
          WHERE r.token_hash = $1 FOR UPDATE OF r
       ), ok AS (
-        SELECT * FROM cur WHERE revoked_at IS NULL AND expires_at > now() AND family_expires_at > now() AND status = 'active'
+        SELECT * FROM cur WHERE revoked_at IS NULL AND expires_at > now() AND family_expires_at > now() AND status = 'active' AND NOT idle
+      ), ended AS (
+        UPDATE ${S}.refresh_tokens SET revoked_at = COALESCE(revoked_at, now())
+         WHERE family_id = (SELECT family_id FROM cur WHERE revoked_at IS NULL AND idle) RETURNING 1
       ), ins AS (
         INSERT INTO ${S}.refresh_tokens (user_id, family_id, token_hash, expires_at, family_expires_at, user_agent, ip_address)
         SELECT user_id, family_id, $2, LEAST(now() + make_interval(days => $5), family_expires_at), family_expires_at, $3, $4 FROM ok
@@ -94,13 +102,14 @@ export async function rotate(req: Request, res: Response, presented: string) {
         UPDATE ${S}.refresh_tokens SET revoked_at = COALESCE(revoked_at, now())
          WHERE family_id = (SELECT family_id FROM cur WHERE revoked_at IS NOT NULL) RETURNING 1
       )
-      SELECT cur.user_id, cur.family_id, cur.role, cur.status, cur.token_version, cur.revoked_at IS NOT NULL AS reused,
+      SELECT cur.user_id, cur.family_id, cur.role, cur.status, cur.token_version, cur.revoked_at IS NOT NULL AS reused, cur.idle, (SELECT count(*) FROM ended) AS ended,
              (SELECT id FROM ins) AS new_id, (SELECT count(*) FROM upd) AS rotated, (SELECT count(*) FROM reuse) AS revoked
         FROM cur`,
-    [sha256(presented), sha256(refreshToken), userAgent(req), clientIp(req), REFRESH_TTL_DAYS],
+    [sha256(presented), sha256(refreshToken), userAgent(req), clientIp(req), REFRESH_TTL_DAYS, !isMobileClient(req), IDLE_MINUTES],
   );
   if (!r || !r.new_id) {
     if (r?.reused) await audit({ userId: r.user_id, action: 'auth.refresh_token_reuse_detected' }, req);
+    if (r?.idle && !r.reused) await audit({ userId: r.user_id, action: 'auth.session_idle_expired' }, req);
     clearRefreshCookie(res);
     throw unauthorized('Session expired, please sign in again', 'SESSION_EXPIRED');
   }

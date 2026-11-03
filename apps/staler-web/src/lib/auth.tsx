@@ -86,21 +86,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sign out after inactivity — a wallet left open on a shared device is a risk.
   useEffect(() => {
     if (!user) return;
-    const bump = () => (lastActivity.current = Date.now());
+    // Away longer than the limit (laptop shut, phone in a pocket): the first touch on return must not
+    // count as activity — it ends the session instead.
+    const expire = () => {
+      lastActivity.current = Date.now();
+      if (bio.current) setLocked(true); // fingerprint unlock on: lock instead of signing out
+      else {
+        setIdle(true);
+        void logout();
+      }
+    };
+    const bump = () => {
+      if (Date.now() - lastActivity.current > IDLE_MS) return expire();
+      lastActivity.current = Date.now();
+    };
+    const onShow = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastActivity.current > IDLE_MS) expire();
+    };
+    document.addEventListener('visibilitychange', onShow);
+    window.addEventListener('focus', onShow);
     const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
     events.forEach((e) => window.addEventListener(e, bump, { passive: true }));
     const timer = window.setInterval(() => {
-      if (Date.now() - lastActivity.current > IDLE_MS) {
-        lastActivity.current = Date.now();
-        if (bio.current) setLocked(true); // fingerprint unlock on: lock instead of signing out
-        else {
-          setIdle(true);
-          void logout();
-        }
-      }
+      if (Date.now() - lastActivity.current > IDLE_MS) expire();
     }, 30_000);
     return () => {
       events.forEach((e) => window.removeEventListener(e, bump));
+      document.removeEventListener('visibilitychange', onShow);
+      window.removeEventListener('focus', onShow);
       window.clearInterval(timer);
     };
   }, [user, logout]);

@@ -437,6 +437,20 @@ describe('marketplace', () => {
     expect(await walletBalance(app, buyer)).toBe('100.00');
   });
 
+  it('a web session left unused too long cannot be revived (laptop shut, tab restored)', async () => {
+    const u = await walletUser(app, 'Sleepy Laptop');
+    const ok = await request(app).post('/api/auth/refresh').set('Cookie', u.cookie).set('x-requested-with', 'fetch');
+    expect(ok.status).toBe(200);
+    const fresh = String(ok.headers['set-cookie']?.[0] ?? '').split(';')[0]!;
+    // nobody used it for two hours
+    await pool.query(`UPDATE refresh_tokens SET created_at = now() - interval '2 hours' WHERE user_id = $1 AND revoked_at IS NULL`, [u.userId]);
+    const late = await request(app).post('/api/auth/refresh').set('Cookie', fresh).set('x-requested-with', 'fetch');
+    expect(late.status).toBe(401);
+    // and the whole session is closed, not just that one attempt
+    const live = await pool.query(`SELECT count(*)::int AS n FROM refresh_tokens WHERE user_id = $1 AND revoked_at IS NULL`, [u.userId]);
+    expect(live.rows[0].n).toBe(0);
+  });
+
   it('map place search: signed-in only, sensible queries', async () => {
     const u = await walletUser(app, 'Map Searcher');
     expect((await request(app).get('/api/geo/search?q=nablus')).status).toBe(401);
