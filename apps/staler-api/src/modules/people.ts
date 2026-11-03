@@ -27,9 +27,11 @@ export const peopleRouter = Router();
 peopleRouter.use(requireAuth);
 
 const idParam = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Invalid id');
-const KINDS = ['family', 'staff', 'relatives', 'custom'] as const;
-const EVERY = ['week', '2weeks', 'month'] as const;
-const intervalOf = (e: string) => (e === 'week' ? `interval '7 days'` : e === '2weeks' ? `interval '14 days'` : `interval '1 month'`);
+const KINDS = ['family', 'staff', 'relatives', 'custom', 'debt', 'partners', 'suppliers', 'bills'] as const;
+const EVERY = ['once', 'week', '2weeks', 'month', 'days'] as const;
+/** SQL interval for one period; `p` is the payouts row alias (for "every N days"). */
+const intervalOf = (e: string, p = 'payouts') =>
+  e === 'week' ? `interval '7 days'` : e === '2weeks' ? `interval '14 days'` : e === 'days' ? `make_interval(days => COALESCE(${p}.every_days, 1))` : `interval '1 month'`;
 
 const MEMBER_COLS = `m.id, m.group_id, m.user_id, m.nickname, m.role_title, m.since, m.favourite, m.sort, m.link_status, m.show_on_profile, m.created_at,
   u.full_name, u.profile_image, w.wallet_id,
@@ -81,6 +83,8 @@ const groupBody = z
     icon: z.string().trim().max(24).nullable().optional(),
     workplace: z.string().trim().max(80).nullable().optional(),
     seniorAfterMonths: z.number().int().min(1).max(600).nullable().optional(),
+    /** A work group: workplace on members' profiles, seniority, bonuses. */
+    isWork: z.boolean().optional(),
   })
   .strict();
 
@@ -93,8 +97,8 @@ peopleRouter.post(
     if ((n?.n ?? 0) >= 20) throw badRequest('TOO_MANY_GROUPS', 'Up to 20 groups');
     const b = req.body;
     const g = await one(
-      `INSERT INTO ${S}.people_groups (owner_id, name, kind, icon, workplace, senior_after_months, sort) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [me, b.name, b.kind, b.icon ?? null, b.workplace ?? null, b.seniorAfterMonths ?? null, n?.n ?? 0],
+      `INSERT INTO ${S}.people_groups (owner_id, name, kind, icon, workplace, senior_after_months, sort, is_work) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [me, b.name, b.kind, b.icon ?? null, b.workplace ?? null, b.seniorAfterMonths ?? null, n?.n ?? 0, b.isWork ?? b.kind === 'staff'],
     );
     res.status(201).json({ success: true, data: { group: g } });
   }),
@@ -106,13 +110,14 @@ peopleRouter.put(
   ah(async (req, res) => {
     await ownGroup(req.params.id!, req.auth!.userId);
     const b = req.body;
-    await pool.query(`UPDATE ${S}.people_groups SET name = $2, kind = $3, icon = $4, workplace = $5, senior_after_months = $6 WHERE id = $1`, [
+    await pool.query(`UPDATE ${S}.people_groups SET name = $2, kind = $3, icon = $4, workplace = $5, senior_after_months = $6, is_work = COALESCE($7, is_work) WHERE id = $1`, [
       req.params.id,
       b.name,
       b.kind,
       b.icon ?? null,
       b.workplace ?? null,
       b.seniorAfterMonths ?? null,
+      b.isWork ?? null,
     ]);
     res.json({ success: true });
   }),
@@ -463,18 +468,51 @@ async function deliver(d: Delivery): Promise<{ status: 'done' | 'failed' | 'wait
   }
 }
 
-/** Runs the transfers that are due (all, or only the given ones). Called every couple of minutes. */
+/** After a payment (done or skipped): the next date, or the end of the schedule. */
+async function advance(p: any, counted: boolean) {
+  const runs = p.runs + (counted ? 1 : 0);
+  const r = await one<any>(
+    `UPDATE ${S}.payouts SET pending_op = NULL, fail_count = 0, awaiting = false, runs = $2,
+            total = total + CASE WHEN $3 THEN amount ELSE 0 END, last_run_at = CASE WHEN $3 THEN now() ELSE last_run_at END,
+            next_run_at = GREATEST(next_run_at, now() - interval '1 day') + ${intervalOf(p.every)}
+      WHERE id = $1 RETURNING *`,
+    [p.id, runs, counted],
+  );
+  const over =
+    r.every === 'once' || (r.ends === 'count' && r.max_runs != null && runs >= r.max_runs) || (r.ends === 'until' && r.end_date && new Date(r.next_run_at) > new Date(`${String(r.end_date).slice(0, 10)}T23:59:59Z`));
+  if (over) {
+    await pool.query(`UPDATE ${S}.payouts SET active = false, finished_at = now() WHERE id = $1`, [p.id]);
+    if (r.every !== 'once')
+      await notifyBi(undefined, p.owner_id, 'payout_finished', ['A scheduled payment is complete', `${r.title ?? ''} — ${runs} payments`], ['خلصت دفعة مجدولة', `${r.title ?? ''} — ${runs} دفعة`], { link: '/app/people' });
+  }
+}
+
+/** Runs the payments that are due (all, or only the given ones), and sends reminders. Called every couple of minutes. */
 export async function runPayouts(only?: string[]) {
+  await remind();
   const due = await pool.query(
-    `SELECT p.*, m.user_id AS member_user_id FROM ${S}.payouts p JOIN ${S}.people_members m ON m.id = p.member_id
-      WHERE p.active AND NOT p.paused_by_admin AND p.next_run_at <= now() + interval '1 minute' AND ($1::uuid[] IS NULL OR p.id = ANY($1))
+    `SELECT p.*, m.user_id AS member_user_id, u.full_name AS member_name FROM ${S}.payouts p JOIN ${S}.people_members m ON m.id = p.member_id JOIN ${S}.users u ON u.id = m.user_id
+      WHERE p.active AND NOT p.paused_by_admin AND NOT p.awaiting AND p.next_run_at <= now() + interval '1 minute' AND ($1::uuid[] IS NULL OR p.id = ANY($1))
       ORDER BY p.next_run_at LIMIT 50`,
     [only ?? null],
   );
   let done = 0;
   for (const p of due.rows) {
-    // Claim it first so two servers never pay the same transfer twice.
-    const claimed = await one(`UPDATE ${S}.payouts SET next_run_at = now() + interval '10 minutes' WHERE id = $1 AND next_run_at = $2 RETURNING id`, [p.id, p.next_run_at]);
+    // Remind-only payments wait for the owner to pay.
+    if (!p.auto && !only) {
+      await pool.query(`UPDATE ${S}.payouts SET awaiting = true WHERE id = $1`, [p.id]);
+      await notifyBi(
+        undefined,
+        p.owner_id,
+        'payout_due',
+        ['A scheduled payment is due', `${p.amount} to ${p.member_name}${p.title ? ` — ${p.title}` : ''}. Pay it with one tap.`],
+        ['حان موعد دفعة', `${p.amount} لـ ${p.member_name}${p.title ? ` — ${p.title}` : ''}. ادفعها بكبسة.`],
+        { link: '/app/people' },
+      );
+      continue;
+    }
+    // Claim it first so two servers never pay the same payment twice.
+    const claimed = await one(`UPDATE ${S}.payouts SET next_run_at = next_run_at + interval '1 second' WHERE id = $1 AND next_run_at = $2 AND NOT awaiting RETURNING *`, [p.id, p.next_run_at]);
     if (!claimed) continue;
     const r = await deliver({
       ownerId: p.owner_id,
@@ -484,7 +522,7 @@ export async function runPayouts(only?: string[]) {
       source: p.source,
       dest: p.dest,
       kind: 'scheduled',
-      note: p.note,
+      note: p.title ?? p.note,
       payoutId: p.id,
       pendingOp: p.pending_op,
     });
@@ -492,32 +530,231 @@ export async function runPayouts(only?: string[]) {
       await pool.query(`UPDATE ${S}.payouts SET pending_op = $2, next_run_at = now() + interval '5 minutes' WHERE id = $1`, [p.id, r.pendingOp ?? null]);
     } else if (r.status === 'done') {
       done++;
-      await pool.query(
-        `UPDATE ${S}.payouts SET pending_op = NULL, fail_count = 0, runs = runs + 1, total = total + amount, last_run_at = now(),
-                next_run_at = GREATEST($2::timestamptz, now()) + ${intervalOf(p.every)} WHERE id = $1`,
-        [p.id, p.next_run_at],
-      );
+      await advance(claimed, true);
     } else {
-      // Try again tomorrow; after three misses, skip to the next period and tell the owner.
+      // Try again tomorrow; after three misses, move to the next date and tell the owner.
       const fails = p.fail_count + 1;
-      await pool.query(
-        `UPDATE ${S}.payouts SET pending_op = NULL, fail_count = $2,
-                next_run_at = CASE WHEN $2 >= 3 THEN GREATEST($3::timestamptz, now()) + ${intervalOf(p.every)} ELSE now() + interval '1 day' END,
-                fail_count = CASE WHEN $2 >= 3 THEN 0 ELSE $2 END WHERE id = $1`,
-        [p.id, fails, p.next_run_at],
-      );
+      if (fails >= 3) await advance(claimed, false);
+      else await pool.query(`UPDATE ${S}.payouts SET pending_op = NULL, fail_count = $2, next_run_at = now() + interval '1 day' WHERE id = $1`, [p.id, fails]);
       await notifyBi(
         undefined,
         p.owner_id,
         'payout_failed',
-        ['A recurring transfer didn’t go through', `${p.amount} — ${r.error ?? ''}`],
-        ['ما زبط تحويل دوري', `${p.amount} — ${r.error ?? ''}. رح نجرّب مرة ثانية.`],
+        ['A scheduled payment didn’t go through', `${p.amount} to ${p.member_name} — ${r.error ?? ''}`],
+        ['ما زبطت دفعة مجدولة', `${p.amount} لـ ${p.member_name} — ${r.error ?? ''}. ${fails >= 3 ? 'انتقلت للموعد الجاي.' : 'رح نجرّب بكرا.'}`],
         { link: '/app/people' },
       );
     }
   }
   return { done, due: due.rowCount ?? 0 };
 }
+
+/** "Tomorrow 50 goes to Ahmad" — the reminder the owner chose, once per payment date. */
+async function remind() {
+  const r = await pool.query(
+    `SELECT p.id, p.owner_id, p.amount, p.title, p.next_run_at, p.remind_before, p.auto, u.full_name AS member_name
+       FROM ${S}.payouts p JOIN ${S}.people_members m ON m.id = p.member_id JOIN ${S}.users u ON u.id = m.user_id
+      WHERE p.active AND NOT p.paused_by_admin AND p.remind_before IS NOT NULL AND p.reminded_for IS DISTINCT FROM p.next_run_at
+        AND now() >= p.next_run_at - make_interval(days => p.remind_before) - CASE WHEN p.remind_before = 0 THEN interval '3 hours' ELSE interval '0' END
+        AND p.next_run_at > now() LIMIT 100`,
+  );
+  for (const p of r.rows) {
+    await pool.query(`UPDATE ${S}.payouts SET reminded_for = next_run_at WHERE id = $1`, [p.id]);
+    const when = p.remind_before === 0 ? ['today', 'اليوم'] : p.remind_before === 1 ? ['tomorrow', 'بكرا'] : [`in ${p.remind_before} days`, `بعد ${p.remind_before} أيام`];
+    await notifyBi(
+      undefined,
+      p.owner_id,
+      'payout_reminder',
+      [`Reminder: ${p.amount} to ${p.member_name} ${when[0]}`, p.auto ? 'It goes out by itself — pause it if you need to.' : 'Pay it when it’s due.'],
+      [`تذكير: ${p.amount} لـ ${p.member_name} ${when[1]}`, `${p.title ? `${p.title}. ` : ''}${p.auto ? 'رح تنبعت لحالها — وقّفها إذا بدك.' : 'ادفعها لما يجي موعدها.'}`],
+      { link: '/app/people' },
+    );
+  }
+}
+
+// --------------------------------------------------------- the simple flow
+const scheduleBody = z
+  .object({
+    /** Who: a user id (from contacts or search), or a wallet ID / e-mail. */
+    userId: idParam.optional(),
+    who: z.string().trim().min(3).max(254).optional(),
+    groupId: idParam.nullable().optional(),
+    title: z.string().trim().max(60).optional(),
+    amount: amountSchema,
+    every: z.enum(EVERY),
+    everyDays: z.number().int().min(1).max(365).optional(),
+    startAt: z.string().datetime().optional(),
+    ends: z.enum(['never', 'until', 'count']).default('never'),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    maxRuns: z.number().int().min(1).max(1000).optional(),
+    source: z.enum(['wallet', 'bank']).default('wallet'),
+    dest: z.enum(['wallet', 'bank']).default('wallet'),
+    auto: z.boolean().default(true),
+    remindBefore: z.number().int().min(0).max(30).nullable().optional(),
+    totp: totpCode.optional(),
+  })
+  .strict()
+  .refine((b) => b.userId || b.who, 'Choose who to pay')
+  .refine((b) => b.every !== 'days' || b.everyDays, 'How many days between payments?')
+  .refine((b) => b.ends !== 'until' || b.endDate, 'Choose the last date')
+  .refine((b) => b.ends !== 'count' || b.maxRuns, 'How many payments?');
+
+/** Everything on the page: categories, schedules (with the person), people, totals and the next payment. */
+peopleRouter.get(
+  '/overview',
+  ah(async (req, res) => {
+    const me = req.auth!.userId;
+    const groups = await pool.query(
+      `SELECT g.*, (SELECT count(*)::int FROM ${S}.people_members m WHERE m.group_id = g.id) AS count FROM ${S}.people_groups g WHERE g.owner_id = $1 ORDER BY g.sort, g.created_at`,
+      [me],
+    );
+    const schedules = await pool.query(
+      `SELECT p.*, m.user_id, m.nickname, m.group_id, m.role_title, u.full_name, u.profile_image, w.wallet_id
+         FROM ${S}.payouts p JOIN ${S}.people_members m ON m.id = p.member_id JOIN ${S}.users u ON u.id = m.user_id
+         LEFT JOIN LATERAL (SELECT wallet_id FROM ${S}.wallets WHERE user_id = u.id ORDER BY created_at ASC NULLS LAST LIMIT 1) w ON true
+        WHERE p.owner_id = $1 ORDER BY (p.active AND NOT p.paused_by_admin) DESC, p.awaiting DESC, p.next_run_at`,
+      [me],
+    );
+    const people = await pool.query(`SELECT ${MEMBER_COLS} ${memberFrom} WHERE m.owner_id = $1 ORDER BY m.favourite DESC, m.sort, m.created_at`, [me]);
+    const t = await one<any>(
+      `SELECT COALESCE(sum(amount) FILTER (WHERE status = 'done' AND ran_at > now() - interval '30 days'), 0)::text AS last30,
+              (SELECT COALESCE(sum(CASE every WHEN 'week' THEN amount * 4.33 WHEN '2weeks' THEN amount * 2.17 WHEN 'days' THEN amount * 30.0 / GREATEST(every_days, 1) WHEN 'once' THEN 0 ELSE amount END), 0)::numeric(20,2)::text
+                 FROM ${S}.payouts WHERE owner_id = $1 AND active AND NOT paused_by_admin) AS monthly
+         FROM ${S}.payout_runs WHERE owner_id = $1`,
+      [me],
+    );
+    res.json({ success: true, data: { groups: groups.rows, schedules: schedules.rows, people: people.rows, totals: t, bankLinked: await hasBankLink(me) } });
+  }),
+);
+
+peopleRouter.post(
+  '/schedules',
+  moneyLimiter,
+  validate({ body: scheduleBody }),
+  ah(async (req, res) => {
+    const me = req.auth!.userId;
+    const b = req.body as z.infer<typeof scheduleBody>;
+    assertMaxTransfer(b.amount);
+    await requireSecondFactor(me, b.totp);
+    if (b.source === 'bank' && !(await hasBankLink(me))) throw badRequest('BANK_NOT_LINKED', 'Link your TalerBank account first');
+    if (b.groupId) await ownGroup(b.groupId, me);
+    let userId = b.userId;
+    if (!userId) {
+      const r = await resolveRecipient(b.who!);
+      if (!r) throw notFound('No wallet found for that ID or e-mail', 'RECIPIENT_NOT_FOUND');
+      userId = String(r.user_id);
+    } else if (!(await one(`SELECT 1 FROM ${S}.users WHERE id = $1 AND status = 'active'`, [userId]))) throw notFound('User not found');
+    if (String(userId) === String(me)) throw badRequest('SELF', 'You cannot add yourself');
+    const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.payouts WHERE owner_id = $1 AND active`, [me]);
+    if ((n?.n ?? 0) >= 100) throw badRequest('TOO_MANY_PAYOUTS', 'Up to 100 recurring transfers');
+    // The person joins your people (once); a chosen category files them there.
+    const m = await one<any>(
+      `INSERT INTO ${S}.people_members (group_id, owner_id, user_id) VALUES ($1, $2, $3)
+       ON CONFLICT (owner_id, user_id) DO UPDATE SET group_id = COALESCE(EXCLUDED.group_id, ${S}.people_members.group_id) RETURNING id`,
+      [b.groupId ?? null, me, userId],
+    );
+    const start = b.startAt ? new Date(b.startAt) : new Date();
+    const p = await one<any>(
+      `INSERT INTO ${S}.payouts (owner_id, member_id, amount, source, dest, every, every_days, next_run_at, title, ends, end_date, max_runs, auto, remind_before)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+      [me, m.id, b.amount, b.source, b.dest, b.every, b.every === 'days' ? b.everyDays : null, start, b.title || null, b.ends, b.ends === 'until' ? b.endDate : null, b.ends === 'count' ? b.maxRuns : null, b.auto, b.remindBefore ?? null],
+    );
+    await audit({ userId: me, action: 'people.schedule_created', entityType: 'payout', entityId: p.id, details: { amount: b.amount, every: b.every, to: userId, ends: b.ends } }, req);
+    if (b.auto && start.getTime() <= Date.now() + 60_000) await runPayouts([p.id]);
+    res.status(201).json({ success: true, data: { id: p.id, memberId: m.id } });
+  }),
+);
+
+peopleRouter.put(
+  '/schedules/:id',
+  validate({
+    params: z.object({ id: idParam }).strict(),
+    body: z
+      .object({
+        title: z.string().trim().max(60).nullable().optional(),
+        amount: amountSchema.optional(),
+        every: z.enum(EVERY).optional(),
+        everyDays: z.number().int().min(1).max(365).nullable().optional(),
+        nextAt: z.string().datetime().optional(),
+        ends: z.enum(['never', 'until', 'count']).optional(),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        maxRuns: z.number().int().min(1).max(1000).nullable().optional(),
+        source: z.enum(['wallet', 'bank']).optional(),
+        dest: z.enum(['wallet', 'bank']).optional(),
+        auto: z.boolean().optional(),
+        remindBefore: z.number().int().min(0).max(30).nullable().optional(),
+        active: z.boolean().optional(),
+        groupId: idParam.nullable().optional(),
+        totp: totpCode.optional(),
+      })
+      .strict(),
+  }),
+  ah(async (req, res) => {
+    const me = req.auth!.userId;
+    const p = await one<any>(`SELECT * FROM ${S}.payouts WHERE id = $1 AND owner_id = $2`, [req.params.id, me]);
+    if (!p) throw notFound('Transfer not found');
+    const b = req.body;
+    if ((b.amount && toCents(b.amount) > toCents(p.amount)) || (b.active && !p.active)) await requireSecondFactor(me, b.totp);
+    if (b.amount) assertMaxTransfer(b.amount);
+    if (b.source === 'bank' && !(await hasBankLink(me))) throw badRequest('BANK_NOT_LINKED', 'Link your TalerBank account first');
+    if (b.groupId) await ownGroup(b.groupId, me);
+    const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
+    await pool.query(
+      `UPDATE ${S}.payouts SET
+         title = CASE WHEN $2 THEN $3 ELSE title END, amount = COALESCE($4, amount), every = COALESCE($5, every),
+         every_days = CASE WHEN $6 THEN $7 ELSE every_days END, next_run_at = COALESCE($8, next_run_at),
+         ends = COALESCE($9, ends), end_date = CASE WHEN $10 THEN $11::date ELSE end_date END, max_runs = CASE WHEN $12 THEN $13 ELSE max_runs END,
+         source = COALESCE($14, source), dest = COALESCE($15, dest), auto = COALESCE($16, auto),
+         remind_before = CASE WHEN $17 THEN $18 ELSE remind_before END,
+         active = COALESCE($19, active), finished_at = CASE WHEN $19 THEN NULL ELSE finished_at END
+       WHERE id = $1`,
+      [
+        p.id, has('title'), b.title ?? null, b.amount ?? null, b.every ?? null, has('everyDays'), b.everyDays ?? null, b.nextAt ?? null,
+        b.ends ?? null, has('endDate'), b.endDate ?? null, has('maxRuns'), b.maxRuns ?? null, b.source ?? null, b.dest ?? null, b.auto ?? null,
+        has('remindBefore'), b.remindBefore ?? null, b.active ?? null,
+      ],
+    );
+    // Turned back on with a date already past: next try is in an hour, not a burst of back payments.
+    if (b.active && new Date(p.next_run_at) < new Date()) await pool.query(`UPDATE ${S}.payouts SET next_run_at = now() + interval '1 hour', awaiting = false WHERE id = $1`, [p.id]);
+    if (has('groupId')) await pool.query(`UPDATE ${S}.people_members SET group_id = $2 WHERE id = $1`, [p.member_id, b.groupId ?? null]);
+    await audit({ userId: me, action: 'people.payout_changed', entityType: 'payout', entityId: p.id, details: { ...b, totp: undefined } }, req);
+    res.json({ success: true });
+  }),
+);
+
+/** Pay this one now (early, or a remind-only payment that's due); the schedule moves on. */
+peopleRouter.post(
+  '/schedules/:id/pay-now',
+  moneyLimiter,
+  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ totp: totpCode.optional() }).strict() }),
+  ah(async (req, res) => {
+    const me = req.auth!.userId;
+    await requireSecondFactor(me, req.body.totp);
+    const p = await one<any>(
+      `SELECT p.*, m.user_id AS member_user_id FROM ${S}.payouts p JOIN ${S}.people_members m ON m.id = p.member_id WHERE p.id = $1 AND p.owner_id = $2`,
+      [req.params.id, me],
+    );
+    if (!p) throw notFound('Transfer not found');
+    if (p.paused_by_admin) throw badRequest('PAUSED_BY_ADMIN', 'The team paused this payment');
+    const r = await deliver({ ownerId: me, memberId: p.member_id, memberUserId: p.member_user_id, amount: fromCents(toCents(p.amount)), source: p.source, dest: p.dest, kind: 'scheduled', note: p.title ?? p.note, payoutId: p.id });
+    if (r.status === 'failed') throw badRequest(r.code ?? 'TRANSFER_FAILED', r.error ?? 'The transfer failed');
+    if (r.status === 'done') await advance(p, true);
+    res.json({ success: true, data: r });
+  }),
+);
+
+/** Skip the next date (e.g. paid by hand this time). */
+peopleRouter.post(
+  '/schedules/:id/skip',
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const p = await one<any>(`SELECT * FROM ${S}.payouts WHERE id = $1 AND owner_id = $2`, [req.params.id, req.auth!.userId]);
+    if (!p) throw notFound('Transfer not found');
+    await pool.query(`INSERT INTO ${S}.payout_runs (payout_id, owner_id, member_id, amount, kind, status) VALUES ($1, $2, $3, $4, 'skipped', 'skipped')`, [p.id, p.owner_id, p.member_id, p.amount]);
+    await advance(p, false);
+    res.json({ success: true });
+  }),
+);
 
 // -------------------------------------------------------------------- admin
 /** Admins: who sends regularly to whom, how much, and the power to pause it. */

@@ -115,6 +115,7 @@ export function AgentProfileEditor() {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [view, setView] = useState<number | null>(null);
+  const [crop, setCrop] = useState<{ index: number | null; file: File } | null>(null);
   const [focus, setFocus] = useState<{ key: string; lat: number; lng: number; zoom?: number; bbox?: [number, number, number, number] | null } | null>(null);
   const touched = useRef(false);
   // Choosing a city or typing the address moves the map there (the pin stays where it is until you tap).
@@ -168,7 +169,6 @@ export function AgentProfileEditor() {
   };
 
   // Photos go through the cropper first (turn, mirror, zoom, frame); videos upload as they are.
-  const [crop, setCrop] = useState<{ index: number | null; file: File } | null>(null);
   const pickShot = (file: File, index: number | null) => (file.type.startsWith('image/') ? setCrop({ index, file }) : void addShot(file, index));
   const editShot = async (i: number) => {
     try {

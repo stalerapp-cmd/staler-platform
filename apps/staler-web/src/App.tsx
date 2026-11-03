@@ -49,6 +49,7 @@ const StoresPage = lazyRetry(() => import('./pages/Stores'));
 const StoresDirectory = lazyRetry(() => import('./pages/Stores').then((m) => ({ default: m.StoresDirectory })));
 const StorePage = lazyRetry(() => import('./pages/StorePage'));
 const AgentDesk = lazyRetry(() => import('./pages/Agent'));
+const AgentUpdatesPage = lazyRetry(() => import('./components/AgentUpdates').then((m) => ({ default: m.AgentUpdates })));
 const AgentsMap = lazyRetry(() => import('./pages/Agent').then((m) => ({ default: m.AgentsMap })));
 const CashOutPay = lazyRetry(() => import('./pages/Agent').then((m) => ({ default: m.CashOutPay })));
 const Contacts = lazyRetry(() => import('./pages/Contacts'));
@@ -128,6 +129,7 @@ export default function App() {
           <Route path="settings" element={page(<Settings />)} />
           <Route path="vouchers" element={<Private roles={['exchange']}>{page(<Vouchers />)}</Private>} />
           <Route path="agent" element={<Private roles={['exchange']}>{page(<AgentDesk />)}</Private>} />
+          <Route path="agent/updates" element={<Private roles={['exchange']}>{page(<AgentUpdatesPage />)}</Private>} />
           <Route path="agents" element={page(<AgentsMap />)} />
           <Route path="cashout" element={page(<CashOutPay />)} />
           <Route path="merchant" element={<Private roles={['merchant']}>{page(<MerchantDashboard />)}</Private>} />

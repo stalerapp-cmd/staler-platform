@@ -153,13 +153,13 @@ const TOPICS: Topic[] = [
     group: 'all',
     icon: Users,
     color: '#1F4D3A',
-    title: ['My people & transfers', 'ناسي والتحويلات'],
+    title: ['Scheduled payments', 'الدفعات المجدولة'],
     to: '/app/people',
     steps: [
-      { icon: Users, title: ['Groups you name', 'فئات بتسمّيها'], body: ['Put people in groups — your children, your staff, relatives, or any name you like — with a nickname, a title and since when they’re with you. Star favourites and order them.', 'حط ناسك بفئات — ولادك، موظفينك، قرايبك، أو أي اسم بدك — مع اسم بتحبه وصفة ومن إمتى معك. علّم المفضّلين ورتّبهم.'], to: '/app/people' },
-      { icon: Repeat, title: ['Money on a schedule', 'مصاري لحالها كل فترة'], body: ['Set a weekly, two-weekly or monthly transfer from your wallet or your bank, to their wallet or their bank. Pause, change (with a quick % raise) or stop it any time.', 'حدّد تحويل كل أسبوع أو أسبوعين أو شهر، من محفظتك أو بنكك، لمحفظتهم أو بنكهم. وقّفه أو غيّره (مع زيادة بنسبة بكبسة) أو ألغيه وقت ما بدك.'] },
-      { icon: Gift, title: ['A bonus', 'مكافأة'], body: ['Send a one-off extra — a fixed amount or a share of the regular one — with a note.', 'ابعت مبلغ إضافي مرة وحدة — مبلغ ثابت أو نسبة من التحويل الدوري — مع ملاحظة.'] },
-      { icon: BadgeCheck, title: ['Shown on their profile, if they agree', 'بيبين بملفهم إذا وافقوا'], body: ['Ask someone to show they work with you; if they accept, their card says where and for how long. They can hide it again from Settings → Account.', 'اطلب من حدا يبين إنه بيشتغل عندك؛ إذا وافق بيبين بكرته وين ومن قديش. وبيقدر يخفيه من الإعدادات ← الحساب.'] },
+      { icon: Users, title: ['Who to pay', 'لمين'], body: ['Pick someone from your contacts, search a name, or type a wallet ID or e-mail. A group (children, family, debts, rent — or staff, suppliers and partners for stores) is optional, just to sort.', 'اختار حدا من جهات اتصالك، أو دوّر بالاسم، أو اكتب رقم محفظته أو إيميله. الفئة (ولادي، أهلي، ديون، إيجار — أو موظفين وموردين وشركاء للمتاجر) اختيارية، بس للترتيب.'], to: '/app/people' },
+      { icon: Repeat, title: ['How much, how often, until when', 'كم، كل قديش، ولحد إمتى'], body: ['Once, every week, two weeks, month or any number of days. Forever, until a date, or for a number of payments — handy for paying off a debt in instalments.', 'مرة وحدة، كل أسبوع، أسبوعين، شهر أو أي عدد أيام. للأبد، لتاريخ معيّن، أو عدد دفعات — منيح لتسدّ دين بالتقسيط.'] },
+      { icon: BellRing, title: ['Sent by itself, with a reminder', 'بتنبعت لحالها، مع تذكير'], body: ['By default the money goes on time without you. Choose a reminder the same day, a day or two before, or a week before. Or choose “remind only” and pay with one tap.', 'المصاري بتروح بموعدها بلا ما تتدخل. اختار تذكير بنفس اليوم، قبل بيوم أو يومين، أو قبل أسبوع. أو اختار «ذكّرني بس» وادفعها بكبسة.'] },
+      { icon: Gift, title: ['Pause, skip, pay now', 'وقّف، تخطّى، ادفع هلّأ'], body: ['Each payment has buttons to pause and resume, skip just the next one, pay now, edit or delete. Work groups also get bonuses and showing the workplace on profiles if people agree.', 'كل دفعة إلها أزرار توقيف وتشغيل، تخطّي المرة الجاية بس، ادفع هلّأ، تعديل أو حذف. وفئات الشغل كمان إلها مكافآت وإظهار مكان الشغل بملف الناس إذا وافقوا.'] },
     ],
   },
   {
@@ -298,7 +298,7 @@ const TOPICS: Topic[] = [
     icon: BellRing,
     color: '#7A2E2E',
     title: ['Updates for your people', 'تحديثات لناسك'],
-    to: '/app/agent',
+    to: '/app/agent/updates',
     steps: [
       { icon: Users, title: ['To people you served', 'للي تعاملوا معك'], body: ['Moved, new hours, closed for a while, or an offer: it reaches everyone who claimed your vouchers or paid your cash-outs, right away.', 'نقلت، تغيّر دوامك، مسكّر فترة، أو عندك عرض: بيوصل فورًا لكل اللي صرفوا قسائمك أو دفعوا طلبات سحبك.'] },
       { icon: ShieldCheck, title: ['To your whole area', 'لكل منطقتك'], body: ['Ask the admins to announce it to everyone in your governorate. You get a notification when they approve or decline.', 'اطلب من الإدارة تعمّمه على كل محافظتك. بيوصلك إشعار لما يوافقوا أو يرفضوا.'] },

@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Camera,
+  Check,
+  ChevronDown,
   ImagePlus,
   CheckCircle2,
   ClipboardCheck,
@@ -675,6 +677,7 @@ const emptyForm: ProductForm = {
 
 export function MerchantProducts() {
   const { t, lang, err } = useI18n();
+  const ar = lang === 'ar';
   const toast = useToast();
   const confirm = useConfirm();
   const st = useStores();
@@ -813,108 +816,154 @@ export function MerchantProducts() {
         </div>
       )}
 
-      <Sheet open={!!form} onClose={() => setForm(null)} title={form?.id ? t.common.edit : t.merchant.newProduct} wide>
+      <Sheet open={!!form} onClose={() => setForm(null)} title={form?.id ? (ar ? 'عدّل المنتج' : 'Edit product') : t.merchant.newProduct}>
         {form && (
-          <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-4">
-              <Field label={t.merchant.name} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={100} />
-              <div className="grid grid-cols-2 gap-3">
-                <AmountInput label={t.merchant.price} value={form.price} onChange={(v) => setForm({ ...form, price: v })} />
-                <AmountInput label={t.mstore.compareAt} value={form.compareAtPrice} onChange={(v) => setForm({ ...form, compareAtPrice: v })} />
+          <form onSubmit={save} className="space-y-5">
+            {/* 1 · what it is */}
+            <FormBlock title={ar ? 'المنتج' : 'The product'}>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => imgRef.current?.click()}
+                  className="relative grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-dashed border-line text-muted transition hover:border-stitch hover:text-stitch"
+                  aria-label={t.merchant.uploadImage}
+                >
+                  {form.imageUrl ? <img src={assetUrl(form.imageUrl)!} alt="" className="h-full w-full object-cover" /> : <span className="grid place-items-center gap-1 text-[11px]">{busy === 'image' ? '…' : <ImageUp className="h-6 w-6" />}{ar ? 'صورة' : 'Photo'}</span>}
+                  {form.imageUrl && <span className="absolute inset-x-0 bottom-0 bg-black/45 py-0.5 text-center text-[10px] text-white">{ar ? 'غيّر' : 'Change'}</span>}
+                </button>
+                <input ref={imgRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => e.target.files?.[0] && doUpload('image', e.target.files[0])} />
+                <div className="min-w-0 flex-1">
+                  <Field label={t.merchant.name} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={100} />
+                </div>
               </div>
-              <Toggle checked={form.isDigital} onChange={(v) => setForm({ ...form, isDigital: v })} label={t.merchant.digital} />
-              {!form.isDigital && <Field label={t.merchant.stock} type="number" min={0} max={1000000} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />}
-              <div>
-                <p className="mb-1.5 flex items-center justify-between text-sm font-medium text-ink/80">
-                  {lang === 'ar' ? 'بأي قسم؟' : 'Which sections?'}
-                  <Link to="/app/merchant/customers?tab=sections" className="text-xs font-semibold text-sky">
-                    {lang === 'ar' ? 'رتّب الأقسام' : 'Manage sections'}
-                  </Link>
-                </p>
-                {!(sections.data?.sections ?? []).length ? (
-                  <p className="rounded-2xl bg-sunk/70 px-3 py-2.5 text-xs text-muted">{lang === 'ar' ? 'اعمل أقسام لمتجرك (مخبوزات، رجالي، إكسسوارات…) لتبين منتجاتك مرتبة بصفحتك.' : 'Create sections (Bakery, Men, Accessories…) so your products show neatly on your page.'}</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {sections.data!.sections.map((x: any) => {
-                      const on = form.sectionIds.includes(x.id);
-                      const I = sectionIcon(x.icon);
-                      return (
-                        <button
-                          key={x.id}
-                          type="button"
-                          onClick={() => setForm({ ...form, sectionIds: on ? form.sectionIds.filter((y) => y !== x.id) : [...form.sectionIds, x.id] })}
-                          className={cx('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition', on ? 'bg-night text-white dark:bg-white/20' : 'bg-sunk text-ink/80 hover:text-ink')}
-                        >
-                          <I className="h-4 w-4" /> {x.name}
-                        </button>
-                      );
-                    })}
+              <div className="grid grid-cols-2 gap-1 rounded-2xl bg-sunk p-1">
+                {[
+                  [false, ar ? 'منتج عادي' : 'Physical item', Package],
+                  [true, ar ? 'ملف رقمي' : 'Digital file', FileUp],
+                ].map(([v, l, I]: any) => (
+                  <button key={String(v)} type="button" onClick={() => setForm({ ...form, isDigital: v })} className={cx('flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-sm transition', form.isDigital === v ? 'bg-surface font-semibold shadow-card' : 'text-muted')}>
+                    <I className="h-4 w-4" /> {l}
+                  </button>
+                ))}
+              </div>
+              <TextArea label={t.merchant.description} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} maxLength={2000} rows={3} />
+            </FormBlock>
+
+            {/* 2 · price and stock */}
+            <FormBlock title={ar ? 'السعر والكمية' : 'Price & stock'}>
+              <AmountInput label={t.merchant.price} value={form.price} onChange={(v) => setForm({ ...form, price: v })} />
+              <AmountInput label={t.mstore.compareAt} value={form.compareAtPrice} onChange={(v) => setForm({ ...form, compareAtPrice: v })} />
+              {Number(form.compareAtPrice) > Number(form.price) && Number(form.price) > 0 && (
+                <p className="-mt-2 text-xs text-olive">{ar ? `بيبين خصم ${Math.round((1 - Number(form.price) / Number(form.compareAtPrice)) * 100)}٪` : `Shows ${Math.round((1 - Number(form.price) / Number(form.compareAtPrice)) * 100)}% off`}</p>
+              )}
+              {!form.isDigital && <Field label={t.merchant.stock} type="number" inputMode="numeric" min={0} max={1000000} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />}
+            </FormBlock>
+
+            {form.isDigital && (
+              <FormBlock title={t.merchant.file}>
+                <Button type="button" variant="secondary" block loading={busy === 'digital'} icon={<FileUp className="h-4 w-4" />} onClick={() => fileRef.current?.click()}>
+                  <span className="truncate">{form.fileName ?? t.merchant.uploadFile}</span>
+                </Button>
+                <input ref={fileRef} type="file" hidden onChange={(e) => e.target.files?.[0] && doUpload('digital', e.target.files[0])} />
+                <Select
+                  block
+                  label={t.mstore.digitalMode}
+                  value={form.digitalMode}
+                  onChange={(v) => setForm({ ...form, digitalMode: v })}
+                  options={[
+                    { value: 'download', label: t.mstore.modeDownload },
+                    { value: 'view', label: t.mstore.modeView },
+                  ]}
+                />
+                {form.digitalMode === 'download' && <Field label={t.mstore.downloadLimit} type="number" inputMode="numeric" min={1} max={20} value={form.downloadLimit} onChange={(e) => setForm({ ...form, downloadLimit: e.target.value })} />}
+                <p className="text-xs text-muted">{t.mstore.stampNote}</p>
+              </FormBlock>
+            )}
+
+            {/* 3 · where it shows */}
+            <FormBlock
+              title={ar ? 'بأي قسم بيبين' : 'Which sections'}
+              aside={
+                <Link to="/app/merchant/customers?tab=sections" className="text-xs font-semibold text-sky">
+                  {ar ? 'رتّب الأقسام' : 'Manage sections'}
+                </Link>
+              }
+            >
+              {!(sections.data?.sections ?? []).length ? (
+                <p className="text-xs text-muted">{ar ? 'اعمل أقسام لمتجرك (مخبوزات، رجالي، إكسسوارات…) لتبين منتجاتك مرتبة بصفحتك.' : 'Create sections (Bakery, Men, Accessories…) so your products show neatly on your page.'}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {sections.data!.sections.map((x: any) => {
+                    const on = form.sectionIds.includes(x.id);
+                    const I = sectionIcon(x.icon);
+                    return (
+                      <button
+                        key={x.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setForm({ ...form, sectionIds: on ? form.sectionIds.filter((y) => y !== x.id) : [...form.sectionIds, x.id] })}
+                        className={cx('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition', on ? 'bg-night text-white dark:bg-white/20' : 'bg-sunk text-ink/80 hover:text-ink')}
+                      >
+                        {on ? <Check className="h-4 w-4" /> : <I className="h-4 w-4" />} {x.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </FormBlock>
+
+            {/* 4 · extras, folded until needed */}
+            <details className="group rounded-2xl ring-1 ring-line" open={!!form.wholesalePrice || Number(form.depositPercent) > 0}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3.5 font-semibold">
+                <span>
+                  {ar ? 'خيارات إضافية' : 'More options'}
+                  <span className="block text-xs font-normal text-muted">{ar ? 'سعر الجملة' : 'Wholesale price'}{!form.isDigital && (ar ? ' · العربون' : ' · deposit')}</span>
+                </span>
+                <ChevronDown className="h-5 w-5 text-muted transition group-open:rotate-180" />
+              </summary>
+              <div className="space-y-5 border-t border-line p-4">
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold">{ar ? 'سعر الجملة' : 'Wholesale price'}</p>
+                  <AmountInput label={ar ? 'سعر القطعة جملة' : 'Unit price, wholesale'} value={form.wholesalePrice} onChange={(v) => setForm({ ...form, wholesalePrice: v })} />
+                  <Field label={ar ? 'من كمية' : 'From quantity'} type="number" inputMode="numeric" min={1} value={form.wholesaleMinQty} onChange={(e) => setForm({ ...form, wholesaleMinQty: e.target.value })} />
+                  <p className="text-xs text-muted">{ar ? 'بيشوفه بس تجار الجملة اللي قبلتهم، وبينحسب لحاله لما يطلبوا هالكمية أو أكثر.' : 'Only approved wholesale buyers see it; it applies from this quantity.'}</p>
+                </div>
+                {!form.isDigital && (
+                  <div className="space-y-3 border-t border-line pt-4">
+                    <p className="text-sm font-semibold">{t.mstore.deposit}</p>
+                    <Field label={t.mstore.depositPct} type="number" inputMode="numeric" min={0} max={90} value={form.depositPercent} onChange={(e) => setForm({ ...form, depositPercent: e.target.value })} />
+                    <p className="text-xs text-muted">{t.mstore.depositHelp}</p>
+                    {Number(form.depositPercent) > 0 && <Toggle checked={form.depositRefundable} onChange={(v) => setForm({ ...form, depositRefundable: v })} label={t.mstore.depositRefundable} />}
                   </div>
                 )}
               </div>
-              <div className="space-y-3 rounded-2xl border border-[#1F4D3A]/30 bg-[#1F4D3A]/[0.04] p-4">
-                <p className="font-medium">{lang === 'ar' ? 'سعر الجملة (اختياري)' : 'Wholesale price (optional)'}</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <AmountInput label={lang === 'ar' ? 'سعر القطعة جملة' : 'Unit price, wholesale'} value={form.wholesalePrice} onChange={(v) => setForm({ ...form, wholesalePrice: v })} />
-                  <Field label={lang === 'ar' ? 'من كمية' : 'From quantity'} type="number" min={1} value={form.wholesaleMinQty} onChange={(e) => setForm({ ...form, wholesaleMinQty: e.target.value })} />
-                </div>
-                <p className="text-xs text-muted">{lang === 'ar' ? 'بيشوفه بس تجار الجملة اللي قبلتهم، وبينحسب لحاله لما يطلبوا هالكمية أو أكثر.' : 'Only approved wholesale buyers see it; it applies from this quantity.'}</p>
-              </div>
-              {!form.isDigital && (
-                <div className="space-y-3 rounded-2xl border border-gold/40 bg-gold/5 p-4">
-                  <p className="font-medium">{t.mstore.deposit}</p>
-                  <Field label={t.mstore.depositPct} type="number" min={0} max={90} value={form.depositPercent} onChange={(e) => setForm({ ...form, depositPercent: e.target.value })} />
-                  <p className="text-xs text-muted">{t.mstore.depositHelp}</p>
-                  {Number(form.depositPercent) > 0 && (
-                    <Toggle checked={form.depositRefundable} onChange={(v) => setForm({ ...form, depositRefundable: v })} label={t.mstore.depositRefundable} />
-                  )}
-                </div>
-              )}
-              {form.id && <Toggle checked={form.status !== 'hidden'} onChange={(v) => setForm({ ...form, status: v ? 'active' : 'hidden' })} label={form.status !== 'hidden' ? t.merchant.active : t.merchant.hidden} />}
-            </div>
-            <div className="space-y-4">
-              <TextArea label={t.merchant.description} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} maxLength={2000} />
-              <div>
-                <p className="mb-1.5 text-sm font-medium text-ink/80">{t.merchant.image}</p>
-                <button type="button" onClick={() => imgRef.current?.click()} className="grid aspect-video w-full place-items-center overflow-hidden rounded-2xl border-2 border-dashed border-line text-muted transition hover:border-stitch hover:text-stitch">
-                  {form.imageUrl ? <img src={assetUrl(form.imageUrl)!} alt="" className="h-full w-full object-cover" /> : <span className="flex items-center gap-2">{busy === 'image' ? '…' : <ImageUp className="h-5 w-5" />} {t.merchant.uploadImage}</span>}
-                </button>
-                <input ref={imgRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => e.target.files?.[0] && doUpload('image', e.target.files[0])} />
-              </div>
-              {form.isDigital && (
-                <div className="space-y-3 rounded-2xl border border-sky/40 bg-sky/5 p-4">
-                  <p className="text-sm font-medium text-ink/80">{t.merchant.file}</p>
-                  <Button type="button" variant="secondary" block loading={busy === 'digital'} icon={<FileUp className="h-4 w-4" />} onClick={() => fileRef.current?.click()}>
-                    {form.fileName ?? t.merchant.uploadFile}
-                  </Button>
-                  <input ref={fileRef} type="file" hidden onChange={(e) => e.target.files?.[0] && doUpload('digital', e.target.files[0])} />
-                  <Select
-                    block
-                    label={t.mstore.digitalMode}
-                    value={form.digitalMode}
-                    onChange={(v) => setForm({ ...form, digitalMode: v })}
-                    options={[
-                      { value: 'download', label: t.mstore.modeDownload },
-                      { value: 'view', label: t.mstore.modeView },
-                    ]}
-                  />
-                  {form.digitalMode === 'download' && (
-                    <Field label={t.mstore.downloadLimit} type="number" min={1} max={20} value={form.downloadLimit} onChange={(e) => setForm({ ...form, downloadLimit: e.target.value })} />
-                  )}
-                  <p className="text-xs text-muted">{t.mstore.stampNote}</p>
-                </div>
-              )}
-            </div>
-            <div className="sm:col-span-2">
+            </details>
+
+            {/* save, always in reach */}
+            <div className="space-y-3 border-t border-line pt-4">
+              {form.id && <Toggle checked={form.status !== 'hidden'} onChange={(v) => setForm({ ...form, status: v ? 'active' : 'hidden' })} label={form.status !== 'hidden' ? (ar ? 'ظاهر بالمتجر' : 'Shown in the store') : ar ? 'مخفي عن الناس' : 'Hidden from people'} />}
               <ErrorNote>{error}</ErrorNote>
-              <Button block size="lg" className="mt-2" loading={busy === 'save'} disabled={form.isDigital && !form.id && !form.digitalFileRef}>
-                {t.common.save}
+              <Button block size="lg" loading={busy === 'save'} disabled={form.isDigital && !form.id && !form.digitalFileRef} icon={<Check className="h-4 w-4" />}>
+                {form.id ? t.common.save : ar ? 'أضف المنتج' : 'Add product'}
               </Button>
             </div>
           </form>
         )}
       </Sheet>
     </div>
+  );
+}
+
+/** One titled block of a form — keeps long sheets readable on a phone. */
+function FormBlock({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-ink/70">{title}</p>
+        {aside}
+      </div>
+      {children}
+    </section>
   );
 }
 

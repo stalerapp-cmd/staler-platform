@@ -9,7 +9,7 @@ import { fill, relative } from '../lib/format';
 import { useToast } from './Toast';
 import { useConfirm } from './Confirm';
 import { placeLabel } from './PlacePicker';
-import { Button, ErrorNote, Field, TextArea, cx } from './ui';
+import { Button, ErrorNote, Field, PageHeader, TextArea, cx } from './ui';
 
 type Kind = 'moved' | 'hours' | 'closed' | 'news';
 
@@ -103,7 +103,7 @@ const ST: Record<string, { icon: LucideIcon; c: string }> = {
   rejected: { icon: XCircle, c: 'text-stitch' },
 };
 
-/** The agent's desk card for telling people about a move, new hours, closing or an offer. */
+/** The agent's page for telling people about a move, new hours, closing or an offer. */
 export function AgentUpdates() {
   const { lang, err } = useI18n();
   const w = W[lang === 'ar' ? 'ar' : 'en'];
@@ -164,14 +164,9 @@ export function AgentUpdates() {
   const K = POST_LOOK[kind];
 
   return (
-    <section className="card mt-6 overflow-hidden">
-      <div className="relative overflow-hidden bg-night px-5 py-5 text-white sm:px-6 dark:bg-white/[0.04]">
-        <span className="pointer-events-none absolute -end-10 -top-12 h-40 w-40 rounded-full border border-dashed border-gold/30" />
-        <h2 className="relative flex items-center gap-2.5 font-display text-2xl">
-          <BellRing className="h-6 w-6 text-gold" /> {w.title}
-        </h2>
-        <p className="relative mt-1 max-w-xl text-sm text-white/65">{w.lead}</p>
-      </div>
+    <div>
+      <PageHeader title={w.title} lead={w.lead} />
+      <section className="card overflow-hidden">
       <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <form onSubmit={send} className="min-w-0 space-y-4">
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" role="radiogroup">
@@ -301,6 +296,7 @@ export function AgentUpdates() {
           </div>
         </div>
       </div>
-    </section>
+      </section>
+    </div>
   );
 }

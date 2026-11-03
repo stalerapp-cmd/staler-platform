@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowDownToLine, ArrowUpFromLine, Banknote, ChevronDown, Clock, LocateFixed, MapPin, Navigation, Phone, Search, Signpost, Ticket, XCircle } from 'lucide-react';
-import { AgentUpdates, POST_LOOK } from '../components/AgentUpdates';
+import { POST_LOOK } from '../components/AgentUpdates';
 import { AgentInsights, daysLabel, isToday } from '../components/AgentPlaces';
 import { MediaViewer, PlaceStrip, ShotsChip, type PlaceShot } from '../components/PlaceMedia';
 import { del, newIdempotencyKey, post } from '../lib/api';
@@ -185,7 +185,6 @@ export default function AgentDesk() {
 
       <AgentProfileCard />
       <AgentInsights />
-      <AgentUpdates />
 
       <Sheet open={!!show} onClose={() => setShow(null)} title={t.agent.cashOut}>
         {show && (

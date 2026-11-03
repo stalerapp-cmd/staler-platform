@@ -720,6 +720,34 @@ describe('marketplace', () => {
     expect((await request(app).get('/api/admin/people/owners').set(auth(worker.token))).status).toBe(403);
   });
 
+  it('scheduled payments: instalments end after N, remind-only waits for "pay now", skip, pause', async () => {
+    const owner = await walletUser(app, 'Pays Debt');
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: owner.walletId, amount: '30' });
+    const lender = await walletUser(app, 'The Lender');
+    // three instalments of 5, the first right now
+    const s1 = await request(app).post('/api/people/schedules').set(auth(owner.token)).send({ who: lender.walletId, title: 'Debt', amount: '5', every: 'month', ends: 'count', maxRuns: 3, remindBefore: 1 });
+    expect(s1.status).toBe(201);
+    expect(await walletBalance(app, lender)).toBe('5.00');
+    // pay the next two early → finished
+    expect((await request(app).post(`/api/people/schedules/${s1.body.data.id}/pay-now`).set(auth(owner.token)).send({})).status).toBe(200);
+    await request(app).post(`/api/people/schedules/${s1.body.data.id}/pay-now`).set(auth(owner.token)).send({});
+    const ov = await request(app).get('/api/people/overview').set(auth(owner.token));
+    const row = ov.body.data.schedules.find((x: any) => x.id === s1.body.data.id);
+    expect(row.runs).toBe(3);
+    expect(row.active).toBe(false);
+    expect(await walletBalance(app, lender)).toBe('15.00');
+    // remind-only: nothing leaves on its own
+    const s2 = await request(app).post('/api/people/schedules').set(auth(owner.token)).send({ userId: lender.userId, amount: '2', every: 'days', everyDays: 3, auto: false });
+    expect(s2.status).toBe(201);
+    expect(await walletBalance(app, lender)).toBe('15.00');
+    await request(app).post(`/api/people/schedules/${s2.body.data.id}/skip`).set(auth(owner.token)).send({});
+    const ov2 = await request(app).get('/api/people/overview').set(auth(owner.token));
+    const r2 = ov2.body.data.schedules.find((x: any) => x.id === s2.body.data.id);
+    expect(new Date(r2.next_run_at).getTime()).toBeGreaterThan(Date.now() + 2 * 86400000);
+    expect((await request(app).put(`/api/people/schedules/${s2.body.data.id}`).set(auth(owner.token)).send({ active: false })).status).toBe(200);
+    expect((await request(app).put(`/api/people/schedules/${s2.body.data.id}`).set(auth(lender.token)).send({ active: false })).status).toBe(404);
+  });
+
   it('support calls: request, accept, book a time, ring, answer, relay the handshake', async () => {
     const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
     const supMe = await request(app).get('/api/auth/me').set(auth(sup));
