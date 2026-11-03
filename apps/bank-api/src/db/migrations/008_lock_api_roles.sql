@@ -1,0 +1,13 @@
+-- 008: the bank talks to the database directly; Supabase's public API roles get nothing in its schema.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'REVOKE ALL ON ALL TABLES IN SCHEMA __SCHEMA__ FROM anon, authenticated';
+    EXECUTE 'REVOKE ALL ON ALL SEQUENCES IN SCHEMA __SCHEMA__ FROM anon, authenticated';
+    EXECUTE 'REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA __SCHEMA__ FROM PUBLIC, anon, authenticated';
+    EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA __SCHEMA__ REVOKE ALL ON TABLES FROM anon, authenticated';
+    EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA __SCHEMA__ REVOKE ALL ON SEQUENCES FROM anon, authenticated';
+    EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA __SCHEMA__ REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated';
+    EXECUTE 'REVOKE USAGE ON SCHEMA __SCHEMA__ FROM anon, authenticated';
+  END IF;
+END $$;
