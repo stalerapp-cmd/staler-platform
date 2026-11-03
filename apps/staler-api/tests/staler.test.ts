@@ -469,6 +469,77 @@ describe('marketplace', () => {
     expect(hist.body.data.items[0].details.title).toBe('Just you two');
   });
 
+  it('announcements by area, with a mention that links to the store; a person card', async () => {
+    const admin = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const local = await walletUser(app, 'Jenin Local');
+    const pr = await request(app).patch('/api/auth/me').set(auth(local.token)).send({ homeCity: 'قباطية' });
+    expect(pr.body.data?.user?.home_city ?? pr.body).toBe('قباطية');
+    const far = await walletUser(app, 'Far Away');
+    await request(app).patch('/api/auth/me').set(auth(far.token)).send({ homeCity: 'الخليل' });
+    const n = await request(app).post('/api/admin/broadcast').set(auth(admin)).send({ title: 'Area', body: 'Hi', audience: 'places', places: ['gov:jenin'], dryRun: true });
+    expect(n.body.data.count).toBeGreaterThanOrEqual(1);
+    const body = 'Visit @[Corner Shop](store:corner-shop) today';
+    const sent = await request(app).post('/api/admin/broadcast').set(auth(admin)).send({ title: 'Jenin news', body, audience: 'places', places: ['gov:jenin'] });
+    expect(sent.status).toBe(200);
+    const mine = (await request(app).get('/api/notifications').set(auth(local.token))).body.data.notifications.find((x: any) => x.title === 'Jenin news');
+    expect(mine.metadata.link).toBe('/s/corner-shop');
+    const theirs = (await request(app).get('/api/notifications').set(auth(far.token))).body.data.notifications.find((x: any) => x.title === 'Jenin news');
+    expect(theirs).toBeUndefined();
+    const mention = await request(app).get('/api/admin/mentionables?q=Jenin').set(auth(admin));
+    expect(mention.body.data.items.some((x: any) => x.kind === 'user' && x.ref === local.userId)).toBe(true);
+    const card = await request(app).get(`/api/contacts/people/${local.userId}`).set(auth(far.token));
+    expect(card.body.data.person.full_name).toBe('Jenin Local');
+    expect(card.body.data.person.email).toBeUndefined();
+  });
+
+  it('cash agents: photos of the place, updates to their customers, area requests the admins approve', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const email = `${uniq('ag')}@x.com`;
+    await request(app).post('/api/admin/users').set(auth(sup)).send({ fullName: 'Moving Agent', email, password: STRONG, role: 'exchange' });
+    const agent = await login(app, email, STRONG);
+    const save = await request(app)
+      .put('/api/exchange/profile')
+      .set(auth(agent))
+      .send({ displayName: 'Moving Agent', city: 'نابلس', media: [{ url: '/files/abc', kind: 'image', caption: 'Front' }], directions: 'Next to the clock tower' });
+    expect(save.status).toBe(200);
+    expect(save.body.data.profile.media[0].caption).toBe('Front');
+    // outside files are refused
+    expect((await request(app).put('/api/exchange/profile').set(auth(agent)).send({ displayName: 'Moving Agent', media: [{ url: 'https://evil.example/x.jpg', kind: 'image' }] })).status).toBe(400);
+    // saving without the new fields keeps them
+    await request(app).put('/api/exchange/profile').set(auth(agent)).send({ displayName: 'Moving Agent', city: 'نابلس' });
+    const prof = await request(app).get('/api/exchange/profile').set(auth(agent));
+    expect(prof.body.data.profile.directions).toBe('Next to the clock tower');
+    // a customer
+    const me = await request(app).get('/api/auth/me').set(auth(agent));
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: me.body.data.user.wallet_id, amount: '20' });
+    const cust = await walletUser(app, 'Agent Customer');
+    const v = await request(app).post('/api/exchange/vouchers').set(auth(agent)).send({ amount: '5' });
+    await request(app).post('/api/exchange/claim').set(auth(cust.token)).send({ voucher: v.body.data.voucher.uri });
+    const dry = await request(app).post('/api/exchange/posts').set(auth(agent)).send({ kind: 'moved', title: 'We moved', body: 'New shop', audience: 'customers', dryRun: true });
+    expect(dry.body.data.count).toBe(1);
+    const post = await request(app).post('/api/exchange/posts').set(auth(agent)).send({ kind: 'moved', title: 'We moved', body: 'Now opposite the bank', audience: 'customers' });
+    expect(post.body.data.sent).toBe(1);
+    const got = (await request(app).get('/api/notifications').set(auth(cust.token))).body.data.notifications.find((x: any) => x.title === 'We moved');
+    expect(got.metadata.link).toContain('/app/agents?agent=');
+    // area request waits for an admin
+    const area = await request(app).post('/api/exchange/posts').set(auth(agent)).send({ kind: 'news', title: 'Open late', body: 'Until midnight this week', audience: 'area' });
+    expect(area.body.data.status).toBe('pending');
+    const pend = await request(app).get('/api/admin/agent-posts').set(auth(sup));
+    const req1 = pend.body.data.posts.find((x: any) => x.id === area.body.data.id);
+    expect(req1.places).toEqual(['gov:nablus']);
+    expect((await request(app).post(`/api/admin/agent-posts/${req1.id}/approve`).set(auth(cust.token)).send({})).status).toBe(403);
+    const ok = await request(app).post(`/api/admin/agent-posts/${req1.id}/approve`).set(auth(sup)).send({});
+    expect(ok.status).toBe(200);
+    expect((await request(app).post(`/api/admin/agent-posts/${req1.id}/reject`).set(auth(sup)).send({})).status).toBe(404);
+    // the map card shows the latest update
+    const list = await request(app).get('/api/exchange/agents').set(auth(cust.token));
+    const card = list.body.data.agents.find((a: any) => a.display_name === 'Moving Agent');
+    expect(card?.update?.title ?? null).toBe(card ? 'Open late' : null);
+    // a daily limit
+    await request(app).post('/api/exchange/posts').set(auth(agent)).send({ kind: 'news', title: 'Third', body: 'Third one', audience: 'customers' });
+    expect((await request(app).post('/api/exchange/posts').set(auth(agent)).send({ kind: 'news', title: 'Fourth', body: 'Too many', audience: 'customers' })).status).toBe(429);
+  });
+
   it('map place search: signed-in only, sensible queries', async () => {
     const u = await walletUser(app, 'Map Searcher');
     expect((await request(app).get('/api/geo/search?q=nablus')).status).toBe(401);

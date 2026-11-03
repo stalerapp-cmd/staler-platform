@@ -1,9 +1,13 @@
 import { Router } from 'express';
+import multer from 'multer';
+import { fileTypeFromBuffer } from 'file-type';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
 import { hmac, randomToken, safeEqual } from '../lib/crypto.js';
-import { conflict, forbidden, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound, tooMany } from '../lib/errors.js';
+import { putFile } from '../lib/storage.js';
+import { areaOf, inPlaces, mentionOf, placeKeys } from '../lib/audience.js';
 import { ah } from '../lib/http.js';
 import { amountSchema } from '../lib/money.js';
 import { totpCode, uuid, validate } from '../lib/validate.js';
@@ -199,13 +203,23 @@ exchangeRouter.post(
 
 // ------------------------------------------------------------------ agents
 const optText = (n: number) => z.string().trim().max(n).nullable().optional();
+const MAX_MEDIA = 8;
+/** Only files uploaded to us. */
+const fileUrl = z
+  .string()
+  .max(500)
+  .refine((u) => u.startsWith('/files/') || /^https:\/\/[a-z0-9.-]+\.supabase\.co\/storage\//i.test(u), 'Upload the file first');
 
 /** Active cash agents customers can visit (public profile only). */
 exchangeRouter.get(
   '/agents',
   ah(async (_req, res) => {
     const r = await pool.query(
-      `SELECT a.user_id AS id, a.display_name, a.city, a.address, a.lat, a.lng, a.hours, COALESCE(a.logo_url, u.profile_image) AS logo_url, a.cash_in, a.cash_out, a.phone
+      `SELECT a.user_id AS id, a.display_name, a.city, a.address, a.lat, a.lng, a.hours, COALESCE(a.logo_url, u.profile_image) AS logo_url, a.cash_in, a.cash_out, a.phone,
+              a.media, a.directions,
+              (SELECT jsonb_build_object('kind', p.kind, 'title', p.title, 'body', p.body, 'at', p.created_at)
+                 FROM ${S}.agent_posts p WHERE p.agent_id = a.user_id AND p.status = 'sent' AND p.show_until > now()
+                ORDER BY p.created_at DESC LIMIT 1) AS update
          FROM ${S}.agent_profiles a JOIN ${S}.users u ON u.id = a.user_id
         WHERE a.status = 'active' AND u.status = 'active' AND u.role = 'exchange'
         ORDER BY a.city NULLS LAST, a.display_name`,
@@ -218,7 +232,7 @@ async function profileOf(userId: string) {
   const p = await one<any>(`SELECT * FROM ${S}.agent_profiles WHERE user_id = $1`, [userId]);
   if (p) return p;
   const u = await one<any>(`SELECT full_name, phone_number FROM ${S}.users WHERE id = $1`, [userId]);
-  return { user_id: userId, display_name: u?.full_name ?? '', phone: u?.phone_number ?? null, city: null, address: null, lat: null, lng: null, hours: null, logo_url: null, cash_in: true, cash_out: true, status: 'pending', missing: true };
+  return { user_id: userId, display_name: u?.full_name ?? '', phone: u?.phone_number ?? null, city: null, address: null, lat: null, lng: null, hours: null, logo_url: null, cash_in: true, cash_out: true, status: 'pending', media: [], directions: null, missing: true };
 }
 
 exchangeRouter.get(
@@ -241,18 +255,34 @@ export const agentProfileBody = z
     logoUrl: optText(500),
     cashIn: z.boolean().optional(),
     cashOut: z.boolean().optional(),
+    /** Photos or a short video of the place, so people recognise it. */
+    media: z
+      .array(z.object({ url: fileUrl, kind: z.enum(['image', 'video']), caption: z.string().trim().max(80).optional().default('') }).strict())
+      .max(MAX_MEDIA)
+      .optional(),
+    /** How to find the shop: "Next to the mosque, first floor". */
+    directions: optText(400),
   })
   .strict();
 
 export async function saveAgentProfile(userId: string, b: z.infer<typeof agentProfileBody>, status?: string) {
+  // Fields left out keep what was there (an older app doesn't know about photos).
   await pool.query(
-    `INSERT INTO ${S}.agent_profiles (user_id, display_name, city, address, lat, lng, phone, hours, logo_url, cash_in, cash_out, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,true),COALESCE($11,true),COALESCE($12,'pending'))
+    `INSERT INTO ${S}.agent_profiles (user_id, display_name, city, address, lat, lng, phone, hours, logo_url, cash_in, cash_out, status, media, directions)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,true),COALESCE($11,true),COALESCE($12,'pending'),COALESCE($13::jsonb,'[]'::jsonb),$14)
      ON CONFLICT (user_id) DO UPDATE SET display_name = EXCLUDED.display_name, city = EXCLUDED.city, address = EXCLUDED.address,
-       lat = EXCLUDED.lat, lng = EXCLUDED.lng, phone = EXCLUDED.phone, hours = EXCLUDED.hours, logo_url = EXCLUDED.logo_url,
+       lat = EXCLUDED.lat, lng = EXCLUDED.lng, phone = EXCLUDED.phone, hours = EXCLUDED.hours,
+       logo_url = CASE WHEN $15 THEN EXCLUDED.logo_url ELSE ${S}.agent_profiles.logo_url END,
        cash_in = COALESCE($10, ${S}.agent_profiles.cash_in), cash_out = COALESCE($11, ${S}.agent_profiles.cash_out),
-       status = COALESCE($12, ${S}.agent_profiles.status), updated_at = now()`,
-    [userId, b.displayName, b.city ?? null, b.address ?? null, b.lat ?? null, b.lng ?? null, b.phone ?? null, b.hours ?? null, b.logoUrl ?? null, b.cashIn ?? null, b.cashOut ?? null, status ?? null],
+       status = COALESCE($12, ${S}.agent_profiles.status),
+       media = COALESCE($13::jsonb, ${S}.agent_profiles.media),
+       directions = CASE WHEN $16 THEN EXCLUDED.directions ELSE ${S}.agent_profiles.directions END,
+       updated_at = now()`,
+    [
+      userId, b.displayName, b.city ?? null, b.address ?? null, b.lat ?? null, b.lng ?? null, b.phone ?? null, b.hours ?? null, b.logoUrl ?? null,
+      b.cashIn ?? null, b.cashOut ?? null, status ?? null, b.media ? JSON.stringify(b.media) : null, b.directions ?? null,
+      b.logoUrl !== undefined, b.directions !== undefined,
+    ],
   );
 }
 
@@ -271,6 +301,124 @@ exchangeRouter.put(
     }
     await audit({ userId: req.auth!.userId, action: 'exchange.profile_updated', entityType: 'user', entityId: req.auth!.userId }, req);
     res.json({ success: true, data: { profile: await profileOf(req.auth!.userId) } });
+  }),
+);
+
+/** A photo (≤ 5 MB) or a short video (≤ 25 MB) of the agent's place. */
+const mediaUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
+exchangeRouter.post(
+  '/uploads/media',
+  requireRole('exchange'),
+  mediaUpload.single('file'),
+  ah(async (req, res) => {
+    if (!req.file) throw badRequest('NO_FILE', 'Choose an image or a video');
+    const t = await fileTypeFromBuffer(req.file.buffer);
+    const ok = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime'];
+    if (!t || !ok.includes(t.mime)) throw badRequest('INVALID_MEDIA', 'Use JPEG, PNG, WebP, MP4 or WebM');
+    if (t.mime.startsWith('image/') && req.file.size > 5 * 1024 * 1024) throw badRequest('TOO_LARGE', 'Images up to 5 MB');
+    const stored = await putFile('product-images', req.auth!.userId, t.ext, t.mime, req.file.buffer, req.file.originalname);
+    res.status(201).json({ success: true, data: { url: stored.url, kind: t.mime.startsWith('video/') ? 'video' : 'image' } });
+  }),
+);
+
+// ------------------------------------------------------------------ updates
+/** People who dealt with this agent: claimed one of their vouchers or paid one of their cash-outs. */
+const customersOf = `SELECT claimed_by AS id FROM ${S}.exchange_vouchers WHERE exchange_user_id = $1 AND claimed_by IS NOT NULL
+                     UNION SELECT paid_by FROM ${S}.agent_cashouts WHERE agent_id = $1 AND paid_by IS NOT NULL`;
+const POSTS_PER_DAY = 3;
+const SHOW_DAYS = 14;
+const postBody = z
+  .object({
+    kind: z.enum(['moved', 'hours', 'closed', 'news']),
+    title: z.string().trim().min(2).max(80),
+    body: z.string().trim().min(2).max(500),
+    audience: z.enum(['customers', 'area']),
+    /** For an area request: which places (defaults to the agent's governorate). */
+    places: z.array(z.string().trim().max(80)).max(20).optional(),
+    dryRun: z.boolean().default(false),
+  })
+  .strict();
+
+/** Sends an agent update to its people; returns how many got it. */
+export async function deliverAgentPost(p: { id: string; agent_id: string; kind: string; title: string; body: string; audience: string; places: string[] }) {
+  const a = await one<any>(`SELECT COALESCE(a.display_name, u.full_name) AS name FROM ${S}.users u LEFT JOIN ${S}.agent_profiles a ON a.user_id = u.id WHERE u.id = $1`, [p.agent_id]);
+  const tag = mentionOf('agent', p.agent_id, a?.name ?? '');
+  const meta = JSON.stringify({ link: `/app/agents?agent=${p.agent_id}`, agentId: p.agent_id, kind: p.kind, from: 'agent', ar: { title: p.title, body: `${tag} — ${p.body}` } });
+  const r =
+    p.audience === 'customers'
+      ? await pool.query(
+          `INSERT INTO ${S}.notifications (user_id, type, title, body, metadata)
+           SELECT u.id, 'agent_news', $2, $3, $4::jsonb FROM ${S}.users u WHERE u.id IN (${customersOf}) AND u.status = 'active' AND u.id <> $1
+           RETURNING user_id`,
+          [p.agent_id, p.title, `${tag} — ${p.body}`, meta],
+        )
+      : await pool.query(
+          `INSERT INTO ${S}.notifications (user_id, type, title, body, metadata)
+           SELECT u.id, 'agent_news', $2, $3, $4::jsonb FROM ${S}.users u
+            WHERE u.status = 'active' AND u.id <> $1 AND u.email NOT LIKE 'deleted+%@deleted.invalid' AND ${inPlaces('u', '$5')}
+           RETURNING user_id`,
+          [p.agent_id, p.title, `${tag} — ${p.body}`, meta, placeKeys(p.places)],
+        );
+  await pool.query(`UPDATE ${S}.agent_posts SET status = 'sent', reach = $2, show_until = now() + interval '${SHOW_DAYS} days' WHERE id = $1`, [p.id, r.rowCount ?? 0]);
+  return r.rowCount ?? 0;
+}
+
+exchangeRouter.get(
+  '/posts',
+  requireRole('exchange'),
+  ah(async (req, res) => {
+    const id = req.auth!.userId;
+    const [posts, n, prof] = await Promise.all([
+      pool.query(`SELECT id, kind, title, body, audience, places, status, reach, note, created_at, decided_at FROM ${S}.agent_posts WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 40`, [id]),
+      one<{ n: number }>(`SELECT count(*)::int AS n FROM (${customersOf}) x`, [id]),
+      one<any>(`SELECT city FROM ${S}.agent_profiles WHERE user_id = $1`, [id]),
+    ]);
+    res.json({ success: true, data: { posts: posts.rows, customers: n?.n ?? 0, area: areaOf(prof?.city), city: prof?.city ?? null } });
+  }),
+);
+
+exchangeRouter.post(
+  '/posts',
+  requireRole('exchange'),
+  validate({ body: postBody }),
+  ah(async (req, res) => {
+    const id = req.auth!.userId;
+    const b = req.body as z.infer<typeof postBody>;
+    const prof = await one<any>(`SELECT display_name, city, status FROM ${S}.agent_profiles WHERE user_id = $1`, [id]);
+    const places = b.audience === 'area' ? (b.places?.length ? b.places : areaOf(prof?.city)) : [];
+    if (b.audience === 'area' && !places.length) throw badRequest('NO_AREA', 'Add your city to your profile first');
+    if (b.dryRun) {
+      const n =
+        b.audience === 'customers'
+          ? await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.users u WHERE u.id IN (${customersOf}) AND u.status = 'active' AND u.id <> $1`, [id])
+          : await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.users u WHERE u.status = 'active' AND u.id <> $1 AND ${inPlaces('u', '$2')}`, [id, placeKeys(places)]);
+      return res.json({ success: true, data: { count: n?.n ?? 0, places } });
+    }
+    const today = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.agent_posts WHERE agent_id = $1 AND created_at > now() - interval '1 day'`, [id]);
+    if ((today?.n ?? 0) >= POSTS_PER_DAY) throw tooMany('Up to 3 updates a day', 'POST_LIMIT');
+    const p = await one<any>(
+      `INSERT INTO ${S}.agent_posts (agent_id, kind, title, body, audience, places, status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [id, b.kind, b.title, b.body, b.audience, places, b.audience === 'area' ? 'pending' : 'sent'],
+    );
+    let sent = 0;
+    if (b.audience === 'customers') sent = await deliverAgentPost(p);
+    else {
+      // An area announcement waits for an admin.
+      const admins = await pool.query(
+        `SELECT id FROM ${S}.users WHERE role = 'admin' AND status = 'active' AND (admin_level = 'super_admin' OR 'notify' = ANY(admin_permissions))`,
+      );
+      for (const a of admins.rows)
+        await notifyBi(
+          undefined,
+          a.id,
+          'agent_post_pending',
+          ['A cash agent asks to announce in their area', `${prof?.display_name ?? ''}: ${b.title}`],
+          ['وكيل صرف بطلب تعميم لمنطقته', `${prof?.display_name ?? ''}: ${b.title}`],
+          { link: '/app/admin/notify' },
+        );
+    }
+    await audit({ userId: id, action: 'exchange.post', entityType: 'agent_post', entityId: p.id, details: { kind: b.kind, audience: b.audience, title: b.title, sent } }, req);
+    res.status(201).json({ success: true, data: { id: p.id, status: b.audience === 'area' ? 'pending' : 'sent', sent } });
   }),
 );
 

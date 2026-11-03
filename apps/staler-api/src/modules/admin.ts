@@ -15,7 +15,8 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { PERMISSIONS, assertCanManage, can, isSuper, requirePerm } from '../lib/permissions.js';
 import { noticeMail } from '../lib/mailer.js';
 import { notify, notifyBi, writeLine } from './walletCore.js';
-import { agentProfileBody, refundVoucher, saveAgentProfile } from './exchange.js';
+import { agentProfileBody, deliverAgentPost, refundVoucher, saveAgentProfile } from './exchange.js';
+import { inPlaces, mentionLink, placeKeys, plainText } from '../lib/audience.js';
 import { requireSecondFactor } from './mfa.js';
 import { revokeAllSessions } from './sessions.js';
 import { anonymiseUser } from './auth.js';
@@ -276,7 +277,8 @@ adminRouter.post(
   }),
 );
 
-const message = z.object({ title: z.string().trim().min(2).max(80), body: z.string().trim().min(2).max(500) }).strict();
+/** The body may carry mentions (@[Name](store:slug)), so it allows a little more than it shows. */
+const message = z.object({ title: z.string().trim().min(2).max(80), body: z.string().trim().min(2).max(1000) }).strict();
 
 /** In-app notification to one user. */
 adminRouter.post(
@@ -286,7 +288,8 @@ adminRouter.post(
   ah(async (req, res) => {
     const target = await one<any>(`SELECT id FROM ${S}.users WHERE id = $1`, [req.params.id]);
     if (!target) throw notFound('User not found');
-    await notify(undefined, target.id, 'admin_message', req.body.title, req.body.body);
+    const link = mentionLink(req.body.body);
+    await notify(undefined, target.id, 'admin_message', req.body.title, req.body.body, { from: 'admin', ...(link ? { link } : {}) });
     await audit({ userId: req.auth!.userId, action: 'admin.user_notified', entityType: 'user', entityId: target.id, details: { title: req.body.title, body: req.body.body.slice(0, 300) } }, req);
     res.json({ success: true });
   }),
@@ -297,8 +300,10 @@ const BROADCAST_ROLES = ['user', 'merchant', 'exchange', 'admin'] as const;
 const broadcastBody = message
   .extend({
     /** Who gets it: everyone, chosen kinds of account, or chosen people. */
-    audience: z.enum(['all', 'roles', 'people']).default('all'),
+    audience: z.enum(['all', 'roles', 'people', 'places']).default('all'),
     roles: z.array(z.enum(BROADCAST_ROLES)).max(BROADCAST_ROLES.length).optional(),
+    /** For 'places': governorates (gov:<id>) and towns (town:<name>); roles narrow it further. */
+    places: z.array(z.string().trim().max(80)).max(60).optional(),
     userIds: z.array(idParam).max(200).optional(),
     /** Older clients send one role. */
     role: z.enum(BROADCAST_ROLES).optional(),
@@ -320,31 +325,36 @@ adminRouter.post(
   validate({ body: broadcastBody }),
   ah(async (req, res) => {
     const b = req.body as z.infer<typeof broadcastBody>;
-    const roles = b.audience === 'roles' ? (b.roles ?? []) : b.role ? [b.role] : null;
+    const roles = b.audience === 'roles' ? (b.roles ?? []) : b.audience === 'places' ? (b.roles?.length ? b.roles : null) : b.role ? [b.role] : null;
     const people = b.audience === 'people' ? [...new Set(b.userIds ?? [])] : null;
+    const keys = b.audience === 'places' ? placeKeys(b.places ?? []) : null;
     if (roles && !roles.length) throw badRequest('NO_AUDIENCE', 'Choose who should get it');
     if (people && !people.length) throw badRequest('NO_AUDIENCE', 'Choose who should get it');
-    const where = `status = 'active' AND email NOT LIKE 'deleted+%@deleted.invalid' AND ($1::text[] IS NULL OR role = ANY($1)) AND ($2::uuid[] IS NULL OR id = ANY($2))`;
-    const params = [roles, people];
+    if (keys && !keys.length) throw badRequest('NO_AUDIENCE', 'Choose who should get it');
+    const where = `status = 'active' AND email NOT LIKE 'deleted+%@deleted.invalid' AND ($1::text[] IS NULL OR role = ANY($1)) AND ($2::uuid[] IS NULL OR id = ANY($2))
+                   AND ($3::text[] IS NULL OR ${inPlaces('u', '$3')})`;
+    const params = [roles, people, keys];
+    const link = mentionLink(b.body);
     if (b.dryRun) {
-      const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.users WHERE ${where}`, params);
+      const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.users u WHERE ${where}`, params);
       return res.json({ success: true, data: { count: n?.n ?? 0 } });
     }
     const r = await pool.query(
       `INSERT INTO ${S}.notifications (user_id, type, title, body, metadata)
-       SELECT id, 'admin_message', $3, $4, jsonb_build_object('tone', $5::text, 'from', 'admin') FROM ${S}.users WHERE ${where}
+       SELECT id, 'admin_message', $4, $5, jsonb_build_object('tone', $6::text, 'from', 'admin') || COALESCE(jsonb_build_object('link', $7::text), '{}'::jsonb)
+         FROM ${S}.users u WHERE ${where}
        RETURNING user_id`,
-      [...params, b.title, b.body, b.tone],
+      [...params, b.title, b.body, b.tone, link],
     );
     let emailed = 0;
     if (b.email) {
-      const to = await pool.query(`SELECT email, language FROM ${S}.users WHERE ${where} AND email NOT LIKE '%.invalid' LIMIT 300`, params);
+      const to = await pool.query(`SELECT email, language FROM ${S}.users u WHERE ${where} AND email NOT LIKE '%.invalid' LIMIT 300`, params);
       emailed = to.rowCount ?? 0;
       // One by one in the background, so the mail server isn't flooded.
       const list = to.rows;
       const next = (k: number) => {
         if (k >= list.length) return;
-        void sendMail(noticeMail(list[k].email, b.title, b.body, list[k].language === 'en' ? 'en' : 'ar'));
+        void sendMail(noticeMail(list[k].email, b.title, plainText(b.body), list[k].language === 'en' ? 'en' : 'ar'));
         setTimeout(() => next(k + 1), 400);
       };
       next(0);
@@ -353,11 +363,98 @@ adminRouter.post(
       {
         userId: req.auth!.userId,
         action: 'admin.broadcast',
-        details: { title: b.title, body: b.body.slice(0, 300), audience: b.audience, roles, people: people?.length ?? null, tone: b.tone, email: b.email, emailed, count: r.rowCount },
+        details: { title: b.title, body: b.body.slice(0, 300), audience: b.audience, roles, people: people?.length ?? null, places: b.audience === 'places' ? b.places : undefined, tone: b.tone, email: b.email, emailed, count: r.rowCount },
       },
       req,
     );
     res.json({ success: true, data: { sent: r.rowCount, emailed } });
+  }),
+);
+
+/** People, stores and cash agents an announcement can mention. */
+adminRouter.get(
+  '/mentionables',
+  requirePerm('notify'),
+  validate({ query: z.object({ q: z.string().trim().min(1).max(60) }).strict() }),
+  ah(async (req, res) => {
+    const like = `%${String(req.query.q).replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+    const [stores, agents, people] = await Promise.all([
+      pool.query(
+        `SELECT m.slug, m.store_name AS name, m.logo_url AS image, m.city FROM ${S}.merchants m
+          WHERE m.status = 'active' AND m.slug IS NOT NULL AND (m.store_name ILIKE $1 OR m.slug ILIKE $1) ORDER BY m.parent_id NULLS FIRST, m.store_name LIMIT 5`,
+        [like],
+      ),
+      pool.query(
+        `SELECT a.user_id AS id, a.display_name AS name, COALESCE(a.logo_url, u.profile_image) AS image, a.city FROM ${S}.agent_profiles a JOIN ${S}.users u ON u.id = a.user_id
+          WHERE a.status = 'active' AND u.role = 'exchange' AND (a.display_name ILIKE $1 OR u.full_name ILIKE $1) ORDER BY a.display_name LIMIT 5`,
+        [like],
+      ),
+      pool.query(
+        `SELECT id, full_name AS name, profile_image AS image, role, email FROM ${S}.users
+          WHERE status = 'active' AND role <> 'admin' AND email NOT LIKE '%.invalid' AND (full_name ILIKE $1 OR email ILIKE $1) ORDER BY full_name LIMIT 6`,
+        [like],
+      ),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        items: [
+          ...stores.rows.map((x) => ({ kind: 'store', ref: x.slug, name: x.name, image: x.image, sub: x.city })),
+          ...agents.rows.map((x) => ({ kind: 'agent', ref: x.id, name: x.name, image: x.image, sub: x.city })),
+          ...people.rows.map((x) => ({ kind: 'user', ref: x.id, name: x.name, image: x.image, sub: x.email, role: x.role })),
+        ],
+      },
+    });
+  }),
+);
+
+/** Cash agents asking to announce something to everyone in their area. */
+adminRouter.get(
+  '/agent-posts',
+  requirePerm('notify'),
+  ah(async (_req, res) => {
+    const r = await pool.query(
+      `SELECT p.id, p.kind, p.title, p.body, p.places, p.status, p.reach, p.note, p.created_at, p.decided_at, p.agent_id,
+              COALESCE(a.display_name, u.full_name) AS agent_name, COALESCE(a.logo_url, u.profile_image) AS agent_image, a.city AS agent_city, d.full_name AS decided_by_name
+         FROM ${S}.agent_posts p JOIN ${S}.users u ON u.id = p.agent_id LEFT JOIN ${S}.agent_profiles a ON a.user_id = p.agent_id
+         LEFT JOIN ${S}.users d ON d.id = p.decided_by
+        WHERE p.audience = 'area' AND (p.status = 'pending' OR p.decided_at > now() - interval '30 days')
+        ORDER BY (p.status = 'pending') DESC, p.created_at DESC LIMIT 40`,
+    );
+    const counts = await Promise.all(
+      r.rows.filter((x) => x.status === 'pending').map((x) => one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.users u WHERE u.status = 'active' AND u.id <> $1 AND ${inPlaces('u', '$2')}`, [x.agent_id, placeKeys(x.places)])),
+    );
+    let k = 0;
+    res.json({ success: true, data: { posts: r.rows.map((x) => (x.status === 'pending' ? { ...x, reach: counts[k++]?.n ?? 0 } : x)) } });
+  }),
+);
+
+adminRouter.post(
+  '/agent-posts/:id/:decision',
+  requirePerm('notify'),
+  validate({
+    params: z.object({ id: idParam, decision: z.enum(['approve', 'reject']) }).strict(),
+    body: z.object({ note: z.string().trim().max(200).optional() }).strict(),
+  }),
+  ah(async (req, res) => {
+    const p = await one<any>(
+      `UPDATE ${S}.agent_posts SET status = CASE WHEN $2 = 'approve' THEN status ELSE 'rejected' END, decided_by = $3, decided_at = now(), note = $4
+        WHERE id = $1 AND status = 'pending' RETURNING *`,
+      [req.params.id, req.params.decision, req.auth!.userId, req.body.note ?? null],
+    );
+    if (!p) throw notFound('Request not found or already decided');
+    let sent = 0;
+    if (req.params.decision === 'approve') sent = await deliverAgentPost(p);
+    await notifyBi(
+      undefined,
+      p.agent_id,
+      'agent_post_decided',
+      req.params.decision === 'approve' ? ['Your area announcement went out', `“${p.title}” reached ${sent} people.`] : ['Your area announcement was not approved', req.body.note || `“${p.title}”`],
+      req.params.decision === 'approve' ? ['انبعت تعميمك لمنطقتك', `«${p.title}» وصل لـ ${sent} شخص.`] : ['ما انقبل طلب التعميم', req.body.note || `«${p.title}»`],
+      { link: '/app/agent' },
+    );
+    await audit({ userId: req.auth!.userId, action: `admin.agent_post_${req.params.decision}`, entityType: 'agent_post', entityId: p.id, details: { title: p.title, sent } }, req);
+    res.json({ success: true, data: { sent } });
   }),
 );
 

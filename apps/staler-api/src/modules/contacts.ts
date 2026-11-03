@@ -86,3 +86,27 @@ contactsRouter.delete(
     res.json({ success: true });
   }),
 );
+
+/**
+ * A person's public card, for a name mentioned in an announcement: who they are and
+ * where to find them (their store or their cash-agent listing) — nothing private.
+ */
+contactsRouter.get(
+  '/people/:id',
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const u = await one<any>(
+      `SELECT u.id, u.full_name, u.profile_image, u.role, w.wallet_id,
+              (SELECT jsonb_build_object('slug', m.slug, 'name', m.store_name, 'logo', m.logo_url, 'city', m.city) FROM ${S}.merchants m
+                WHERE m.user_id = u.id AND m.status = 'active' AND m.parent_id IS NULL AND m.slug IS NOT NULL ORDER BY m.created_at LIMIT 1) AS store,
+              (SELECT jsonb_build_object('name', a.display_name, 'city', a.city) FROM ${S}.agent_profiles a WHERE a.user_id = u.id AND a.status = 'active' AND u.role = 'exchange') AS agent,
+              EXISTS (SELECT 1 FROM ${S}.contacts c WHERE c.owner_id = $2 AND c.contact_user_id = u.id) AS saved
+         FROM ${S}.users u
+         LEFT JOIN LATERAL (SELECT wallet_id FROM ${S}.wallets WHERE user_id = u.id ORDER BY created_at ASC NULLS LAST LIMIT 1) w ON true
+        WHERE u.id = $1 AND u.status = 'active' AND u.email NOT LIKE 'deleted+%@deleted.invalid'`,
+      [req.params.id, req.auth!.userId],
+    );
+    if (!u) throw notFound('User not found');
+    res.json({ success: true, data: { person: { ...u, me: String(u.id) === String(req.auth!.userId) } } });
+  }),
+);

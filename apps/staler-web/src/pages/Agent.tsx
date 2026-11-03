@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowDownToLine, ArrowUpFromLine, Banknote, Clock, LocateFixed, MapPin, Navigation, Phone, Search, Ticket, XCircle } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Banknote, ChevronDown, Clock, LocateFixed, MapPin, Navigation, Phone, Search, Signpost, Ticket, XCircle } from 'lucide-react';
+import { AgentUpdates, POST_LOOK } from '../components/AgentUpdates';
+import { MediaViewer, PlaceStrip, ShotsChip, type PlaceShot } from '../components/PlaceMedia';
 import { del, newIdempotencyKey, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -181,6 +183,7 @@ export default function AgentDesk() {
       </section>
 
       <AgentProfileCard />
+      <AgentUpdates />
 
       <Sheet open={!!show} onClose={() => setShow(null)} title={t.agent.cashOut}>
         {show && (
@@ -267,8 +270,12 @@ export function AgentsMap() {
   const [origin, setOrigin] = useState<{ lat: number; lng: number; label: string } | null>(null);
   const [locating, setLocating] = useState(false);
   const [fitKey, setFitKey] = useState(0);
+  const [viewer, setViewer] = useState<{ media: PlaceShot[]; i: number; title: string } | null>(null);
+  const [focus, setFocus] = useState<{ key: string; lat: number; lng: number; zoom?: number } | null>(null);
+  const [sp, setSp] = useSearchParams();
   const listRef = useRef<HTMLUListElement>(null);
   const A = t.agentMap;
+  const ar = lang === 'ar';
 
   const all = data.data?.agents ?? [];
   // Distances are measured from a place searched on the map, or else from the person.
@@ -290,6 +297,20 @@ export function AgentsMap() {
   useEffect(() => {
     setFitKey((k) => k + 1);
   }, [pins.length, places, service]);
+  // ?agent=<id> (from a mention or an update): open that agent and fly to them.
+  const wantedAgent = sp.get('agent');
+  useEffect(() => {
+    if (!wantedAgent || !all.length) return;
+    const a = all.find((x) => x.id === wantedAgent);
+    if (a) {
+      setSel(a.id);
+      if (a.lat != null) setFocus({ key: `agent:${a.id}`, lat: Number(a.lat), lng: Number(a.lng), zoom: 16 });
+      setTimeout(() => listRef.current?.querySelector(`[data-agent="${a.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 700);
+    }
+    sp.delete('agent');
+    setSp(sp, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantedAgent, all.length]);
   const fmtDist = (m: number) => (m < 1000 ? fill(A.m, { n: Math.round(m / 10) * 10 }) : fill(A.km, { n: (m / 1000).toFixed(m < 10000 ? 1 : 0) }));
 
   const locate = () => {
@@ -360,6 +381,7 @@ export function AgentsMap() {
                 setSel(null);
               }}
               onSearchClear={() => setOrigin(null)}
+              focus={focus}
             />
             {/* Floating controls over the map (under the search box) */}
             <div dir="ltr" className="pointer-events-none absolute inset-x-3 top-[3.9rem] z-[500] flex justify-end">
@@ -411,6 +433,7 @@ export function AgentsMap() {
             </div>
           )}
           <PlacePicker open={pickPlace} onClose={() => setPickPlace(false)} value={places} onChange={setPlaces} />
+          <MediaViewer media={viewer?.media ?? []} index={viewer ? viewer.i : null} title={viewer?.title} onClose={() => setViewer(null)} />
           <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
             {(
               [
@@ -468,13 +491,38 @@ export function AgentsMap() {
                           <Clock className="h-3.5 w-3.5" /> {a.hours}
                         </p>
                       )}
-                      <div className="mt-2 flex flex-wrap gap-1.5">
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {a.cash_in && <Badge tone="good">{t.agent.cashIn}</Badge>}
                         {a.cash_out && <Badge tone="info">{t.agent.cashOut}</Badge>}
                         {a.lat == null && <Badge tone="neutral">{A.noPin}</Badge>}
+                        {sel !== a.id && <ShotsChip n={a.media?.length ?? 0} />}
                       </div>
                     </div>
                   </div>
+                  {a.update && <AgentNote u={a.update} />}
+                  <AnimatePresence initial={false}>
+                    {sel === a.id && (a.directions || a.media?.length > 0) && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }} className="overflow-hidden">
+                        <div className="mt-3 rounded-2xl bg-bg/70 p-3 ring-1 ring-line">
+                          {a.directions && (
+                            <p className="flex items-start gap-2 text-sm leading-relaxed">
+                              <Signpost className="mt-0.5 h-4 w-4 shrink-0 text-stitch" />
+                              <span>
+                                <span className="block text-xs font-semibold text-muted">{ar ? 'كيف توصل' : 'How to get there'}</span>
+                                {a.directions}
+                              </span>
+                            </p>
+                          )}
+                          <PlaceStrip media={a.media ?? []} onOpen={(i) => setViewer({ media: a.media, i, title: a.display_name })} className={a.directions ? 'mt-3' : ''} />
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  {sel !== a.id && (a.directions || a.media?.length > 0) && (
+                    <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-sky">
+                      <ChevronDown className="h-3.5 w-3.5" /> {ar ? 'شوف المكان وكيف توصل' : 'See the place and how to get there'}
+                    </span>
+                  )}
                   {actions(a)}
                 </motion.li>
               ))}
@@ -482,6 +530,24 @@ export function AgentsMap() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The agent's latest update (a move, new hours, closing, an offer) on their card. */
+function AgentNote({ u }: { u: { kind: keyof typeof POST_LOOK; title: string; body: string; at: string } }) {
+  const { lang } = useI18n();
+  const L = POST_LOOK[u.kind] ?? POST_LOOK.news;
+  return (
+    <div className={cx('mt-3 flex items-start gap-2.5 rounded-2xl px-3 py-2.5', L.c.replace(/text-\S+/g, ''), 'bg-opacity-100')}>
+      <span className={cx('grid h-7 w-7 shrink-0 place-items-center rounded-lg', L.c)}>
+        <L.icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{u.title}</span>
+        <span className="line-clamp-2 block text-xs text-ink/75">{u.body}</span>
+        <span className="mt-0.5 block text-[11px] text-muted">{relative(u.at, lang)}</span>
+      </span>
     </div>
   );
 }

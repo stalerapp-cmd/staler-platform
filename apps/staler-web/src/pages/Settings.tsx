@@ -18,6 +18,7 @@ import { ImageCropper } from '../components/ImageCropper';
 import { fill } from '../lib/format';
 import { useConfirm } from '../components/Confirm';
 import { DeviceList } from '../components/Devices';
+import { TownField } from '../components/TownField';
 
 function Section({ title, children, aside, icon: Icon, tone = 'bg-night text-white' }: { title: string; children: ReactNode; aside?: ReactNode; icon?: LucideIcon; tone?: string }) {
   return (
@@ -63,6 +64,7 @@ export default function Settings() {
 
   const [name, setName] = useState(user?.full_name ?? '');
   const [phone, setPhone] = useState(user?.phone_number ?? '');
+  const [homeCity, setHomeCity] = useState<string>(user?.home_city ?? '');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<Record<string, string | null>>({});
 
@@ -251,7 +253,7 @@ export default function Settings() {
           onSubmit={(e) => {
             e.preventDefault();
             void act('profile', async () => {
-              await patch('/api/auth/me', { fullName: name.trim(), phoneNumber: phone.trim() || null, language: lang });
+              await patch('/api/auth/me', { fullName: name.trim(), phoneNumber: phone.trim() || null, homeCity: homeCity.trim() || null, language: lang });
               await reload();
               toast(t.common.saved);
             });
@@ -259,6 +261,12 @@ export default function Settings() {
         >
           <Field label={t.settings.fullName} value={name} onChange={(e) => setName(e.target.value)} required />
           <Field label={t.settings.phone} value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" type="tel" />
+          <div className="sm:col-span-2">
+            <TownField label={lang === 'ar' ? 'منطقتك' : 'Where you live'} value={homeCity} onChange={setHomeCity} />
+            <p className="mt-1.5 text-xs text-muted">
+              {lang === 'ar' ? 'اختياري — حتى توصلك أخبار وعروض منطقتك، وتحديثات وكلاء الصرف القريبين منك.' : 'Optional — so you get news and offers for your area, and updates from cash agents near you.'}
+            </p>
+          </div>
           <div className="sm:col-span-2">
             <ErrorNote>{error.profile}</ErrorNote>
             <Button loading={busy === 'profile'}>{t.common.save}</Button>

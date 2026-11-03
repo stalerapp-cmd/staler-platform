@@ -11,6 +11,7 @@ export interface User {
   admin_level: string | null;
   profile_image: string | null;
   phone_number: string | null;
+  home_city?: string | null;
   language: 'en' | 'ar' | null;
   theme?: 'light' | 'dark' | null;
   totp_enabled: boolean;

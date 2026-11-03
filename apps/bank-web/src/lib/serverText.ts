@@ -4,6 +4,11 @@
  * TalerBank — keep both copies identical.
  */
 const AR: Record<string, string> = {
+  'Upload the file first': 'ارفع الملف أول',
+  'Use JPEG, PNG, WebP, MP4 or WebM': 'استخدم JPEG أو PNG أو WebP أو MP4 أو WebM',
+  'Up to 3 updates a day': 'بتقدر تبعت لحد 3 تحديثات باليوم',
+  'Add your city to your profile first': 'حط مدينتك بملف الوكيل أول',
+  'Request not found or already decided': 'الطلب مش موجود أو انحسم قبل',
   'Choose who should get it': 'اختار لمين بدك تبعته',
   'The offer must end after it starts': 'العرض لازم يخلص بعد ما يبلّش',
   'You can have up to 10 running offers': 'بتقدر يكون عندك لحد 10 عروض شغّالة',

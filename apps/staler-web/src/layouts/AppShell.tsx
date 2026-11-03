@@ -49,6 +49,7 @@ import { get, post } from '../lib/api';
 import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { localize, targetOf, type Notice } from '../lib/notifications';
+import { RichText, plainText } from '../components/Mentions';
 import { useToast } from '../components/Toast';
 import { Logo, StitchBand } from '../components/Tatreez';
 import { StitchCorner } from '../components/HeaderStitch';
@@ -382,7 +383,7 @@ function Notifications() {
       const d = await get<{ notifications: Notice[]; unread: number }>('/api/notifications');
       // Something new arrived while the app is open: show it right away.
       const newest = d.notifications[0];
-      if (seen.current && newest && newest.id !== seen.current && !newest.is_read) toast(localize(newest, lang).title);
+      if (seen.current && newest && newest.id !== seen.current && !newest.is_read) toast(plainText(localize(newest, lang).title));
       seen.current = newest?.id ?? '';
       setData(d);
     } catch {
@@ -417,7 +418,9 @@ function Notifications() {
               const l = localize(n, lang);
               return (
                 <li key={n.id}>
-                  <button
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => {
                       const to = targetOf(n);
                       if (to) {
@@ -425,15 +428,23 @@ function Notifications() {
                         nav(to);
                       }
                     }}
-                    className="flex w-full gap-3 rounded-xl px-1 py-3 text-start transition hover:bg-sunk"
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      const to = targetOf(n);
+                      if (to) {
+                        setOpen(false);
+                        nav(to);
+                      }
+                    }}
+                    className="flex w-full cursor-pointer gap-3 rounded-xl px-1 py-3 text-start transition hover:bg-sunk"
                   >
                     <span className={cx('mt-2 h-2 w-2 shrink-0 rounded-full', n.is_read ? 'bg-transparent' : 'bg-stitch')} aria-hidden="true" />
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium">{l.title}</p>
-                      {l.body && <p className="break-words text-sm text-muted">{l.body}</p>}
+                      <p className="font-medium">{plainText(l.title)}</p>
+                      {l.body && <RichText text={l.body} className="block break-words text-sm leading-relaxed text-muted" onNavigate={() => setOpen(false)} />}
                       <p className="mt-1 text-xs text-muted">{relative(n.created_at, lang)}</p>
                     </div>
-                  </button>
+                  </div>
                 </li>
               );
             })}

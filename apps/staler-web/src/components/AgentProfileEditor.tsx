@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowDownToLine, ArrowUpFromLine, CircleCheck, Clock, Hourglass, LocateFixed, MapPin, PauseCircle, Phone, Store, type LucideIcon } from 'lucide-react';
-import { get, put } from '../lib/api';
+import { ArrowDownToLine, ArrowUpFromLine, Camera, CircleCheck, Clock, Hourglass, ImagePlus, LocateFixed, MapPin, PauseCircle, Phone, Signpost, Store, Trash2, type LucideIcon } from 'lucide-react';
+import { get, put, upload } from '../lib/api';
+import { MediaViewer, PlaceStrip, ShotThumb, type PlaceShot } from './PlaceMedia';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
@@ -9,7 +10,7 @@ import { useToast } from './Toast';
 import { MapView } from './MapView';
 import { OptionCard } from './Choice';
 import { TownField, govOf } from './TownField';
-import { Avatar, Button, ErrorNote, Field, Skeleton, cx } from './ui';
+import { Avatar, Button, ErrorNote, Field, Skeleton, TextArea, cx } from './ui';
 
 const W = {
   ar: {
@@ -34,6 +35,15 @@ const W = {
     } as Record<string, [string, string]>,
     save: 'احفظ الملف',
     saved: 'انحفظ ملفك',
+    shots: 'صور المكان وكيف توصل',
+    shotsLead: 'صوّر واجهة المحل والمدخل وأقرب معلم — أو فيديو قصير من الشارع للباب. بتبين للناس لما يفتحوا كرتك على الخريطة.',
+    addShot: 'أضف صورة أو فيديو',
+    uploading: 'عم نرفع…',
+    caption: 'وصف قصير (مثلًا: المدخل من جهة الدوار)',
+    maxShots: 'لحد 8 — الصورة لحد 5 ميغا والفيديو لحد 25',
+    directions: 'كيف توصلنا',
+    directionsPh: 'مثلًا: بجانب مسجد النصر، الطابق الأرضي، باب أزرق',
+    remove: 'شيل',
   },
   en: {
     title: 'Agent profile',
@@ -57,6 +67,15 @@ const W = {
     } as Record<string, [string, string]>,
     save: 'Save profile',
     saved: 'Profile saved',
+    shots: 'Photos of the place and how to get there',
+    shotsLead: 'Photograph the shop front, the entrance and the nearest landmark — or a short video from the street to the door. People see them when they open your card on the map.',
+    addShot: 'Add a photo or video',
+    uploading: 'Uploading…',
+    caption: 'Short caption (e.g. entrance from the roundabout side)',
+    maxShots: 'Up to 8 — photos up to 5 MB, videos up to 25 MB',
+    directions: 'How to find us',
+    directionsPh: 'e.g. Next to Al-Nasr mosque, ground floor, blue door',
+    remove: 'Remove',
   },
 };
 
@@ -91,6 +110,8 @@ export function AgentProfileEditor() {
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [view, setView] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ key: string; lat: number; lng: number; zoom?: number; bbox?: [number, number, number, number] | null } | null>(null);
   const touched = useRef(false);
   // Choosing a city or typing the address moves the map there (the pin stays where it is until you tap).
@@ -113,7 +134,7 @@ export function AgentProfileEditor() {
   useEffect(() => {
     if (data.data && !f) {
       const p = data.data.profile;
-      setF({ displayName: p.display_name ?? '', city: p.city ?? '', address: p.address ?? '', phone: p.phone ?? '', hours: p.hours ?? '', lat: p.lat, lng: p.lng, cashIn: p.cash_in, cashOut: p.cash_out });
+      setF({ displayName: p.display_name ?? '', city: p.city ?? '', address: p.address ?? '', phone: p.phone ?? '', hours: p.hours ?? '', lat: p.lat, lng: p.lng, cashIn: p.cash_in, cashOut: p.cash_out, media: (p.media ?? []) as PlaceShot[], directions: p.directions ?? '' });
     }
   }, [data.data, f]);
   if (!f) return <Skeleton className="h-96 rounded-3xl" />;
@@ -143,6 +164,23 @@ export function AgentProfileEditor() {
     );
   };
 
+  const addShot = async (file: File) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await upload<{ url: string; kind: 'image' | 'video' }>('/api/exchange/uploads/media', fd);
+      setF((x: any) => ({ ...x, media: [...x.media, { url: r.url, kind: r.kind, caption: '' }] }));
+    } catch (e2) {
+      setError(err(e2));
+    } finally {
+      setUploading(false);
+    }
+  };
+  const setShot = (i: number, patch: Partial<PlaceShot> | null) =>
+    setF((x: any) => ({ ...x, media: patch ? x.media.map((m: PlaceShot, k: number) => (k === i ? { ...m, ...patch } : m)) : x.media.filter((_: PlaceShot, k: number) => k !== i) }));
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -158,6 +196,8 @@ export function AgentProfileEditor() {
         lng: f.lng ?? null,
         cashIn: f.cashIn,
         cashOut: f.cashOut,
+        media: f.media.map((m: PlaceShot) => ({ url: m.url, kind: m.kind, caption: (m.caption ?? '').trim() })),
+        directions: f.directions.trim() || null,
       });
       toast(w.saved);
       void data.reload();
@@ -206,6 +246,12 @@ export function AgentProfileEditor() {
               {f.cashOut && <span className="rounded-full bg-sky/10 px-2.5 py-1 text-xs font-medium text-sky">{t.agent.cashOut}</span>}
               {f.lat == null && <span className="rounded-full bg-stitch/10 px-2.5 py-1 text-xs font-medium text-stitch">{w.noPin}</span>}
             </div>
+            {f.directions.trim() && (
+              <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-ink/75">
+                <Signpost className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stitch" /> {f.directions}
+              </p>
+            )}
+            <PlaceStrip media={f.media} onOpen={setView} className="mt-3" />
           </div>
         </div>
       </section>
@@ -245,6 +291,58 @@ export function AgentProfileEditor() {
         </div>
       </Block>
 
+      {/* Photos of the place + directions */}
+      <Block icon={Camera} title={w.shots} tone="bg-gold/15 text-[rgb(150_105_10)] dark:text-gold">
+        <p className="-mt-2 mb-4 text-sm leading-relaxed text-muted">{w.shotsLead}</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {f.media.map((m: PlaceShot, i: number) => (
+            <motion.div key={m.url} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+              <button type="button" onClick={() => setView(i)} className="block w-full">
+                <ShotThumb m={m} className="aspect-[4/3] w-full" />
+              </button>
+              <div className="flex items-center gap-1 p-1.5">
+                <input
+                  value={m.caption ?? ''}
+                  onChange={(e) => setShot(i, { caption: e.target.value })}
+                  maxLength={80}
+                  placeholder={w.caption}
+                  className="min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1.5 text-xs outline-none placeholder:text-muted/70 focus:bg-sunk"
+                />
+                <button type="button" onClick={() => setShot(i, null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-stitch/10 hover:text-stitch" aria-label={w.remove} title={w.remove}>
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+          {f.media.length < 8 && (
+            <label className={cx('grid aspect-[4/3] cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-line text-center transition hover:border-stitch/50 hover:bg-stitch/[0.03]', uploading && 'pointer-events-none opacity-60')}>
+              <span className="px-2">
+                {uploading ? (
+                  <span className="mx-auto block h-6 w-6 animate-spin rounded-full border-2 border-stitch border-t-transparent" />
+                ) : (
+                  <ImagePlus className="mx-auto h-7 w-7 text-stitch" />
+                )}
+                <span className="mt-2 block text-sm font-medium">{uploading ? w.uploading : w.addShot}</span>
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void addShot(file);
+                }}
+              />
+            </label>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-muted">{w.maxShots}</p>
+        <div className="mt-5">
+          <TextArea label={w.directions} value={f.directions} onChange={(e) => setF({ ...f, directions: e.target.value })} placeholder={w.directionsPh} maxLength={400} rows={2} />
+        </div>
+      </Block>
+
       {/* Contact and hours */}
       <Block icon={Phone} title={w.contact} tone="bg-sky/10 text-sky">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -273,6 +371,7 @@ export function AgentProfileEditor() {
         </div>
       </Block>
 
+      <MediaViewer media={f.media} index={view} title={f.displayName} onClose={() => setView(null)} />
       <ErrorNote>{error}</ErrorNote>
       <div>
         <Button size="lg" block loading={busy}>

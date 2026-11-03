@@ -36,7 +36,7 @@ const phone = z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, 'Invalid phone number
 
 export async function publicUser(userId: string) {
   return one(
-    `SELECT u.id, u.email, u.full_name, u.role, u.admin_level, u.admin_permissions, u.profile_image, u.phone_number, u.language, u.theme,
+    `SELECT u.id, u.email, u.full_name, u.role, u.admin_level, u.admin_permissions, u.profile_image, u.phone_number, u.language, u.theme, u.home_city,
             u.totp_enabled, u.email_verified, u.created_at, u.last_login_at,
             COALESCE(cardinality(u.totp_recovery_hashes), 0) AS recovery_codes_left,
             w.wallet_id, w.balance, w.currency, w.is_frozen AS wallet_frozen,
@@ -450,13 +450,14 @@ authRouter.get(
 authRouter.patch(
   '/me',
   requireAuth,
-  validate({ body: z.object({ fullName: fullName.optional(), language: z.enum(['en', 'ar']).optional(), theme: z.enum(['light', 'dark']).optional(), phoneNumber: phone.nullable().optional() }).strict() }),
+  validate({ body: z.object({ fullName: fullName.optional(), language: z.enum(['en', 'ar']).optional(), theme: z.enum(['light', 'dark']).optional(), phoneNumber: phone.nullable().optional(), homeCity: z.string().trim().max(60).nullable().optional() }).strict() }),
   ah(async (req, res) => {
-    const { fullName: name, language, theme, phoneNumber } = req.body;
+    const { fullName: name, language, theme, phoneNumber, homeCity } = req.body;
     await pool.query(
       `UPDATE ${S}.users SET full_name = COALESCE($2, full_name), language = COALESCE($3, language), theme = COALESCE($6, theme),
-              phone_number = CASE WHEN $5 THEN $4 ELSE phone_number END WHERE id = $1`,
-      [req.auth!.userId, name ?? null, language ?? null, phoneNumber ?? null, phoneNumber !== undefined, theme ?? null],
+              phone_number = CASE WHEN $5 THEN $4 ELSE phone_number END,
+              home_city = CASE WHEN $8 THEN NULLIF($7, '') ELSE home_city END WHERE id = $1`,
+      [req.auth!.userId, name ?? null, language ?? null, phoneNumber ?? null, phoneNumber !== undefined, theme ?? null, homeCity ?? null, homeCity !== undefined],
     );
     res.json({ success: true, data: { user: await publicUser(req.auth!.userId) } });
   }),

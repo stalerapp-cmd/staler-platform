@@ -15,9 +15,9 @@ const W = {
  * Palestine by governorate: tap a governorate to take all of it, or open it to pick
  * single towns and villages. Several places can be chosen at once.
  */
-export function PlacePicker({ open, onClose, value, onChange }: { open: boolean; onClose: () => void; value: string[]; onChange: (v: string[]) => void }) {
+export function PlacePicker({ open, onClose, value, onChange, title, lead }: { open: boolean; onClose: () => void; value: string[]; onChange: (v: string[]) => void; title?: string; lead?: string }) {
   const { lang } = useI18n();
-  const w = W[lang === 'ar' ? 'ar' : 'en'];
+  const w = { ...W[lang === 'ar' ? 'ar' : 'en'], ...(title ? { title } : {}), ...(lead ? { lead } : {}) };
   const [q, setQ] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const has = (k: string) => value.includes(k);

@@ -14,7 +14,7 @@ export interface Notice {
 /** Where tapping a notification should take you. */
 export function targetOf(n: Notice): string | null {
   const m = n.metadata ?? {};
-  if (typeof m.link === 'string' && m.link.startsWith('/app/')) return m.link;
+  if (typeof m.link === 'string' && (m.link.startsWith('/app/') || m.link.startsWith('/s/'))) return m.link;
   if (m.conversationId) return `/app/messages/${m.conversationId}`;
   if (n.type === 'new_order' || n.type === 'balance_paid' || n.type === 'order_disputed' || (n.type === 'order_cancelled' && /buyer/i.test(n.body ?? ''))) return '/app/merchant/orders';
   if (n.type === 'dispute_opened') return '/app/admin/disputes';
