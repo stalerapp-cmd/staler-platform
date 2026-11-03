@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PrivacySettings } from '../components/PrivacySettings';
 import { AgentProfileEditor } from '../components/AgentProfileEditor';
@@ -58,6 +58,13 @@ export default function Settings() {
   const [params, setParams] = useSearchParams();
   const asked = params.get('tab') as Tab | null;
   const [tab, setTabState] = useState<Tab>(asked && tabs.includes(asked) ? asked : 'profile');
+  // A link (e.g. from a notification) can open a tab even when Settings is already open.
+  useEffect(() => {
+    if (asked && tabs.includes(asked)) setTabState(asked);
+    const h = window.location.hash.slice(1);
+    if (h) setTimeout(() => document.getElementById(h)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
   const setTab = (k: Tab) => {
     setTabState(k);
     setParams(k === 'profile' ? {} : { tab: k }, { replace: true });

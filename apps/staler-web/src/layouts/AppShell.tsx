@@ -57,6 +57,7 @@ import { get, post } from '../lib/api';
 import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { localize, targetOf, type Notice } from '../lib/notifications';
+import { InviteButtons } from '../components/PrivacySettings';
 import { RichText, plainText } from '../components/Mentions';
 import { CallOverlay } from '../components/CallOverlay';
 import { useToast } from '../components/Toast';
@@ -459,6 +460,7 @@ function Notifications() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium">{plainText(l.title)}</p>
                       {l.body && <RichText text={l.body} className="block break-words text-sm leading-relaxed text-muted" onNavigate={() => setOpen(false)} />}
+                      {n.type === 'people_invite' && typeof n.metadata?.memberId === 'string' && <InviteButtons memberId={n.metadata.memberId} />}
                       <p className="mt-1 text-xs text-muted">{relative(n.created_at, lang)}</p>
                     </div>
                   </div>

@@ -10,6 +10,7 @@ import { BalanceCard, TxDetails, TxRow, type Tx } from '../components/Wallet';
 import { AreaChart } from '../components/Chart';
 import { MoreLink } from '../components/Fun';
 import { ActionDock, type DockAction } from '../components/ActionDock';
+import { PendingInvites } from '../components/PrivacySettings';
 import { Button, EmptyState, Sheet, Skeleton } from '../components/ui';
 
 export default function Home() {
@@ -41,6 +42,8 @@ export default function Home() {
           )}
           <ActionDock actions={actions} />
         </div>
+
+        {user?.role !== 'admin' && <PendingInvites />}
 
         {user?.role === 'exchange' ? (
           <Link to="/app/agent" className="cloth cloth-gold flex items-center gap-4 overflow-hidden rounded-3xl p-4 shadow-lift">

@@ -167,7 +167,7 @@ peopleRouter.post(
       [g.id, me, r.user_id, req.body.nickname || null, req.body.roleTitle || null, req.body.since ?? null, req.body.invite ? 'invited' : 'none', n?.n ?? 0],
     );
     if (!m) throw badRequest('ALREADY_IN_GROUP', 'This person is already in the group');
-    await joinRequest(me, String(r.user_id), g.name);
+    await joinRequest(me, String(r.user_id), g.name, m.id);
     if (req.body.invite) await inviteNotice(me, r.user_id, g.workplace || g.name);
     res.status(201).json({ success: true, data: { id: m.id, name: maskName(r.full_name) } });
   }),
@@ -181,7 +181,7 @@ async function assertMayAdd(owner: string, user: string) {
 }
 
 /** Being put in someone's group is a request: the person is told and accepts or declines. */
-async function joinRequest(owner: string, user: string, group: string | null) {
+async function joinRequest(owner: string, user: string, group: string | null, memberId: string) {
   const o = await one<any>(`SELECT full_name FROM ${S}.users WHERE id = $1`, [owner]);
   const where = group ? ` “${group}”` : '';
   await notifyBi(
@@ -190,7 +190,7 @@ async function joinRequest(owner: string, user: string, group: string | null) {
     'people_invite',
     [`${o?.full_name ?? ''} wants to add you to their people${where}`, 'Accept to be added and receive what they send — or decline. You can also stop them asking again.'],
     [`${o?.full_name ?? ''} بدّه يضيفك لناسه${group ? ` بفئة «${group}»` : ''}`, 'وافق لتنضاف وتوصلك الدفعات اللي بيبعتها — أو ارفض. وبتقدر تمنعه يطلب مرة ثانية.'],
-    { link: '/app/settings?tab=privacy#groups' },
+    { link: '/app/settings?tab=privacy#groups', memberId, ownerId: owner },
   );
 }
 
@@ -762,7 +762,7 @@ peopleRouter.post(
       [me, m.id, b.amount, b.source, b.dest, b.every, b.every === 'days' ? b.everyDays : null, start, b.title || null, b.ends, b.ends === 'until' ? b.endDate : null, b.ends === 'count' ? b.maxRuns : null, b.auto, b.remindBefore ?? null],
     );
     await audit({ userId: me, action: 'people.schedule_created', entityType: 'payout', entityId: p.id, details: { amount: b.amount, every: b.every, to: userId, ends: b.ends } }, req);
-    if (m.created) await joinRequest(me, userId, b.groupId ? ((await one<any>(`SELECT name FROM ${S}.people_groups WHERE id = $1`, [b.groupId]))?.name ?? null) : null);
+    if (m.created) await joinRequest(me, userId, b.groupId ? ((await one<any>(`SELECT name FROM ${S}.people_groups WHERE id = $1`, [b.groupId]))?.name ?? null) : null, m.id);
     if (m.consent === 'accepted' && b.auto && start.getTime() <= Date.now() + 60_000) await runPayouts([p.id]);
     res.status(201).json({ success: true, data: { id: p.id, memberId: m.id } });
   }),

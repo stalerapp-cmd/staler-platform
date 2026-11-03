@@ -292,3 +292,65 @@ export function BlockPicker({ open, onClose, onDone, preset }: { open: boolean; 
     </Sheet>
   );
 }
+
+/** Accept or decline being added, right where the request shows (a notification, the home page). */
+export function InviteButtons({ memberId, onDone }: { memberId: string; onDone?: (accepted: boolean) => void }) {
+  const { lang, err } = useI18n();
+  const ar = lang === 'ar';
+  const toast = useToast();
+  const [state, setState] = useState<'idle' | 'busy' | 'accepted' | 'declined' | 'gone'>('idle');
+  const go = async (action: 'accept' | 'decline') => {
+    setState('busy');
+    try {
+      await post(`/api/people/memberships/${memberId}`, { action });
+      setState(action === 'accept' ? 'accepted' : 'declined');
+      onDone?.(action === 'accept');
+    } catch (e: any) {
+      if (e?.status === 404) setState('gone');
+      else {
+        setState('idle');
+        toast(err(e), 'error');
+      }
+    }
+  };
+  if (state === 'accepted') return <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-olive"><Check className="h-4 w-4" /> {ar ? 'وافقت — صرت من ناسه' : 'Accepted'}</p>;
+  if (state === 'declined') return <p className="mt-2 text-sm text-muted">{ar ? 'رفضت. بتقدر تمنعه يطلب مرة ثانية من الإعدادات ← الخصوصية.' : 'Declined. You can stop them asking again in Settings → Privacy.'}</p>;
+  if (state === 'gone') return <p className="mt-2 text-sm text-muted">{ar ? 'هالطلب انتهى أو رديت عليه قبل.' : 'This request is no longer open.'}</p>;
+  return (
+    <div className="mt-2.5 flex gap-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <Button size="sm" loading={state === 'busy'} icon={<Check className="h-4 w-4" />} onClick={() => go('accept')}>
+        {ar ? 'وافق' : 'Accept'}
+      </Button>
+      <Button size="sm" variant="secondary" disabled={state === 'busy'} icon={<X className="h-4 w-4" />} onClick={() => go('decline')}>
+        {ar ? 'ارفض' : 'Decline'}
+      </Button>
+    </div>
+  );
+}
+
+/** Home: people waiting for your yes, so the request can't be missed. */
+export function PendingInvites() {
+  const { lang } = useI18n();
+  const ar = lang === 'ar';
+  const data = useData<{ memberships: any[] }>('/api/people/memberships');
+  const list = (data.data?.memberships ?? []).filter((m) => m.consent === 'pending');
+  if (!list.length) return null;
+  return (
+    <section className="mb-5 space-y-2">
+      {list.map((m) => (
+        <div key={m.id} className="rounded-3xl bg-gold/[0.08] p-4 ring-1 ring-gold/40">
+          <div className="flex items-center gap-3">
+            <Avatar name={m.store_name ?? m.owner_name} src={m.owner_image} size={42} />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{ar ? `${m.store_name ?? m.owner_name} بدّه يضيفك لناسه` : `${m.store_name ?? m.owner_name} wants to add you`}</p>
+              <p className="truncate text-xs text-muted">
+                {[m.group_name ? (ar ? `بفئة «${m.group_name}»` : `in “${m.group_name}”`) : null, m.payments?.[0] ? `${money(m.payments[0].amount, lang)} ${(EVERY[m.payments[0].every]?.[ar ? 0 : 1] ?? '').replace('{n}', String(m.payments[0].every_days ?? ''))}` : null].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+          </div>
+          <InviteButtons memberId={m.id} onDone={() => setTimeout(() => void data.reload(), 1500)} />
+        </div>
+      ))}
+    </section>
+  );
+}
