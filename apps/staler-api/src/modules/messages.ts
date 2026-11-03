@@ -7,6 +7,7 @@ import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { validate } from '../lib/validate.js';
 import { requireAuth } from '../middleware/auth.js';
+import { assertNotBlocked, blockedSql } from './blocks.js';
 import { moneyLimiter } from '../middleware/security.js';
 import { idParam } from './commerce.js';
 import { notifyBi } from './walletCore.js';
@@ -87,6 +88,10 @@ export async function postMessage(conversationId: string, me: string, text: stri
   await participant(conversationId, me);
   const conv = await one<any>(`SELECT status, type FROM ${S}.conversations WHERE id = $1`, [conversationId]);
   if (conv?.status === 'closed') throw forbidden('This conversation is closed', 'CONVERSATION_CLOSED');
+  if (conv?.type !== 'support') {
+    const other = await one<any>(`SELECT user_id FROM ${S}.conversation_participants WHERE conversation_id = $1 AND user_id <> $2 LIMIT 1`, [conversationId, me]);
+    if (other) await assertNotBlocked(me, String(other.user_id));
+  }
   if (o.replyTo && !(await one(`SELECT 1 FROM ${S}.messages WHERE id = $1 AND conversation_id = $2`, [o.replyTo, conversationId]))) throw notFound('Message not found');
   const kind = o.kind ?? (LINK_RE.test(text) ? 'link' : 'text');
   const m = await one<any>(
@@ -160,6 +165,7 @@ messagesRouter.post(
     if (String(req.body.recipientId) === String(me)) throw badRequest('SELF', 'You cannot message yourself');
     const target = await one<any>(`SELECT id, role, status FROM ${S}.users WHERE id = $1`, [req.body.recipientId]);
     if (!target || target.status !== 'active' || target.role === 'admin') throw notFound('User not found');
+    await assertNotBlocked(String(me), String(target.id));
     const existing = await one<any>(
       `SELECT c.id FROM ${S}.conversations c
          JOIN ${S}.conversation_participants a ON a.conversation_id = c.id AND a.user_id = $1
@@ -187,7 +193,7 @@ messagesRouter.get(
     const q = `%${String(req.query.q).replace(/[\\%_]/g, (m) => '\\' + m)}%`;
     const r = await pool.query(
       `SELECT u.id, u.full_name, u.role, u.profile_image, w.wallet_id FROM ${S}.users u LEFT JOIN ${S}.wallets w ON w.user_id = u.id
-        WHERE (u.full_name ILIKE $1 OR lower(u.email) = lower($3) OR w.wallet_id = $3) AND u.id <> $2 AND u.role <> 'admin' AND u.status = 'active'
+        WHERE (u.full_name ILIKE $1 OR lower(u.email) = lower($3) OR w.wallet_id = $3) AND u.id <> $2 AND u.role <> 'admin' AND u.status = 'active' AND NOT ${blockedSql('$2', 'u.id')}
         ORDER BY (lower(u.email) = lower($3) OR w.wallet_id = $3) DESC, u.full_name LIMIT 20`,
       [q, req.auth!.userId, String(req.query.q).trim()],
     );
@@ -279,6 +285,7 @@ messagesRouter.post(
     if (String(recipientId) === String(me)) throw badRequest('SELF', 'You cannot message yourself');
     const target = await one<any>(`SELECT id, role, status FROM ${S}.users WHERE id = $1`, [recipientId]);
     if (!target || target.status !== 'active' || target.role === 'admin') throw notFound('User not found');
+    await assertNotBlocked(String(me), String(target.id));
     const existing = await one<any>(
       `SELECT c.id FROM ${S}.conversations c
          JOIN ${S}.conversation_participants a ON a.conversation_id = c.id AND a.user_id = $1

@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Ban,
   ArrowLeftRight,
   ArrowUpRight,
   AtSign,
@@ -159,7 +160,21 @@ const TOPICS: Topic[] = [
       { icon: Users, title: ['Who to pay', 'لمين'], body: ['Pick someone from your contacts, search a name, or type a wallet ID or e-mail. A group (children, family, debts, rent — or staff, suppliers and partners for stores) is optional, just to sort.', 'اختار حدا من جهات اتصالك، أو دوّر بالاسم، أو اكتب رقم محفظته أو إيميله. الفئة (ولادي، أهلي، ديون، إيجار — أو موظفين وموردين وشركاء للمتاجر) اختيارية، بس للترتيب.'], to: '/app/people' },
       { icon: Repeat, title: ['How much, how often, until when', 'كم، كل قديش، ولحد إمتى'], body: ['Once, every week, two weeks, month or any number of days. Forever, until a date, or for a number of payments — handy for paying off a debt in instalments.', 'مرة وحدة، كل أسبوع، أسبوعين، شهر أو أي عدد أيام. للأبد، لتاريخ معيّن، أو عدد دفعات — منيح لتسدّ دين بالتقسيط.'] },
       { icon: BellRing, title: ['Sent by itself, with a reminder', 'بتنبعت لحالها، مع تذكير'], body: ['By default the money goes on time without you. Choose a reminder the same day, a day or two before, or a week before. Or choose “remind only” and pay with one tap.', 'المصاري بتروح بموعدها بلا ما تتدخل. اختار تذكير بنفس اليوم، قبل بيوم أو يومين، أو قبل أسبوع. أو اختار «ذكّرني بس» وادفعها بكبسة.'] },
+      { icon: BadgeCheck, title: ['They say yes first', 'بيوافقوا أول'], body: ['Adding someone sends them a request. Nothing is sent to them until they accept; if they decline, the payment stops — and they can stop you asking again.', 'لما تضيف حدا بيوصله طلب. ما بينبعتله إشي لحد ما يوافق؛ وإذا رفض الدفعة بتوقف — وبيقدر يمنعك تطلب مرة ثانية.'] },
       { icon: Gift, title: ['Pause, skip, pay now', 'وقّف، تخطّى، ادفع هلّأ'], body: ['Each payment has buttons to pause and resume, skip just the next one, pay now, edit or delete. Work groups also get bonuses and showing the workplace on profiles if people agree.', 'كل دفعة إلها أزرار توقيف وتشغيل، تخطّي المرة الجاية بس، ادفع هلّأ، تعديل أو حذف. وفئات الشغل كمان إلها مكافآت وإظهار مكان الشغل بملف الناس إذا وافقوا.'] },
+    ],
+  },
+  {
+    id: 'privacy',
+    group: 'all',
+    icon: Ban,
+    color: '#7A2E2E',
+    title: ['Privacy & blocking', 'الخصوصية والبلوك'],
+    to: '/app/settings?tab=privacy',
+    steps: [
+      { icon: Users, title: ['Who added you', 'مين ضافك'], body: ['Settings → Privacy lists everyone who wants to add you to their people, with what they would send. Accept, decline, leave any time, or stop someone asking again.', 'من الإعدادات ← الخصوصية بتشوف كل حدا بدّه يضيفك لناسه، ومع شو رح يبعتلك. وافق، ارفض، اطلع وقت ما بدك، أو امنعه يطلب مرة ثانية.'], to: '/app/settings?tab=privacy' },
+      { icon: Ban, title: ['Block someone', 'بلّك حدا'], body: ['From a person’s card, your contacts or Settings → Privacy. A block stops money, messages, contacts and groups between you both ways, and hides you from their search. They aren’t told.', 'من كرت الشخص، أو جهات الاتصال، أو الإعدادات ← الخصوصية. البلوك بيوقف المصاري والرسائل وجهات الاتصال والفئات بينكم بالاتجاهين، وبيخفيك من بحثه. وما بيوصله إشعار.'] },
+      { icon: ShieldCheck, title: ['Your blocked list', 'قائمة المحظورين'], body: ['Unblock anyone from the same list. A block put by the S-Taler team can only be lifted by the team.', 'بتشيل البلوك عن أي حدا من نفس القائمة. البلوك اللي حطّته الإدارة بس الإدارة بتشيله.'] },
     ],
   },
   {
@@ -348,7 +363,8 @@ const TOPICS: Topic[] = [
       { icon: AtSign, title: ['Mention someone', 'منشن حدا'], body: ['Type @ in the message to mention a store, a cash agent or a person; readers tap the name to open their page.', 'اكتب @ بالرسالة لتمنشن متجر أو وكيل صرف أو شخص؛ واللي بيقرأ بيكبس على الاسم ليفتح صفحته.'] },
       { icon: MessageCircle, title: ['The support desk', 'مكتب الدعم'], body: ['In Messages, “Waiting support requests” lists the requests for your team (by your permissions). Take one and it’s yours alone; give it back to the queue if another team should handle it.', 'بالرسائل، «طلبات دعم بتستنى» فيها طلبات فريقك (حسب صلاحياتك). استلم طلب وبيصير إلك لحالك؛ ورجّعه للطابور إذا لازم فريق ثاني.'], to: '/app/messages' },
       { icon: PhoneCall, title: ['Support calls', 'مكالمات الدعم'], body: ['Accept or decline call requests, set the team’s hours, call at the booked time or let the customer call, and ask anyone for a call when something’s wrong.', 'اقبل أو ارفض طلبات المكالمات، حدّد ساعات الفريق، اتصل بالموعد أو خلّي الزبون يتصل، واطلب مكالمة من أي حدا إذا صار خلل.'], to: '/app/admin/calls' },
-      { icon: Users, title: ['Groups & recurring transfers', 'الفئات والتحويلات الدورية'], body: ['See who sends money regularly to whom, every movement and failure, and pause any transfer with a reason the owner sees.', 'شوف مين بيحوّل بشكل دوري لمين، كل الحركات والفشل، وأوقف أي تحويل مع سبب بيوصل لصاحبه.'], to: '/app/admin/groups' },
+      { icon: Users, title: ['Groups & scheduled payments', 'الفئات والدفعات المجدولة'], body: ['See who pays whom on a schedule, who hasn’t accepted yet, every movement and failure. Pause any payment with a reason the owner sees, remove someone from a person’s people, or add them directly.', 'شوف مين بيدفع لمين بشكل مجدول، مين لسا ما وافق، وكل الحركات والفشل. أوقف أي دفعة مع سبب بيوصل لصاحبها، شيل حدا من ناس شخص، أو ضيفه مباشرة.'], to: '/app/admin/groups' },
+      { icon: Ban, title: ['Blocks', 'البلوكات'], body: ['Every block between people, merchants and cash agents: who blocked whom and when. Lift any block, or keep two accounts apart yourself — the protected person can’t lift a team block.', 'كل البلوكات بين الناس والتجار والصرّافين: مين بلّك مين وإمتى. شيل أي بلوك، أو افصل بين حسابين بنفسك — والشخص ما بيقدر يشيل بلوك الإدارة.'], to: '/app/admin/blocks' },
       { icon: HandCoins, title: ['Agent requests', 'طلبات الوكلاء'], body: ['Agents asking to announce to their area appear at the top: approve to send it, or reject with a reason they’ll see.', 'الوكلاء اللي بدهم يعمّموا على منطقتهم بيبينوا فوق: وافق ليوصل، أو ارفض مع سبب بيوصلهم.'] },
       { icon: ShieldCheck, title: ['Preview and history', 'معاينة وسجل'], body: ['See exactly how it will look, send an e-mail copy if needed (up to 300), and look back at everything sent and by whom.', 'شوف بالزبط كيف رح تبين، ابعت نسخة بالإيميل إذا لازم (لحد 300)، وارجع لكل اللي انبعت ومين بعته.'] },
     ],

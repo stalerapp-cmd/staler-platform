@@ -5,6 +5,7 @@ import { badRequest, notFound } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { validate } from '../lib/validate.js';
 import { requireAuth } from '../middleware/auth.js';
+import { assertNotBlocked, blockedSql } from './blocks.js';
 import { idParam } from './commerce.js';
 import { workplacesOf } from './people.js';
 
@@ -21,7 +22,7 @@ contactsRouter.get(
     const q = req.query.q ? `%${String(req.query.q).replace(/[\\%_]/g, (m) => '\\' + m)}%` : null;
     const r = await pool.query(
       `SELECT ${COLS} FROM ${S}.contacts c JOIN ${S}.users u ON u.id = c.contact_user_id LEFT JOIN ${S}.wallets w ON w.user_id = u.id
-        WHERE c.owner_id = $1 AND u.status = 'active'
+        WHERE c.owner_id = $1 AND u.status = 'active' AND NOT ${blockedSql('$1', 'u.id')}
           AND ($2::text IS NULL OR c.nickname ILIKE $2 OR u.full_name ILIKE $2 OR w.wallet_id ILIKE $2)
         ORDER BY c.favourite DESC, lower(COALESCE(c.nickname, u.full_name)) LIMIT 500`,
       [req.auth!.userId, q],
@@ -53,6 +54,7 @@ contactsRouter.post(
     );
     if (!u) throw notFound('No S-Taler account found', 'CONTACT_NOT_FOUND');
     if (String(u.id) === String(me)) throw badRequest('SELF', 'That’s you');
+    await assertNotBlocked(String(me), String(u.id));
     const c = await one(
       `INSERT INTO ${S}.contacts (owner_id, contact_user_id, nickname) VALUES ($1, $2, $3)
        ON CONFLICT (owner_id, contact_user_id) DO UPDATE SET nickname = COALESCE(EXCLUDED.nickname, ${S}.contacts.nickname) RETURNING id`,
@@ -104,7 +106,7 @@ contactsRouter.get(
               EXISTS (SELECT 1 FROM ${S}.contacts c WHERE c.owner_id = $2 AND c.contact_user_id = u.id) AS saved
          FROM ${S}.users u
          LEFT JOIN LATERAL (SELECT wallet_id FROM ${S}.wallets WHERE user_id = u.id ORDER BY created_at ASC NULLS LAST LIMIT 1) w ON true
-        WHERE u.id = $1 AND u.status = 'active' AND u.email NOT LIKE 'deleted+%@deleted.invalid'`,
+        WHERE u.id = $1 AND u.status = 'active' AND u.email NOT LIKE 'deleted+%@deleted.invalid' AND NOT ${blockedSql('$1', '$2')}`,
       [req.params.id, req.auth!.userId],
     );
     if (!u) throw notFound('User not found');

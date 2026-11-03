@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BadgeCheck, Flag, HandCoins, MapPin, MessageCircle, Send, Store, UserPlus, UserRound } from 'lucide-react';
+import { Ban, BadgeCheck, Flag, HandCoins, MapPin, MessageCircle, Send, Store, UserPlus, UserRound } from 'lucide-react';
 import { get, post } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useToast } from './Toast';
 import { Avatar, Button, Sheet, Skeleton, cx } from './ui';
 import { ReportSheet } from './Feedback';
+import { BlockPicker } from './PrivacySettings';
 
 /** `@[Name](store:slug)`, `@[Name](agent:id)`, `@[Name](user:id)` — same as the server. */
 const MENTION = /@\[([^\]\n]{1,60})\]\((store|agent|user):([A-Za-z0-9_-]{1,80})\)/g;
@@ -101,6 +102,7 @@ export function PersonSheet({ id, onClose, onNavigate }: { id: string | null; on
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [report, setReport] = useState(false);
+  const [blocking, setBlocking] = useState(false);
   useEffect(() => {
     if (!id) return;
     setP(null);
@@ -218,9 +220,17 @@ export function PersonSheet({ id, onClose, onNavigate }: { id: string | null; on
               <Button className="col-span-2" variant={p.saved ? 'secondary' : 'primary'} disabled={p.saved} loading={saving} icon={<UserPlus className="h-4 w-4" />} onClick={save}>
                 {p.saved ? w.saved : w.save}
               </Button>
-              <button type="button" onClick={() => setReport(true)} className="col-span-2 inline-flex items-center justify-center gap-1.5 py-1 text-xs text-muted hover:text-stitch">
-                <Flag className="h-3.5 w-3.5" /> {lang === 'ar' ? 'بلّغ عن هالشخص' : 'Report this person'}
-              </button>
+              <div className="col-span-2 flex justify-center gap-4">
+                <button type="button" onClick={() => setReport(true)} className="inline-flex items-center gap-1.5 py-1 text-xs text-muted hover:text-stitch">
+                  <Flag className="h-3.5 w-3.5" /> {lang === 'ar' ? 'بلّغ عن هالشخص' : 'Report this person'}
+                </button>
+                {p.role !== 'admin' && (
+                  <button type="button" onClick={() => setBlocking(true)} className="inline-flex items-center gap-1.5 py-1 text-xs text-muted hover:text-stitch">
+                    <Ban className="h-3.5 w-3.5" /> {lang === 'ar' ? 'بلّكه' : 'Block'}
+                  </button>
+                )}
+              </div>
+              <BlockPicker open={blocking} onClose={() => setBlocking(false)} preset={{ id: p.id, full_name: p.full_name, profile_image: p.profile_image }} onDone={() => (setBlocking(false), onClose())} />
               <ReportSheet open={report} onClose={() => setReport(false)} target={{ userId: p.id, name: p.full_name }} />
             </div>
           )}

@@ -147,6 +147,12 @@ export async function walletToWallet(
   const to = locked.get(String(p.toWalletDbId));
   if (!from || !to) throw notFound('Wallet not found', 'WALLET_NOT_FOUND');
   if (to.is_frozen) throw forbidden('The receiving wallet cannot accept payments right now', 'RECIPIENT_FROZEN');
+  // No money between accounts that blocked each other (either way).
+  const bl = await c.query(
+    `SELECT 1 FROM ${S}.user_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1`,
+    [from.user_id, to.user_id],
+  );
+  if (bl.rowCount) throw forbidden('You can’t deal with this account', 'BLOCKED');
   const fromBalance = await debit(c, from.id, p.amount, p.allowFrozenSource);
   const toBalance = await credit(c, to.id, p.amount);
   const reference = crypto.randomUUID();

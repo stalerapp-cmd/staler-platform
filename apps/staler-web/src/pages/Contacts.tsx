@@ -1,17 +1,18 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Pencil, Search, SendHorizontal, Star, Trash2, UserPlus, Users } from 'lucide-react';
+import { Ban, MessageCircle, Pencil, Search, SendHorizontal, Star, Trash2, UserPlus, Users } from 'lucide-react';
 import { del, patch, post } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
 import { fill } from '../lib/format';
 import { useToast } from '../components/Toast';
+import { BlockPicker } from '../components/PrivacySettings';
 import { useConfirm } from '../components/Confirm';
 import { Avatar, Button, EmptyState, ErrorNote, Field, PageHeader, Sheet, Skeleton, cx } from '../components/ui';
 
 export default function Contacts() {
-  const { t, err } = useI18n();
+  const { t, err, lang } = useI18n();
   const nav = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
@@ -21,6 +22,7 @@ export default function Contacts() {
   const [who, setWho] = useState('');
   const [nick, setNick] = useState('');
   const [rename, setRename] = useState<any>(null);
+  const [blocking, setBlocking] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -150,8 +152,12 @@ export default function Contacts() {
         >
           <Field label={t.contacts.nickname} value={nick} onChange={(e) => setNick(e.target.value)} maxLength={60} autoFocus />
           <Button block>{t.common.save}</Button>
+          <button type="button" onClick={() => (setBlocking(rename), setRename(null))} className="mx-auto flex items-center gap-1.5 py-1 text-xs text-muted hover:text-stitch">
+            <Ban className="h-3.5 w-3.5" /> {lang === 'ar' ? 'بلّك هالشخص' : 'Block this person'}
+          </button>
         </form>
       </Sheet>
+      <BlockPicker open={!!blocking} onClose={() => setBlocking(null)} preset={blocking ? { id: blocking.user_id, full_name: blocking.full_name, profile_image: blocking.profile_image } : null} onDone={() => (setBlocking(null), void reload())} />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { assertNotBlocked } from './blocks.js';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
 import { badRequest, notFound } from '../lib/errors.js';
@@ -112,6 +113,7 @@ walletRouter.get(
   validate({ query: z.object({ to: recipientSchema }).strict() }),
   ah(async (req, res) => {
     const r = await resolveRecipient(String(req.query.to));
+    await assertNotBlocked(String(req.auth!.userId), String(r.user_id));
     res.json({ success: true, data: { walletId: r.wallet_id, name: maskName(r.full_name), role: r.role } });
   }),
 );

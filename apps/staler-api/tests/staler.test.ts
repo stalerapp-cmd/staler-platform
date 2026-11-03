@@ -701,6 +701,15 @@ describe('marketplace', () => {
     const add = await request(app).post(`/api/people/groups/${g.body.data.group.id}/members`).set(auth(boss.token)).send({ who: worker.walletId, roleTitle: 'Baker', since: '2020-05-01', invite: true });
     expect(add.status).toBe(201);
     const mid = add.body.data.id;
+    // nothing reaches the worker before they accept being added
+    const pend = await request(app).post(`/api/people/members/${mid}/payouts`).set(auth(boss.token)).send({ amount: '1', every: 'week' });
+    expect(pend.status).toBe(201);
+    expect(await walletBalance(app, worker)).toBe('0.00');
+    expect((await request(app).post(`/api/people/members/${mid}/bonus`).set(auth(boss.token)).send({ amount: '1' })).status).toBe(400);
+    await request(app).delete(`/api/people/payouts/${pend.body.data.id}`).set(auth(boss.token));
+    const ms = await request(app).get('/api/people/memberships').set(auth(worker.token));
+    expect(ms.body.data.memberships[0].consent).toBe('pending');
+    expect((await request(app).post(`/api/people/memberships/${mid}`).set(auth(worker.token)).send({ action: 'accept' })).status).toBe(200);
     // a weekly transfer starting now runs straight away
     const p = await request(app).post(`/api/people/members/${mid}/payouts`).set(auth(boss.token)).send({ amount: '10', every: 'week' });
     expect(p.status).toBe(201);
@@ -730,6 +739,43 @@ describe('marketplace', () => {
     expect((await request(app).get('/api/admin/people/owners').set(auth(worker.token))).status).toBe(403);
   });
 
+  it('consent and blocks: decline and stop re-adding, block cuts every dealing, team blocks', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const a = await walletUser(app, 'Adds People');
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: a.walletId, amount: '6' });
+    const b = await walletUser(app, 'Says No');
+    const s = await request(app).post('/api/people/schedules').set(auth(a.token)).send({ who: b.walletId, amount: '1', every: 'week' });
+    expect(s.status).toBe(201);
+    const m = (await request(app).get('/api/people/memberships').set(auth(b.token))).body.data.memberships[0];
+    expect((await request(app).post(`/api/people/memberships/${m.id}`).set(auth(b.token)).send({ action: 'decline', stop: true })).status).toBe(200);
+    expect(await walletBalance(app, b)).toBe('0.00');
+    const again = await request(app).post('/api/people/schedules').set(auth(a.token)).send({ who: b.walletId, amount: '1', every: 'week' });
+    expect(again.status).toBe(403);
+    expect((await request(app).delete(`/api/people/optouts/${a.userId}`).set(auth(b.token))).status).toBe(200);
+    // block: no money, no messages, not in search, not in contacts
+    expect((await request(app).post('/api/contacts').set(auth(a.token)).send({ userId: b.userId })).status).toBe(201);
+    expect((await request(app).post('/api/blocks').set(auth(b.token)).send({ userId: a.userId })).status).toBe(201);
+    expect((await request(app).post('/api/wallet/transfer').set(auth(a.token)).send({ to: b.walletId, amount: '1' })).status).toBe(403);
+    expect((await request(app).post('/api/messages/conversations').set(auth(a.token)).send({ type: 'user_to_user', recipientId: b.userId })).status).toBe(403);
+    expect((await request(app).post('/api/contacts').set(auth(a.token)).send({ userId: b.userId })).status).toBe(403);
+    expect((await request(app).get('/api/contacts').set(auth(a.token))).body.data.contacts.find((c: any) => c.user_id === b.userId)).toBeUndefined();
+    const found = await request(app).get(`/api/messages/search-users?q=${encodeURIComponent('Says No')}`).set(auth(a.token));
+    expect(found.body.data.users.find((u: any) => u.id === b.userId)).toBeUndefined();
+    expect((await request(app).post('/api/people/schedules').set(auth(a.token)).send({ who: b.walletId, amount: '1', every: 'week' })).status).toBe(403);
+    expect((await request(app).get('/api/blocks').set(auth(b.token))).body.data.blocks[0].id).toBe(a.userId);
+    expect((await request(app).delete(`/api/blocks/${a.userId}`).set(auth(b.token))).status).toBe(200);
+    expect((await request(app).post('/api/wallet/transfer').set(auth(a.token)).send({ to: b.walletId, amount: '1' })).status).toBe(201);
+    // the team keeps two accounts apart; the person can't lift a team block
+    expect((await request(app).post('/api/admin/blocks').set(auth(sup)).send({ blockerId: b.userId, blockedId: a.userId, note: 'harassment' })).status).toBe(201);
+    expect((await request(app).post('/api/wallet/transfer').set(auth(a.token)).send({ to: b.walletId, amount: '1' })).status).toBe(403);
+    expect((await request(app).delete(`/api/blocks/${a.userId}`).set(auth(b.token))).status).toBe(403);
+    const all = await request(app).get('/api/admin/blocks?by=team').set(auth(sup));
+    const row = all.body.data.blocks.find((x: any) => x.blocked.id === a.userId);
+    expect(row.by_team).toBe(true);
+    expect((await request(app).delete(`/api/admin/blocks/${row.id}`).set(auth(sup))).status).toBe(200);
+    expect((await request(app).get('/api/admin/blocks').set(auth(a.token))).status).toBe(403);
+  });
+
   it('scheduled payments: instalments end after N, remind-only waits for "pay now", skip, pause', async () => {
     const owner = await walletUser(app, 'Pays Debt');
     await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: owner.walletId, amount: '30' });
@@ -737,6 +783,10 @@ describe('marketplace', () => {
     // three instalments of 5, the first right now
     const s1 = await request(app).post('/api/people/schedules').set(auth(owner.token)).send({ who: lender.walletId, title: 'Debt', amount: '5', every: 'month', ends: 'count', maxRuns: 3, remindBefore: 1 });
     expect(s1.status).toBe(201);
+    // the lender has to accept first; then the first instalment goes straight out
+    expect(await walletBalance(app, lender)).toBe('0.00');
+    const lm = (await request(app).get('/api/people/memberships').set(auth(lender.token))).body.data.memberships[0];
+    expect((await request(app).post(`/api/people/memberships/${lm.id}`).set(auth(lender.token)).send({ action: 'accept' })).status).toBe(200);
     expect(await walletBalance(app, lender)).toBe('5.00');
     // pay the next two early → finished
     expect((await request(app).post(`/api/people/schedules/${s1.body.data.id}/pay-now`).set(auth(owner.token)).send({})).status).toBe(200);

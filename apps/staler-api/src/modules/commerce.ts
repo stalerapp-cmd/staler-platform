@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import multer from 'multer';
 import { fileTypeFromBuffer } from 'file-type';
 import { z } from 'zod';
+import { assertNotBlocked } from './blocks.js';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
 import { AppError, badRequest, conflict, forbidden, notFound, tooMany } from '../lib/errors.js';
@@ -494,6 +495,7 @@ storeRouter.post(
           }
           if (p.status !== 'active' || p.merchant_status !== 'active') throw conflict('PRODUCT_UNAVAILABLE', `${p.name} is not available`);
           if (String(p.merchant_user_id) === String(userId)) throw badRequest('OWN_PRODUCT', 'You cannot buy your own product');
+          await assertNotBlocked(String(userId), String(p.merchant_user_id), c);
           if (p.is_digital && q !== 1) throw badRequest('DIGITAL_QUANTITY', `${p.name} is digital — quantity must be 1`);
           if (!p.is_digital && Number(p.stock) < q) throw conflict('OUT_OF_STOCK', `Only ${p.stock} left of ${p.name}`);
           if (!p.is_digital && b.fulfillment === 'pickup' && p.offers_pickup === false) throw badRequest('NO_PICKUP', 'This store does not offer pickup');

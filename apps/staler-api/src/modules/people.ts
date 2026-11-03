@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { one, pool, S, tx } from '../lib/db.js';
-import { badRequest, notFound } from '../lib/errors.js';
+import { badRequest, forbidden, notFound } from '../lib/errors.js';
 import { ah } from '../lib/http.js';
 import { amountSchema, fromCents, toCents } from '../lib/money.js';
 import { totpCode, validate } from '../lib/validate.js';
@@ -13,6 +13,7 @@ import { moneyLimiter } from '../middleware/security.js';
 import { requireSecondFactor } from './mfa.js';
 import { resolveRecipient } from './wallet.js';
 import { hasBankLink, pullFromBank, pushToBank } from './bank.js';
+import { assertNotBlocked } from './blocks.js';
 import { assertDailyLimit, assertMaxTransfer, maskName, notifyBi, walletOfUser, walletToWallet } from './walletCore.js';
 
 /**
@@ -33,10 +34,10 @@ const EVERY = ['once', 'week', '2weeks', 'month', 'days'] as const;
 const intervalOf = (e: string, p = 'payouts') =>
   e === 'week' ? `interval '7 days'` : e === '2weeks' ? `interval '14 days'` : e === 'days' ? `make_interval(days => COALESCE(${p}.every_days, 1))` : `interval '1 month'`;
 
-const MEMBER_COLS = `m.id, m.group_id, m.user_id, m.nickname, m.role_title, m.since, m.favourite, m.sort, m.link_status, m.show_on_profile, m.created_at,
+const MEMBER_COLS = `m.id, m.consent, m.group_id, m.user_id, m.nickname, m.role_title, m.since, m.favourite, m.sort, m.link_status, m.show_on_profile, m.created_at,
   u.full_name, u.profile_image, w.wallet_id,
   (SELECT COALESCE(json_agg(json_build_object('id', p.id, 'amount', p.amount, 'source', p.source, 'dest', p.dest, 'every', p.every, 'next_run_at', p.next_run_at,
-     'active', p.active, 'paused_by_admin', p.paused_by_admin, 'admin_note', p.admin_note, 'note', p.note, 'runs', p.runs, 'total', p.total, 'last_run_at', p.last_run_at, 'fail_count', p.fail_count)
+     'every_days', p.every_days, 'active', p.active, 'paused_by_admin', p.paused_by_admin, 'admin_note', p.admin_note, 'note', p.note, 'runs', p.runs, 'total', p.total, 'last_run_at', p.last_run_at, 'fail_count', p.fail_count)
      ORDER BY p.created_at), '[]') FROM ${S}.payouts p WHERE p.member_id = m.id) AS payouts,
   (SELECT COALESCE(sum(r.amount), 0)::text FROM ${S}.payout_runs r WHERE r.member_id = m.id AND r.status = 'done') AS paid_total`;
 const memberFrom = `FROM ${S}.people_members m JOIN ${S}.users u ON u.id = m.user_id
@@ -48,7 +49,7 @@ async function ownGroup(id: string, owner: string) {
   return g;
 }
 async function ownMember(id: string, owner: string) {
-  const m = await one<any>(`SELECT m.*, g.workplace, g.name AS group_name, g.kind FROM ${S}.people_members m JOIN ${S}.people_groups g ON g.id = m.group_id WHERE m.id = $1 AND m.owner_id = $2`, [id, owner]);
+  const m = await one<any>(`SELECT m.*, g.workplace, g.name AS group_name, g.kind FROM ${S}.people_members m LEFT JOIN ${S}.people_groups g ON g.id = m.group_id WHERE m.id = $1 AND m.owner_id = $2`, [id, owner]);
   if (!m) throw notFound('Person not found');
   return m;
 }
@@ -57,7 +58,11 @@ async function ownMember(id: string, owner: string) {
 export async function groupsOf(owner: string) {
   const groups = await pool.query(`SELECT * FROM ${S}.people_groups WHERE owner_id = $1 ORDER BY sort, created_at`, [owner]);
   const members = await pool.query(`SELECT ${MEMBER_COLS} ${memberFrom} WHERE m.owner_id = $1 ORDER BY m.favourite DESC, m.sort, m.created_at`, [owner]);
-  return groups.rows.map((g) => ({ ...g, members: members.rows.filter((m) => String(m.group_id) === String(g.id)) }));
+  const out = groups.rows.map((g) => ({ ...g, members: members.rows.filter((m) => String(m.group_id) === String(g.id)) }));
+  // People with payments but no group still belong to the owner's people.
+  const loose = members.rows.filter((m) => !m.group_id);
+  if (loose.length) out.push({ id: null, owner_id: owner, name: null, kind: 'none', members: loose });
+  return out;
 }
 
 peopleRouter.get(
@@ -153,18 +158,41 @@ peopleRouter.post(
     const r = await resolveRecipient(req.body.who);
     if (!r) throw notFound('No wallet found for that ID or e-mail', 'RECIPIENT_NOT_FOUND');
     if (String(r.user_id) === String(me)) throw badRequest('SELF', 'You cannot add yourself');
+    await assertMayAdd(me, String(r.user_id));
     const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.people_members WHERE group_id = $1`, [g.id]);
     if ((n?.n ?? 0) >= 200) throw badRequest('GROUP_FULL', 'Up to 200 people in a group');
     const m = await one<any>(
-      `INSERT INTO ${S}.people_members (group_id, owner_id, user_id, nickname, role_title, since, link_status, sort)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (group_id, user_id) DO NOTHING RETURNING id`,
+      `INSERT INTO ${S}.people_members (group_id, owner_id, user_id, nickname, role_title, since, link_status, sort, consent, asked_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', now()) ON CONFLICT DO NOTHING RETURNING id`,
       [g.id, me, r.user_id, req.body.nickname || null, req.body.roleTitle || null, req.body.since ?? null, req.body.invite ? 'invited' : 'none', n?.n ?? 0],
     );
     if (!m) throw badRequest('ALREADY_IN_GROUP', 'This person is already in the group');
+    await joinRequest(me, String(r.user_id), g.name);
     if (req.body.invite) await inviteNotice(me, r.user_id, g.workplace || g.name);
     res.status(201).json({ success: true, data: { id: m.id, name: maskName(r.full_name) } });
   }),
 );
+
+/** May `owner` put `user` in their groups? Not if either blocked the other, or the person said no for good. */
+async function assertMayAdd(owner: string, user: string) {
+  await assertNotBlocked(String(owner), String(user));
+  if (await one(`SELECT 1 FROM ${S}.people_optouts WHERE user_id = $1 AND owner_id = $2`, [user, owner]))
+    throw forbidden('This person asked not to be added to your groups', 'OPTED_OUT');
+}
+
+/** Being put in someone's group is a request: the person is told and accepts or declines. */
+async function joinRequest(owner: string, user: string, group: string | null) {
+  const o = await one<any>(`SELECT full_name FROM ${S}.users WHERE id = $1`, [owner]);
+  const where = group ? ` “${group}”` : '';
+  await notifyBi(
+    undefined,
+    user,
+    'people_invite',
+    [`${o?.full_name ?? ''} wants to add you to their people${where}`, 'Accept to be added and receive what they send — or decline. You can also stop them asking again.'],
+    [`${o?.full_name ?? ''} بدّه يضيفك لناسه${group ? ` بفئة «${group}»` : ''}`, 'وافق لتنضاف وتوصلك الدفعات اللي بيبعتها — أو ارفض. وبتقدر تمنعه يطلب مرة ثانية.'],
+    { link: '/app/settings?tab=privacy#groups' },
+  );
+}
 
 async function inviteNotice(owner: string, user: string, place: string) {
   const o = await one<any>(`SELECT full_name FROM ${S}.users WHERE id = $1`, [owner]);
@@ -332,6 +360,7 @@ peopleRouter.post(
   ah(async (req, res) => {
     const me = req.auth!.userId;
     const m = await ownMember(req.params.id!, me);
+    if (m.consent !== 'accepted') throw badRequest('NOT_ACCEPTED', 'Waiting for them to accept');
     await requireSecondFactor(me, req.body.totp);
     const r = await deliver({ ownerId: me, memberId: m.id, memberUserId: m.user_id, amount: req.body.amount, source: req.body.source, dest: 'wallet', kind: 'bonus', note: req.body.note ?? null });
     if (r.status === 'failed') throw badRequest(r.code ?? 'TRANSFER_FAILED', r.error ?? 'The transfer failed');
@@ -384,13 +413,84 @@ peopleRouter.post(
   }),
 );
 
+/**
+ * Everyone who put me in their people: what they call the group, what they send me,
+ * and whether I said yes. I accept, decline or leave — and can stop someone asking again.
+ */
+peopleRouter.get(
+  '/memberships',
+  ah(async (req, res) => {
+    const me = req.auth!.userId;
+    const r = await pool.query(
+      `SELECT m.id, m.consent, m.created_at, m.asked_at, m.link_status, m.show_on_profile, m.role_title, g.name AS group_name, g.kind, g.is_work, g.workplace,
+              o.id AS owner_id, o.full_name AS owner_name, o.profile_image AS owner_image, o.role AS owner_role,
+              (SELECT store_name FROM ${S}.merchants WHERE user_id = o.id AND parent_id IS NULL ORDER BY created_at LIMIT 1) AS store_name,
+              (SELECT COALESCE(json_agg(json_build_object('amount', p.amount, 'every', p.every, 'every_days', p.every_days, 'next_run_at', p.next_run_at, 'title', p.title) ORDER BY p.next_run_at), '[]')
+                 FROM ${S}.payouts p WHERE p.member_id = m.id AND p.active) AS payments
+         FROM ${S}.people_members m JOIN ${S}.users o ON o.id = m.owner_id LEFT JOIN ${S}.people_groups g ON g.id = m.group_id
+        WHERE m.user_id = $1 ORDER BY (m.consent = 'pending') DESC, m.created_at DESC`,
+      [me],
+    );
+    const off = await pool.query(
+      `SELECT o.id, o.full_name, o.profile_image, x.created_at FROM ${S}.people_optouts x JOIN ${S}.users o ON o.id = x.owner_id WHERE x.user_id = $1 ORDER BY x.created_at DESC`,
+      [me],
+    );
+    res.json({ success: true, data: { memberships: r.rows, optouts: off.rows } });
+  }),
+);
+
+peopleRouter.post(
+  '/memberships/:id',
+  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ action: z.enum(['accept', 'decline', 'leave']), stop: z.boolean().default(false) }).strict() }),
+  ah(async (req, res) => {
+    const me = String(req.auth!.userId);
+    const m = await one<any>(`SELECT m.id, m.owner_id, m.consent, u.full_name FROM ${S}.people_members m JOIN ${S}.users u ON u.id = m.user_id WHERE m.id = $1 AND m.user_id = $2`, [req.params.id, me]);
+    if (!m) throw notFound('Not found');
+    const { action, stop } = req.body;
+    if (action === 'accept') {
+      await pool.query(`UPDATE ${S}.people_members SET consent = 'accepted' WHERE id = $1`, [m.id]);
+      // Payments that were waiting for this yes go out now.
+      const due = await pool.query(`SELECT id FROM ${S}.payouts WHERE member_id = $1 AND active AND auto AND next_run_at <= now() + interval '1 minute'`, [m.id]);
+      if (due.rowCount) await runPayouts(due.rows.map((x) => x.id));
+      await notifyBi(undefined, m.owner_id, 'people_accepted', [`${m.full_name} accepted`, 'Their scheduled payments can go out now.'], [`${m.full_name} وافق`, 'صار فيك تبعتله الدفعات المجدولة.'], { link: '/app/people' });
+    } else {
+      // Declining or leaving removes the place and its scheduled payments; history stays with the sender.
+      await tx(async (c) => {
+        await c.query(`DELETE FROM ${S}.people_members WHERE id = $1`, [m.id]);
+        if (stop) await c.query(`INSERT INTO ${S}.people_optouts (user_id, owner_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [me, m.owner_id]);
+      });
+      const left = action === 'leave' || m.consent === 'accepted';
+      await notifyBi(
+        undefined,
+        m.owner_id,
+        'people_declined',
+        [left ? `${m.full_name} left your people` : `${m.full_name} declined`, 'Their scheduled payments were stopped.'],
+        [left ? `${m.full_name} طلع من ناسك` : `${m.full_name} رفض ينضاف`, 'وقفنا الدفعات المجدولة إله.'],
+        { link: '/app/people' },
+      );
+    }
+    await audit({ userId: me, action: `people.membership_${action}`, entityType: 'people_member', entityId: m.id, details: { stop } }, req);
+    res.json({ success: true });
+  }),
+);
+
+/** Let someone ask again. */
+peopleRouter.delete(
+  '/optouts/:ownerId',
+  validate({ params: z.object({ ownerId: idParam }).strict() }),
+  ah(async (req, res) => {
+    await pool.query(`DELETE FROM ${S}.people_optouts WHERE user_id = $1 AND owner_id = $2`, [req.auth!.userId, req.params.ownerId]);
+    res.json({ success: true });
+  }),
+);
+
 /** For a person's public card: where they work, as they agreed to show. */
 export async function workplacesOf(userId: string) {
   const r = await pool.query(
     `SELECT COALESCE(g.workplace, (SELECT store_name FROM ${S}.merchants WHERE user_id = m.owner_id AND parent_id IS NULL ORDER BY created_at LIMIT 1), o.full_name) AS place,
             m.role_title, m.since
        FROM ${S}.people_members m JOIN ${S}.people_groups g ON g.id = m.group_id JOIN ${S}.users o ON o.id = m.owner_id
-      WHERE m.user_id = $1 AND m.link_status = 'accepted' AND m.show_on_profile`,
+      WHERE m.user_id = $1 AND m.link_status = 'accepted' AND m.show_on_profile AND m.consent = 'accepted'`,
     [userId],
   );
   return r.rows;
@@ -492,7 +592,7 @@ export async function runPayouts(only?: string[]) {
   await remind();
   const due = await pool.query(
     `SELECT p.*, m.user_id AS member_user_id, u.full_name AS member_name FROM ${S}.payouts p JOIN ${S}.people_members m ON m.id = p.member_id JOIN ${S}.users u ON u.id = m.user_id
-      WHERE p.active AND NOT p.paused_by_admin AND NOT p.awaiting AND p.next_run_at <= now() + interval '1 minute' AND ($1::uuid[] IS NULL OR p.id = ANY($1))
+      WHERE p.active AND NOT p.paused_by_admin AND NOT p.awaiting AND m.consent = 'accepted' AND p.next_run_at <= now() + interval '1 minute' AND ($1::uuid[] IS NULL OR p.id = ANY($1))
       ORDER BY p.next_run_at LIMIT 50`,
     [only ?? null],
   );
@@ -609,7 +709,7 @@ peopleRouter.get(
       [me],
     );
     const schedules = await pool.query(
-      `SELECT p.*, m.user_id, m.nickname, m.group_id, m.role_title, u.full_name, u.profile_image, w.wallet_id
+      `SELECT p.*, m.user_id, m.consent, m.nickname, m.group_id, m.role_title, u.full_name, u.profile_image, w.wallet_id
          FROM ${S}.payouts p JOIN ${S}.people_members m ON m.id = p.member_id JOIN ${S}.users u ON u.id = m.user_id
          LEFT JOIN LATERAL (SELECT wallet_id FROM ${S}.wallets WHERE user_id = u.id ORDER BY created_at ASC NULLS LAST LIMIT 1) w ON true
         WHERE p.owner_id = $1 ORDER BY (p.active AND NOT p.paused_by_admin) DESC, p.awaiting DESC, p.next_run_at`,
@@ -645,12 +745,14 @@ peopleRouter.post(
       userId = String(r.user_id);
     } else if (!(await one(`SELECT 1 FROM ${S}.users WHERE id = $1 AND status = 'active'`, [userId]))) throw notFound('User not found');
     if (String(userId) === String(me)) throw badRequest('SELF', 'You cannot add yourself');
+    await assertMayAdd(me, userId);
     const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.payouts WHERE owner_id = $1 AND active`, [me]);
     if ((n?.n ?? 0) >= 100) throw badRequest('TOO_MANY_PAYOUTS', 'Up to 100 recurring transfers');
     // The person joins your people (once); a chosen category files them there.
     const m = await one<any>(
-      `INSERT INTO ${S}.people_members (group_id, owner_id, user_id) VALUES ($1, $2, $3)
-       ON CONFLICT (owner_id, user_id) DO UPDATE SET group_id = COALESCE(EXCLUDED.group_id, ${S}.people_members.group_id) RETURNING id`,
+      `INSERT INTO ${S}.people_members (group_id, owner_id, user_id, consent, asked_at) VALUES ($1, $2, $3, 'pending', now())
+       ON CONFLICT (owner_id, user_id) DO UPDATE SET group_id = COALESCE(EXCLUDED.group_id, ${S}.people_members.group_id)
+       RETURNING id, consent, (xmax = 0) AS created`,
       [b.groupId ?? null, me, userId],
     );
     const start = b.startAt ? new Date(b.startAt) : new Date();
@@ -660,7 +762,8 @@ peopleRouter.post(
       [me, m.id, b.amount, b.source, b.dest, b.every, b.every === 'days' ? b.everyDays : null, start, b.title || null, b.ends, b.ends === 'until' ? b.endDate : null, b.ends === 'count' ? b.maxRuns : null, b.auto, b.remindBefore ?? null],
     );
     await audit({ userId: me, action: 'people.schedule_created', entityType: 'payout', entityId: p.id, details: { amount: b.amount, every: b.every, to: userId, ends: b.ends } }, req);
-    if (b.auto && start.getTime() <= Date.now() + 60_000) await runPayouts([p.id]);
+    if (m.created) await joinRequest(me, userId, b.groupId ? ((await one<any>(`SELECT name FROM ${S}.people_groups WHERE id = $1`, [b.groupId]))?.name ?? null) : null);
+    if (m.consent === 'accepted' && b.auto && start.getTime() <= Date.now() + 60_000) await runPayouts([p.id]);
     res.status(201).json({ success: true, data: { id: p.id, memberId: m.id } });
   }),
 );
@@ -731,10 +834,11 @@ peopleRouter.post(
     const me = req.auth!.userId;
     await requireSecondFactor(me, req.body.totp);
     const p = await one<any>(
-      `SELECT p.*, m.user_id AS member_user_id FROM ${S}.payouts p JOIN ${S}.people_members m ON m.id = p.member_id WHERE p.id = $1 AND p.owner_id = $2`,
+      `SELECT p.*, m.user_id AS member_user_id, m.consent FROM ${S}.payouts p JOIN ${S}.people_members m ON m.id = p.member_id WHERE p.id = $1 AND p.owner_id = $2`,
       [req.params.id, me],
     );
     if (!p) throw notFound('Transfer not found');
+    if (p.consent !== 'accepted') throw badRequest('NOT_ACCEPTED', 'Waiting for them to accept');
     if (p.paused_by_admin) throw badRequest('PAUSED_BY_ADMIN', 'The team paused this payment');
     const r = await deliver({ ownerId: me, memberId: p.member_id, memberUserId: p.member_user_id, amount: fromCents(toCents(p.amount)), source: p.source, dest: p.dest, kind: 'scheduled', note: p.title ?? p.note, payoutId: p.id });
     if (r.status === 'failed') throw badRequest(r.code ?? 'TRANSFER_FAILED', r.error ?? 'The transfer failed');
@@ -774,7 +878,7 @@ peopleAdminRouter.get(
               (SELECT count(*)::int FROM ${S}.payouts p WHERE p.owner_id = u.id AND p.paused_by_admin) AS paused,
               (SELECT COALESCE(sum(r.amount), 0)::text FROM ${S}.payout_runs r WHERE r.owner_id = u.id AND r.status = 'done' AND r.ran_at > now() - interval '30 days') AS last30,
               (SELECT count(*)::int FROM ${S}.payout_runs r WHERE r.owner_id = u.id AND r.status = 'failed' AND r.ran_at > now() - interval '30 days') AS failed30
-         FROM ${S}.users u WHERE EXISTS (SELECT 1 FROM ${S}.people_groups g WHERE g.owner_id = u.id)
+         FROM ${S}.users u WHERE (EXISTS (SELECT 1 FROM ${S}.people_groups g WHERE g.owner_id = u.id) OR EXISTS (SELECT 1 FROM ${S}.people_members m WHERE m.owner_id = u.id))
           AND ($1::text IS NULL OR u.full_name ILIKE $1 OR u.email ILIKE $1)
         ORDER BY last30 DESC, members DESC LIMIT 200`,
       [q ? `%${q}%` : null],
@@ -799,6 +903,41 @@ peopleAdminRouter.get(
       [u.id],
     );
     res.json({ success: true, data: { owner: u, groups: await groupsOf(u.id), runs: runs.rows } });
+  }),
+);
+
+peopleAdminRouter.delete(
+  '/members/:id',
+  validate({ params: z.object({ id: idParam }).strict() }),
+  ah(async (req, res) => {
+    const m = await one<any>(`DELETE FROM ${S}.people_members WHERE id = $1 RETURNING owner_id, user_id`, [req.params.id]);
+    if (!m) throw notFound('Person not found');
+    await notifyBi(undefined, m.owner_id, 'payout_admin', ['The team removed someone from your people', 'Their scheduled payments were stopped.'], ['الإدارة شالت حدا من ناسك', 'وقفنا الدفعات المجدولة إله.'], { link: '/app/people' });
+    await audit({ userId: req.auth!.userId, action: 'admin.people_member_removed', entityType: 'people_member', entityId: req.params.id!, details: { owner: m.owner_id, user: m.user_id } }, req);
+    res.json({ success: true });
+  }),
+);
+
+/** Team: put someone in a person's people directly (already accepted), e.g. to sort out a support case. */
+peopleAdminRouter.post(
+  '/owners/:id/members',
+  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ who: z.string().trim().min(3).max(254), groupId: idParam.optional() }).strict() }),
+  ah(async (req, res) => {
+    const owner = req.params.id!;
+    const r = await resolveRecipient(req.body.who);
+    if (!r) throw notFound('No wallet found for that ID or e-mail', 'RECIPIENT_NOT_FOUND');
+    if (String(r.user_id) === String(owner)) throw badRequest('SELF', 'You cannot add yourself');
+    if (req.body.groupId && !(await one(`SELECT 1 FROM ${S}.people_groups WHERE id = $1 AND owner_id = $2`, [req.body.groupId, owner]))) throw notFound('Group not found');
+    const m = await one<any>(
+      `INSERT INTO ${S}.people_members (group_id, owner_id, user_id, consent) VALUES ($1, $2, $3, 'accepted')
+       ON CONFLICT (owner_id, user_id) DO UPDATE SET consent = 'accepted', group_id = COALESCE(EXCLUDED.group_id, ${S}.people_members.group_id) RETURNING id`,
+      [req.body.groupId ?? null, owner, r.user_id],
+    );
+    await notifyBi(undefined, r.user_id, 'people_invite', ['The team added you to someone’s people', 'You can leave any time from Settings → Privacy.'], ['الإدارة ضافتك لناس شخص', 'بتقدر تطلع وقت ما بدك من الإعدادات ← الخصوصية.'], {
+      link: '/app/settings?tab=privacy#groups',
+    });
+    await audit({ userId: req.auth!.userId, action: 'admin.people_member_added', entityType: 'people_member', entityId: m.id, details: { owner, user: r.user_id } }, req);
+    res.status(201).json({ success: true, data: { id: m.id } });
   }),
 );
 

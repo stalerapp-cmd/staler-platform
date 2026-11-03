@@ -1,19 +1,23 @@
 import { useState } from 'react';
-import { Landmark, Pause, Play, Repeat, Search, Users, Wallet } from 'lucide-react';
-import { get, post } from '../lib/api';
+import { Landmark, Pause, Play, Repeat, Search, Trash2, UserPlus, Users, Wallet } from 'lucide-react';
+import { del, get, post } from '../lib/api';
+import { useConfirm } from '../components/Confirm';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
 import { money, relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { Avatar, Badge, EmptyState, PageHeader, Sheet, Skeleton, cx } from '../components/ui';
 
-const EVERY: Record<string, [string, string]> = { week: ['كل أسبوع', 'weekly'], '2weeks': ['كل أسبوعين', 'every 2 weeks'], month: ['كل شهر', 'monthly'] };
+const EVERY: Record<string, [string, string]> = { once: ['مرة وحدة', 'once'], week: ['كل أسبوع', 'weekly'], '2weeks': ['كل أسبوعين', 'every 2 weeks'], month: ['كل شهر', 'monthly'], days: ['كل {n} يوم', 'every {n} days'] };
+const every = (p: any, ar: boolean) => (EVERY[p.every]?.[ar ? 0 : 1] ?? p.every).replace('{n}', String(p.every_days ?? ''));
 
 /** Admins: who sends money regularly to whom (children, staff…), and the power to pause it. */
 export function AdminGroups() {
   const { lang, err } = useI18n();
   const ar = lang === 'ar';
   const toast = useToast();
+  const confirm = useConfirm();
+  const [who, setWho] = useState('');
   const [q, setQ] = useState('');
   const data = useData<{ owners: any[]; totals: any }>(`/api/admin/people/owners${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`, [q]);
   const [sel, setSel] = useState<any>(null);
@@ -38,10 +42,31 @@ export function AdminGroups() {
       toast(err(e), 'error');
     }
   };
+  const remove = async (m: any) => {
+    if (!(await confirm({ title: ar ? `تشيل ${m.full_name}؟` : `Remove ${m.full_name}?`, body: ar ? 'بتوقف كل الدفعات المجدولة إله. صاحب الفئة بيوصله إشعار.' : 'All their scheduled payments stop. The owner is told.', tone: 'danger', confirmLabel: ar ? 'شيل' : 'Remove' }))) return;
+    try {
+      await del(`/api/admin/people/members/${m.id}`);
+      void open(sel);
+      void data.reload();
+    } catch (e) {
+      toast(err(e), 'error');
+    }
+  };
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await post(`/api/admin/people/owners/${sel.id}/members`, { who: who.trim() });
+      setWho('');
+      toast(ar ? 'انضاف' : 'Added');
+      void open(sel);
+    } catch (e2) {
+      toast(err(e2), 'error');
+    }
+  };
   const t = data.data?.totals;
   return (
     <div>
-      <PageHeader title={ar ? 'الفئات والتحويلات الدورية' : 'Groups & recurring transfers'} lead={ar ? 'مين بيحوّل بشكل دوري لمين — ولاده، موظفينه، قرايبه — أديش وكل قديش، مع كل الحركات. وبتقدر توقف أي تحويل.' : 'Who sends money regularly to whom — children, staff, relatives — how much and how often, with every movement. You can pause any transfer.'} />
+      <PageHeader title={ar ? 'الفئات والدفعات المجدولة' : 'Groups & scheduled payments'} lead={ar ? 'مين بيدفع لمين بشكل مجدول — ولاده، موظفينه، قرايبه، دين — أديش وكل قديش، مين لسا ما وافق، وكل الحركات. بتقدر توقف أي دفعة، تشيل حدا أو تضيفه.' : 'Who pays whom on a schedule — children, staff, relatives, debts — how much and how often, who hasn’t accepted yet, every movement. Pause any payment, remove or add people.'} />
       {t && (
         <div className="mb-5 grid grid-cols-3 gap-3">
           {[
@@ -63,7 +88,7 @@ export function AdminGroups() {
       {!data.data ? (
         <Skeleton className="h-64 rounded-3xl" />
       ) : !data.data.owners.length ? (
-        <EmptyState icon={<Users className="h-6 w-6" />} title={ar ? 'ما حدا عامل فئات لسا' : 'Nobody has groups yet'} />
+        <EmptyState icon={<Users className="h-6 w-6" />} title={ar ? 'ما حدا عامل دفعات مجدولة لسا' : 'No scheduled payments yet'} />
       ) : (
         <ul className="card divide-y divide-line overflow-hidden">
           {data.data.owners.map((o) => (
@@ -90,10 +115,16 @@ export function AdminGroups() {
           <Skeleton className="h-60" />
         ) : (
           <div className="space-y-5">
+            <form onSubmit={add} className="flex gap-2">
+              <input value={who} onChange={(e) => setWho(e.target.value)} placeholder={ar ? 'ضيف حدا لناسه: رقم محفظة أو إيميل' : 'Add someone: wallet ID or e-mail'} className="field flex-1" dir="auto" />
+              <button disabled={who.trim().length < 3} className="inline-flex shrink-0 items-center gap-1.5 rounded-2xl bg-night px-4 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white/15">
+                <UserPlus className="h-4 w-4" /> {ar ? 'ضيف' : 'Add'}
+              </button>
+            </form>
             {detail.groups.map((g: any) => (
-              <section key={g.id}>
+              <section key={g.id ?? 'none'}>
                 <p className="mb-2 font-semibold">
-                  {g.name} {g.workplace && <span className="text-sm font-normal text-muted">· {g.workplace}</span>}
+                  {g.name ?? (ar ? 'بلا فئة' : 'No group')} {g.workplace && <span className="text-sm font-normal text-muted">· {g.workplace}</span>}
                 </p>
                 <ul className="space-y-2">
                   {g.members.map((m: any) => (
@@ -105,14 +136,18 @@ export function AdminGroups() {
                             {m.full_name}
                             {m.role_title && <span className="font-normal text-muted"> · {m.role_title}</span>}
                           </span>
-                          <span className="block text-xs text-muted">{ar ? `استلم ${money(m.paid_total, lang)}` : `received ${money(m.paid_total, lang)}`}</span>
+                          <span className="block text-xs text-muted">{ar ? `استلم ${money(m.paid_total ?? 0, lang)}` : `received ${money(m.paid_total ?? 0, lang)}`}</span>
                         </span>
+                        {m.consent === 'pending' && <Badge tone="warn">{ar ? 'بستنى موافقته' : 'Not accepted yet'}</Badge>}
+                        <button onClick={() => remove(m)} className="grid h-8 w-8 place-items-center rounded-full text-muted hover:bg-stitch/10 hover:text-stitch" aria-label={ar ? 'شيل' : 'Remove'}>
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                      {m.payouts.map((p: any) => (
+                      {(m.payouts ?? []).map((p: any) => (
                         <div key={p.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-sunk/60 px-3 py-2 text-sm">
                           <Repeat className="h-4 w-4 text-olive" />
                           <b className="num">{money(p.amount, lang)}</b>
-                          <span className="text-muted">{EVERY[p.every]![ar ? 0 : 1]}</span>
+                          <span className="text-muted">{every(p, ar)}</span>
                           <span className="inline-flex items-center gap-1 text-xs text-muted">
                             {p.source === 'bank' ? <Landmark className="h-3.5 w-3.5" /> : <Wallet className="h-3.5 w-3.5" />}→{p.dest === 'bank' ? <Landmark className="h-3.5 w-3.5" /> : <Wallet className="h-3.5 w-3.5" />}
                           </span>

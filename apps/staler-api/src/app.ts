@@ -24,6 +24,7 @@ import { exchangeRouter } from './modules/exchange.js';
 import { merchantRouter, storeRouter } from './modules/commerce.js';
 import { messagesRouter } from './modules/messages.js';
 import { contactsRouter } from './modules/contacts.js';
+import { blocksAdminRouter, blocksRouter } from './modules/blocks.js';
 import { feedbackRouter } from './modules/feedback.js';
 import { peopleAdminRouter, peopleRouter } from './modules/people.js';
 import { callsRouter } from './modules/calls.js';
@@ -135,6 +136,8 @@ export function createApp(): Express {
   app.use('/api/people', noStore, peopleRouter);
   app.use('/api/calls', noStore, callsRouter);
   app.use('/api/admin/people', noStore, requireAuth, peopleAdminRouter);
+  app.use('/api/blocks', noStore, blocksRouter);
+  app.use('/api/admin/blocks', noStore, requireAuth, blocksAdminRouter);
   app.use('/api/admin', noStore, adminRouter);
 
   // Public images stored in the database (when Supabase Storage isn't configured).

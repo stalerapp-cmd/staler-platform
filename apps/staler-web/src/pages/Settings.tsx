@@ -1,9 +1,10 @@
 import { motion } from 'framer-motion';
 import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { PrivacySettings } from '../components/PrivacySettings';
 import { AgentProfileEditor } from '../components/AgentProfileEditor';
 import { StoreLogo } from './Stores';
-import { AtSign, BellRing, Camera, HandCoins, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Palette, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { AtSign, Ban, BellRing, Camera, HandCoins, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Palette, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, type LucideIcon } from 'lucide-react';
 import { applySession, assetUrl, del, patch, post, put, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
@@ -39,8 +40,8 @@ function Section({ title, children, aside, icon: Icon, tone = 'bg-night text-whi
   );
 }
 
-type Tab = 'profile' | 'agent' | 'security' | 'devices' | 'account';
-const TAB_ICONS: Record<Tab, LucideIcon> = { profile: UserRound, agent: HandCoins, security: ShieldCheck, devices: MonitorSmartphone, account: KeyRound };
+type Tab = 'profile' | 'agent' | 'security' | 'privacy' | 'devices' | 'account';
+const TAB_ICONS: Record<Tab, LucideIcon> = { profile: UserRound, agent: HandCoins, security: ShieldCheck, privacy: Ban, devices: MonitorSmartphone, account: KeyRound };
 
 export default function Settings() {
   const { t, lang, setLang, err } = useI18n();
@@ -51,8 +52,9 @@ export default function Settings() {
   const fileRef = useRef<HTMLInputElement>(null);
   const confirm = useConfirm();
   const sessions = useData<{ sessions: any[] }>('/api/auth/me/sessions');
+  const isAdmin = user?.role === 'admin';
   const isAgent = user?.role === 'exchange';
-  const tabs: Tab[] = isAgent ? ['profile', 'agent', 'security', 'devices', 'account'] : ['profile', 'security', 'devices', 'account'];
+  const tabs: Tab[] = isAdmin ? ['profile', 'security', 'devices', 'account'] : isAgent ? ['profile', 'agent', 'security', 'privacy', 'devices', 'account'] : ['profile', 'security', 'privacy', 'devices', 'account'];
   const [params, setParams] = useSearchParams();
   const asked = params.get('tab') as Tab | null;
   const [tab, setTabState] = useState<Tab>(asked && tabs.includes(asked) ? asked : 'profile');
@@ -263,7 +265,7 @@ export default function Settings() {
 
       <div className="lg:grid lg:grid-cols-[220px_1fr] lg:gap-6">
         {/* Tabs: a scrolling pill row on phones, a sticky list on desktop */}
-        <div role="tablist" className={cx('mb-5 grid gap-1.5', tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4', 'rounded-3xl bg-surface p-1.5 shadow-card lg:sticky lg:top-24 lg:mb-0 lg:flex lg:h-fit lg:flex-col lg:gap-2 lg:bg-transparent lg:p-0 lg:shadow-none')}>
+        <div role="tablist" className={cx('mb-5 grid gap-1.5', tabs.length === 6 ? 'grid-cols-3' : tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4', 'rounded-3xl bg-surface p-1.5 shadow-card lg:sticky lg:top-24 lg:mb-0 lg:flex lg:h-fit lg:flex-col lg:gap-2 lg:bg-transparent lg:p-0 lg:shadow-none')}>
           {tabs.map((k) => {
             const Icon = TAB_ICONS[k];
             const on = tab === k;
@@ -285,6 +287,7 @@ export default function Settings() {
 
         <div className="min-w-0 space-y-5">
       {tab === 'agent' && isAgent && <AgentProfileEditor />}
+      {tab === 'privacy' && <PrivacySettings />}
       {tab === 'profile' && (
         <>
       <Section title={t.settings.profile} icon={UserRound}>
