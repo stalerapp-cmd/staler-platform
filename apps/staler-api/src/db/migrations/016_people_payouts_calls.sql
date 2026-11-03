@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS __SCHEMA__.call_sessions (
 );
 CREATE INDEX IF NOT EXISTS call_sessions_callee_idx ON __SCHEMA__.call_sessions (callee_id, status);
 
-CREATE TABLE IF NOT EXISTS __SCHEMA__.call_signals (
+CREATE TABLE IF NOT EXISTS __SCHEMA__.call_relay (
   id BIGSERIAL PRIMARY KEY,
   session_id UUID NOT NULL REFERENCES __SCHEMA__.call_sessions(id) ON DELETE CASCADE,
   to_user UUID NOT NULL,
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS __SCHEMA__.call_signals (
   payload JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS call_signals_idx ON __SCHEMA__.call_signals (session_id, to_user, id);
+CREATE INDEX IF NOT EXISTS call_relay_idx ON __SCHEMA__.call_relay (session_id, to_user, id);
 
 ALTER TABLE __SCHEMA__.people_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE __SCHEMA__.people_members ENABLE ROW LEVEL SECURITY;
@@ -122,7 +122,7 @@ ALTER TABLE __SCHEMA__.payouts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE __SCHEMA__.payout_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE __SCHEMA__.call_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE __SCHEMA__.call_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE __SCHEMA__.call_signals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE __SCHEMA__.call_relay ENABLE ROW LEVEL SECURITY;
 
 -- Admins who can see people's money also oversee groups and recurring transfers.
 UPDATE __SCHEMA__.users SET admin_permissions = array_append(admin_permissions, 'people.oversee')

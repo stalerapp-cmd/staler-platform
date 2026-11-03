@@ -322,7 +322,7 @@ callsRouter.post(
     const { s, other } = await party(req.params.id!, req.auth!.userId);
     if (['ended', 'missed', 'declined'].includes(s.status) && req.body.kind !== 'bye') throw conflict('CALL_GONE', 'This call has ended');
     if (JSON.stringify(req.body.payload ?? null).length > 20000) throw badRequest('TOO_LARGE', 'Too large');
-    await pool.query(`INSERT INTO ${S}.call_signals (session_id, to_user, kind, payload) VALUES ($1, $2, $3, $4)`, [s.id, other, req.body.kind, JSON.stringify(req.body.payload ?? null)]);
+    await pool.query(`INSERT INTO ${S}.call_relay (session_id, to_user, kind, payload) VALUES ($1, $2, $3, $4)`, [s.id, other, req.body.kind, JSON.stringify(req.body.payload ?? null)]);
     res.json({ success: true });
   }),
 );
@@ -332,7 +332,7 @@ callsRouter.get(
   validate({ params: z.object({ id: idParam }).strict(), query: z.object({ after: z.coerce.number().int().min(0).default(0) }).strict() }),
   ah(async (req, res) => {
     const { s } = await party(req.params.id!, req.auth!.userId);
-    const r = await pool.query(`SELECT id, kind, payload FROM ${S}.call_signals WHERE session_id = $1 AND to_user = $2 AND id > $3 ORDER BY id LIMIT 100`, [
+    const r = await pool.query(`SELECT id, kind, payload FROM ${S}.call_relay WHERE session_id = $1 AND to_user = $2 AND id > $3 ORDER BY id LIMIT 100`, [
       s.id,
       req.auth!.userId,
       (req.query as any).after,
