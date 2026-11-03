@@ -179,3 +179,93 @@ export function SupportRating({ conversationId, rating, onDone }: { conversation
     </motion.div>
   );
 }
+
+/** Chats the super admin handed to me: take it, or ask for it to move — saying why. */
+export function HandoffInbox({ onTaken }: { onTaken: () => void }) {
+  const { lang, err } = useI18n();
+  const ar = lang === 'ar';
+  const nav = useNavigate();
+  const toast = useToast();
+  const [items, setItems] = useState<any[]>([]);
+  const [asking, setAsking] = useState<string | null>(null);
+  const [answer, setAnswer] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = async () => {
+    try {
+      setItems((await get<{ items: any[] }>('/api/messages/support/handoffs')).items);
+    } catch {
+      setItems([]);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  usePolling(load, 20_000);
+  if (!items.length) return null;
+  const act = async (x: any, action: 'accept' | 'decline') => {
+    setBusy(x.id);
+    try {
+      await post(`/api/messages/support/handoffs/${x.id}`, action === 'accept' ? { action } : { action, answer: answer.trim() });
+      setAsking(null);
+      setAnswer('');
+      void load();
+      onTaken();
+      if (action === 'accept') nav(`/app/messages/${x.conversation_id}`);
+      else toast(ar ? 'انبعت طلبك للسوبر أدمن' : 'Sent to the super admin');
+    } catch (e) {
+      toast(err(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="border-b border-line p-2">
+      <p className="flex items-center gap-2 px-2 py-1.5 text-sm font-semibold">
+        <Hand className="h-4 w-4 text-stitch" /> {ar ? 'انحوّلتلك' : 'Handed to you'}
+        <span className="num grid h-5 min-w-5 place-items-center rounded-full bg-stitch px-1.5 text-[11px] font-bold text-white">{items.length}</span>
+      </p>
+      <ul className="space-y-1.5">
+        {items.map((x) => {
+          const T = topicOf(x.topic);
+          return (
+            <li key={x.id} className="rounded-2xl bg-stitch/[0.05] p-3 ring-1 ring-stitch/25">
+              <div className="flex items-start gap-2.5">
+                <Avatar name={x.customer_name} src={x.customer_image} size={34} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{x.customer_name}</p>
+                  {T && <span className={cx('mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium', T.c)}>{ar ? T.ar : T.en}</span>}
+                  <p className="mt-1 text-xs text-muted">
+                    {ar ? `من ${x.from_name ?? 'الإدارة'}` : `From ${x.from_name ?? 'the team'}`} · {relative(x.created_at, lang)}
+                  </p>
+                  {x.reason && <p className="mt-1 rounded-xl bg-surface px-2.5 py-1.5 text-xs">«{x.reason}»</p>}
+                </div>
+              </div>
+              {asking === x.id ? (
+                <div className="mt-2.5 space-y-2">
+                  <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={2} maxLength={300} autoFocus placeholder={ar ? 'ليش لازم تنتقل؟ (مثلًا: عندي ظرف، مش اختصاصي…)' : 'Why should it move? (e.g. something came up, not my area…)'} className="field resize-none py-2.5 text-sm" />
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => setAsking(null)}>
+                      {ar ? 'رجوع' : 'Back'}
+                    </Button>
+                    <Button size="sm" className="flex-1" variant="stitch" loading={busy === x.id} disabled={answer.trim().length < 3} onClick={() => act(x, 'decline')}>
+                      {ar ? 'ابعت الطلب' : 'Send'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2.5 flex gap-2">
+                  <Button size="sm" className="flex-1" loading={busy === x.id} icon={<Hand className="h-4 w-4" />} onClick={() => act(x, 'accept')}>
+                    {ar ? 'استلمها' : 'Take it'}
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => (setAsking(x.id), setAnswer(''))}>
+                    {ar ? 'اطلب تحويلها' : 'Ask to move it'}
+                  </Button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}

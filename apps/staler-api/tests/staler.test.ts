@@ -682,6 +682,27 @@ describe('marketplace', () => {
     expect((await request(app).post(`/api/messages/conversations/${cid}/messages`).set(auth(sup)).send({ content: 'Super admin here' })).status).toBe(201);
     expect((await request(app).post(`/api/messages/conversations/${cid}/messages`).set(auth(shopAdmin)).send({ content: 'still here?' })).status).toBe(404);
     await request(app).patch(`/api/messages/conversations/${cid}/close`).set(auth(sup));
+    // a closed chat can be handed on: it opens again, the admin takes it or asks to move it
+    const h1 = await request(app).post(`/api/messages/support/${cid}/hand`).set(auth(sup)).send({ to: shopId, reason: 'Follow up please' });
+    expect(h1.body.data.reopened).toBe(true);
+    const inbox = await request(app).get('/api/messages/support/handoffs').set(auth(shopAdmin));
+    const ho = inbox.body.data.items.find((x: any) => x.conversation_id === cid);
+    expect(ho.reason).toBe('Follow up please');
+    expect((await request(app).post(`/api/messages/support/handoffs/${ho.id}`).set(auth(shopAdmin)).send({ action: 'decline' })).status).toBe(400);
+    expect((await request(app).post(`/api/messages/support/handoffs/${ho.id}`).set(auth(shopAdmin)).send({ action: 'decline', answer: 'Away tomorrow' })).status).toBe(200);
+    const seen = (await request(app).get('/api/messages/support/all').set(auth(sup))).body.data.items.find((x: any) => x.id === cid);
+    expect(seen.handoff.status).toBe('declined');
+    expect(seen.handoff.answer).toBe('Away tomorrow');
+    // leave: an admin asks, the super admin approves; it shows on the team page
+    const lv = await request(app).post('/api/admin/leaves').set(auth(shopAdmin)).send({ startsOn: '2020-01-01', endsOn: '2099-01-01', reason: 'Family trip' });
+    expect(lv.status).toBe(201);
+    expect((await request(app).post(`/api/admin/leaves/${lv.body.data.id}/decide`).set(auth(bankAdmin)).send({ approve: true })).status).toBe(403);
+    expect((await request(app).post(`/api/admin/leaves/${lv.body.data.id}/decide`).set(auth(sup)).send({ approve: true })).status).toBe(200);
+    const tm = await request(app).get('/api/admin/team').set(auth(sup));
+    expect(tm.body.data.admins.find((x: any) => x.id === shopId).leave.kind).toBe('leave');
+    expect((await request(app).post('/api/admin/leaves/set').set(auth(sup)).send({ adminId: shopId, kind: 'off', startsOn: '2020-01-01', endsOn: '2020-01-02' })).status).toBe(201);
+    expect((await request(app).post(`/api/admin/leaves/${lv.body.data.id}/cancel`).set(auth(shopAdmin))).status).toBe(200);
+    expect((await request(app).get('/api/admin/leaves').set(auth(cust.token))).status).toBe(403);
     expect((await request(app).post(`/api/messages/conversations/${cid}/rate`).set(auth(cust.token)).send({ stars: 4, comment: 'Quick and kind' })).status).toBe(200);
     const all = await request(app).get('/api/messages/support/all').set(auth(sup));
     expect(all.body.data.items.find((x: any) => x.id === cid).stars).toBe(4);

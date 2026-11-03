@@ -8,6 +8,7 @@ import { ah } from '../lib/http.js';
 import { validate } from '../lib/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 import { assertNotBlocked, blockedSql } from './blocks.js';
+import { awaySql } from './leaves.js';
 import { moneyLimiter } from '../middleware/security.js';
 import { idParam } from './commerce.js';
 import { notifyBi } from './walletCore.js';
@@ -273,7 +274,8 @@ messagesRouter.post(
         await c.query(`INSERT INTO ${S}.conversation_participants (conversation_id, user_id) VALUES ($1, $2)`, [conv.id, me]);
         return conv.id;
       });
-      const admins = await pool.query<AdminRow>(`SELECT id, admin_level, admin_permissions FROM ${S}.users WHERE role = 'admin' AND status = 'active' AND id <> $1`, [me]);
+      // Admins on leave or off support aren't alerted.
+      const admins = await pool.query<AdminRow>(`SELECT id, admin_level, admin_permissions FROM ${S}.users u WHERE role = 'admin' AND status = 'active' AND id <> $1 AND NOT ${awaySql('u.id')}`, [me]);
       const who = await one<any>(`SELECT full_name FROM ${S}.users WHERE id = $1`, [me]);
       for (const a of admins.rows.filter((x) => canTake(x, topic)))
         await notifyBi(undefined, a.id, 'support_new', ['New support request', `${who?.full_name ?? ''} is waiting for help.`], ['طلب دعم جديد', `${who?.full_name ?? ''} بستنى مساعدة.`], {
@@ -478,12 +480,13 @@ messagesRouter.post(
 );
 
 /**
- * Super admin: move a chat to another admin, or to themselves to carry on the reply.
- * The previous admin leaves the chat; the customer and the new admin are told.
+ * Super admin: hand a chat — open or closed — to an admin, or take it yourself.
+ * A closed chat opens again. The admin it goes to is told and either takes it or
+ * asks for it to move, with a reason. Admins on leave can still get it, for when they're back.
  */
 messagesRouter.post(
   '/support/:id/hand',
-  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ to: idParam }).strict() }),
+  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ to: idParam, reason: z.string().trim().max(300).optional() }).strict() }),
   ah(async (req, res) => {
     const me = String(req.auth!.userId);
     const a = await adminRow(me);
@@ -493,27 +496,92 @@ messagesRouter.post(
       throw badRequest('NOT_SUPPORT_ADMIN', 'This admin does not handle support');
     const c = await one<any>(`SELECT created_by, assigned_to, status FROM ${S}.conversations WHERE id = $1 AND type = 'support'`, [req.params.id]);
     if (!c) throw notFound('Conversation not found');
-    if (c.status === 'closed') throw forbidden('This conversation is closed', 'CONVERSATION_CLOSED');
     const from = c.assigned_to ? String(c.assigned_to) : null;
-    await pool.query(`UPDATE ${S}.conversations SET assigned_to = $2, claimed_at = COALESCE(claimed_at, now()), updated_at = now() WHERE id = $1`, [req.params.id, to.id]);
-    if (from && from !== String(to.id)) await pool.query(`DELETE FROM ${S}.conversation_participants WHERE conversation_id = $1 AND user_id = $2`, [req.params.id, from]);
-    await pool.query(
-      `INSERT INTO ${S}.conversation_participants (conversation_id, user_id) SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM ${S}.conversation_participants WHERE conversation_id = $1 AND user_id = $2)`,
-      [req.params.id, to.id],
-    );
-    if (String(to.id) !== me)
-      await notifyBi(undefined, to.id, 'support_new', ['A support chat was handed to you', `${a.full_name} gave you a support chat to carry on.`], ['انحوّلتلك محادثة دعم', `${a.full_name} حوّللك محادثة دعم لتكمّلها.`], {
-        conversationId: req.params.id,
-      });
+    const self = String(to.id) === me;
+    await tx(async (q) => {
+      await q.query(
+        `UPDATE ${S}.conversations SET assigned_to = $2, claimed_at = COALESCE(claimed_at, now()), status = 'active', closed_at = NULL, closed_by = NULL, updated_at = now() WHERE id = $1`,
+        [req.params.id, to.id],
+      );
+      if (from && from !== String(to.id)) await q.query(`DELETE FROM ${S}.conversation_participants WHERE conversation_id = $1 AND user_id = $2`, [req.params.id, from]);
+      await q.query(
+        `INSERT INTO ${S}.conversation_participants (conversation_id, user_id) SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM ${S}.conversation_participants WHERE conversation_id = $1 AND user_id = $2)`,
+        [req.params.id, to.id],
+      );
+      await q.query(`UPDATE ${S}.support_handoffs SET status = 'replaced', decided_at = now() WHERE conversation_id = $1 AND status = 'pending'`, [req.params.id]);
+      await q.query(`INSERT INTO ${S}.support_handoffs (conversation_id, from_admin, to_admin, reason, status, decided_at) VALUES ($1, $2, $3, $4, $5, $6)`, [
+        req.params.id,
+        me,
+        to.id,
+        req.body.reason ?? null,
+        self ? 'accepted' : 'pending',
+        self ? new Date() : null,
+      ]);
+    });
+    if (!self)
+      await notifyBi(
+        undefined,
+        to.id,
+        'support_handoff',
+        ['A support chat was handed to you', `${a.full_name}: ${req.body.reason || 'please carry on with it'} — take it, or ask to move it.`],
+        ['انحوّلتلك محادثة دعم', `${a.full_name}: ${req.body.reason || 'كمّل فيها'} — استلمها أو اطلب تحويلها.`],
+        { link: '/app/messages?queue=1' },
+      );
     if (from && from !== String(to.id) && from !== me)
       await notifyBi(undefined, from, 'support_moved', ['A support chat moved', `${a.full_name} moved one of your support chats to ${to.full_name}.`], ['محادثة دعم انتقلت', `${a.full_name} نقل محادثة دعم من عندك لـ ${to.full_name}.`], {
         conversationId: req.params.id,
       });
-    if (from !== String(to.id))
+    if (from !== String(to.id) || c.status === 'closed')
       await notifyBi(undefined, c.created_by, 'support_claimed', ['Someone is helping you', `${to.full_name} is carrying on with your request.`], ['في حدا عم يساعدك', `${to.full_name} رح يكمّل معك طلبك.`], {
         conversationId: req.params.id,
       });
-    res.json({ success: true, data: { assignedTo: to.id, name: to.full_name } });
+    res.json({ success: true, data: { assignedTo: to.id, name: to.full_name, reopened: c.status === 'closed' } });
+  }),
+);
+
+/** Chats handed to me that I haven't answered yet. */
+messagesRouter.get(
+  '/support/handoffs',
+  ah(async (req, res) => {
+    const r = await pool.query(
+      `SELECT h.id, h.conversation_id, h.reason, h.created_at, f.full_name AS from_name, c.topic, u.full_name AS customer_name, u.profile_image AS customer_image
+         FROM ${S}.support_handoffs h JOIN ${S}.conversations c ON c.id = h.conversation_id JOIN ${S}.users u ON u.id = c.created_by
+         LEFT JOIN ${S}.users f ON f.id = h.from_admin
+        WHERE h.to_admin = $1 AND h.status = 'pending' AND c.assigned_to = $1 ORDER BY h.created_at`,
+      [req.auth!.userId],
+    );
+    res.json({ success: true, data: { items: r.rows } });
+  }),
+);
+
+/** Take a handed chat, or ask the super admin to move it — saying why. */
+messagesRouter.post(
+  '/support/handoffs/:id',
+  validate({
+    params: z.object({ id: idParam }).strict(),
+    body: z
+      .object({ action: z.enum(['accept', 'decline']), answer: z.string().trim().max(300).optional() })
+      .strict()
+      .refine((b) => b.action === 'accept' || (b.answer && b.answer.length >= 3), 'Say why it should move'),
+  }),
+  ah(async (req, res) => {
+    const me = String(req.auth!.userId);
+    const h = await one<any>(
+      `UPDATE ${S}.support_handoffs SET status = $3, answer = $4, decided_at = now() WHERE id = $1 AND to_admin = $2 AND status = 'pending' RETURNING conversation_id, from_admin`,
+      [req.params.id, me, req.body.action === 'accept' ? 'accepted' : 'declined', req.body.answer ?? null],
+    );
+    if (!h) throw notFound('Not found');
+    const u = await adminRow(me);
+    if (h.from_admin && String(h.from_admin) !== me)
+      await notifyBi(
+        undefined,
+        h.from_admin,
+        'support_handoff',
+        req.body.action === 'accept' ? [`${u?.full_name} took the chat`, ''] : [`${u?.full_name} asked to move a chat`, req.body.answer ?? ''],
+        req.body.action === 'accept' ? [`${u?.full_name} استلم المحادثة`, ''] : [`${u?.full_name} طلب تحويل محادثة`, req.body.answer ?? ''],
+        { link: '/app/admin/team?tab=chats' },
+      );
+    res.json({ success: true, data: { conversationId: h.conversation_id } });
   }),
 );
 
@@ -550,7 +618,9 @@ messagesRouter.get(
     if (a?.admin_level !== 'super_admin') throw forbidden('Only the super admin can see every support chat', 'SUPER_ONLY');
     const q = req.query as any;
     const r = await pool.query(
-      `SELECT ${supportCols}, h.full_name AS admin_name, h.profile_image AS admin_image, sr.stars, sr.comment, sr.declined
+      `SELECT ${supportCols}, h.full_name AS admin_name, h.profile_image AS admin_image, sr.stars, sr.comment, sr.declined,
+              (SELECT json_build_object('status', x.status, 'reason', x.reason, 'answer', x.answer, 'to_name', t.full_name, 'at', COALESCE(x.decided_at, x.created_at))
+                 FROM ${S}.support_handoffs x JOIN ${S}.users t ON t.id = x.to_admin WHERE x.conversation_id = c.id ORDER BY x.created_at DESC LIMIT 1) AS handoff
          FROM ${S}.conversations c JOIN ${S}.users u ON u.id = c.created_by
          LEFT JOIN ${S}.users h ON h.id = c.assigned_to LEFT JOIN ${S}.support_ratings sr ON sr.conversation_id = c.id
         WHERE c.type = 'support' AND ($1::uuid IS NULL OR c.assigned_to = $1)

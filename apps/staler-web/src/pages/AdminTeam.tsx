@@ -101,10 +101,20 @@ function Stars({ v, size = 'h-4 w-4' }: { v: number; size?: string }) {
   );
 }
 
+/** “On leave until …” for an admin's current or next leave. */
+function awayText(l: any, ar: boolean) {
+  if (!l) return null;
+  const d = (x: string) => new Intl.DateTimeFormat(ar ? 'ar-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short' }).format(new Date(String(x).slice(0, 10)));
+  const today = new Date().toISOString().slice(0, 10);
+  const now = String(l.starts_on).slice(0, 10) <= today;
+  if (l.kind === 'off') return now ? (ar ? `موقوف عن الدعم لحد ${d(l.ends_on)}` : `Off support until ${d(l.ends_on)}`) : ar ? `موقوف من ${d(l.starts_on)}` : `Off from ${d(l.starts_on)}`;
+  return now ? (ar ? `بإجازة لحد ${d(l.ends_on)}` : `On leave until ${d(l.ends_on)}`) : ar ? `إجازة من ${d(l.starts_on)} لـ ${d(l.ends_on)}` : `Leave ${d(l.starts_on)}–${d(l.ends_on)}`;
+}
+
 export function AdminTeam() {
   const { lang, err } = useI18n();
   const w = W[lang === 'ar' ? 'ar' : 'en'];
-  const [tab, setTab] = useState<'team' | 'chats'>('team');
+  const [tab, setTab] = useState<'team' | 'chats'>(() => (new URLSearchParams(window.location.search).get('tab') === 'chats' ? 'chats' : 'team'));
   const [days, setDays] = useState(90);
   const team = useData<{ admins: any[] }>(`/api/admin/team?days=${days}`, [days]);
   const [status, setStatus] = useState<string>('');
@@ -116,15 +126,28 @@ export function AdminTeam() {
   ]);
   const [view, setView] = useState<any>(null);
   const [msgs, setMsgs] = useState<any[] | null>(null);
+  const [reason, setReason] = useState('');
+  const fetchMsgs = async (id: string) => (await get<{ messages: any[] }>(`/api/messages/conversations/${id}/messages?limit=200`)).messages;
   const open = async (c: any) => {
     setView(c);
     setMsgs(null);
+    setReason('');
     try {
-      setMsgs((await get<{ messages: any[] }>(`/api/messages/conversations/${c.id}/messages?limit=100`)).messages);
+      setMsgs(await fetchMsgs(c.id));
     } catch {
       setMsgs([]);
     }
   };
+  // Live: while a chat is open, new messages from either side appear as they're written.
+  useEffect(() => {
+    if (!view?.id) return;
+    const t = setInterval(() => {
+      fetchMsgs(view.id)
+        .then((m) => setMsgs((p) => (p && p.length === m.length && p[p.length - 1]?.id === m[m.length - 1]?.id ? p : m)))
+        .catch(() => undefined);
+    }, 4000);
+    return () => clearInterval(t);
+  }, [view?.id]);
   const admins = team.data?.admins ?? [];
   const { user } = useAuth();
   const toast = useToast();
@@ -132,14 +155,16 @@ export function AdminTeam() {
   const [text, setText] = useState('');
   const endRef = useRef<HTMLLIElement>(null);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
-  }, [msgs]);
+    endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  }, [msgs?.length]);
   const hand = async (to: any) => {
     setBusy(to.id);
     try {
-      await post(`/api/messages/support/${view.id}/hand`, { to: to.id });
+      await post(`/api/messages/support/${view.id}/hand`, { to: to.id, ...(reason.trim() ? { reason: reason.trim() } : {}) });
       toast(to.id === user?.id ? w.took : w.handed.replace('{name}', to.full_name));
-      setView({ ...view, assigned_to: to.id, admin_name: to.full_name });
+      const self = String(to.id) === String(user?.id);
+      setView({ ...view, assigned_to: to.id, admin_name: to.full_name, status: 'active', handoff: self ? null : { status: 'pending', to_name: to.full_name, reason: reason.trim() || null } });
+      setReason('');
       void chats.reload();
     } catch (e) {
       toast(err(e), 'error');
@@ -220,6 +245,7 @@ export function AdminTeam() {
                         {a.full_name}
                         {a.admin_level === 'super_admin' && <Crown className="h-4 w-4 text-gold" />}
                         {best?.id === a.id && <Badge tone="good">{w.best}</Badge>}
+                        {a.leave && <Badge tone="warn">{awayText(a.leave, lang === 'ar')}</Badge>}
                       </p>
                       <p className="truncate text-xs text-muted" dir="ltr">
                         {a.email}
@@ -374,6 +400,8 @@ export function AdminTeam() {
                       </span>
                       <span className="flex flex-col items-end gap-1">
                         <Badge tone={c.status === 'closed' ? 'neutral' : c.assigned_to ? 'info' : 'warn'}>{w.st[c.status === 'closed' ? 'closed' : c.assigned_to ? 'active' : 'waiting']}</Badge>
+                        {c.handoff?.status === 'pending' && <Badge tone="warn">{lang === 'ar' ? 'انحوّلت — بستنى' : 'Handed — waiting'}</Badge>}
+                        {c.handoff?.status === 'declined' && <Badge tone="bad">{lang === 'ar' ? 'طلب تحويل' : 'Move asked'}</Badge>}
                         {c.stars ? <Stars v={c.stars} size="h-3 w-3" /> : null}
                       </span>
                     </button>
@@ -391,42 +419,54 @@ export function AdminTeam() {
             <p className="flex items-center gap-2 text-sm">
               <UserRoundCog className="h-4 w-4 text-muted" /> {w.handler}: <b>{view.admin_name ?? w.nobody}</b>
             </p>
-            {view.status === 'closed' ? (
-              <p className="text-xs text-muted">{w.closedNote}</p>
-            ) : (
-              <>
-                {!mine && (
-                  <button
-                    onClick={() => user && hand({ id: user.id, full_name: user.full_name })}
-                    disabled={!!busy}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-night px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white/15"
-                  >
-                    <Send className="h-4 w-4 flip-rtl" /> {w.takeOver}
-                  </button>
-                )}
-                {supportAdmins.some((a) => String(a.id) !== String(view.assigned_to) && String(a.id) !== String(user?.id)) && (
-                  <div>
-                    <p className="mb-1.5 text-xs text-muted">{w.handTo}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {supportAdmins
-                        .filter((a) => String(a.id) !== String(view.assigned_to) && String(a.id) !== String(user?.id))
-                        .map((a) => (
-                          <button
-                            key={a.id}
-                            onClick={() => hand(a)}
-                            disabled={!!busy}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-surface py-1 pe-3 ps-1 text-sm ring-1 ring-line transition hover:ring-ink/30 disabled:opacity-60"
-                          >
-                            <Avatar name={a.full_name} src={a.profile_image} size={24} /> {a.full_name}
-                            {busy === a.id && <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-                )}
-                {!mine && <p className="text-xs text-muted">{w.readOnly}</p>}
-              </>
+            {view.handoff && view.handoff.status !== 'replaced' && (
+              <p className={cx('rounded-xl px-3 py-2 text-xs', view.handoff.status === 'declined' ? 'bg-stitch/10 text-stitch' : view.handoff.status === 'pending' ? 'bg-gold/15 text-[rgb(120_85_10)] dark:text-gold' : 'bg-olive/10 text-olive')}>
+                {view.handoff.status === 'pending'
+                  ? (lang === 'ar' ? `بستنى ${view.handoff.to_name} يستلمها` : `Waiting for ${view.handoff.to_name} to take it`)
+                  : view.handoff.status === 'declined'
+                    ? (lang === 'ar' ? `${view.handoff.to_name} طلب تحويلها: «${view.handoff.answer ?? ''}»` : `${view.handoff.to_name} asked to move it: “${view.handoff.answer ?? ''}”`)
+                    : (lang === 'ar' ? `${view.handoff.to_name} استلمها` : `${view.handoff.to_name} took it`)}
+              </p>
             )}
+            {view.status === 'closed' && <p className="text-xs text-muted">{lang === 'ar' ? 'مسكّرة — إذا حوّلتها أو أخدتها بترجع تنفتح.' : 'Closed — handing it on or taking it opens it again.'}</p>}
+            {(!mine || view.status === 'closed') && (
+              <button
+                onClick={() => user && hand({ id: user.id, full_name: user.full_name })}
+                disabled={!!busy}
+                className="inline-flex items-center gap-1.5 rounded-full bg-night px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-60 dark:bg-white/15"
+              >
+                <Send className="h-4 w-4 flip-rtl" /> {w.takeOver}
+              </button>
+            )}
+            {supportAdmins.some((a) => String(a.id) !== String(user?.id)) && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted">{w.handTo}</p>
+                <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder={lang === 'ar' ? 'ليش؟ (بيوصله مع التحويل — اختياري)' : 'Why? (sent with it — optional)'} className="field h-10 text-sm" />
+                <div className="flex flex-wrap gap-1.5">
+                  {supportAdmins
+                    .filter((a) => String(a.id) !== String(user?.id) && (String(a.id) !== String(view.assigned_to) || view.status === 'closed' || view.handoff?.status === 'declined'))
+                    .map((a) => {
+                      const away = awayText(a.leave, lang === 'ar');
+                      return (
+                        <button
+                          key={a.id}
+                          onClick={() => hand(a)}
+                          disabled={!!busy}
+                          className={cx('inline-flex items-center gap-2 rounded-2xl bg-surface py-1.5 pe-3 ps-1.5 text-start text-sm ring-1 transition hover:ring-ink/30 disabled:opacity-60', away ? 'ring-gold/50' : 'ring-line')}
+                        >
+                          <Avatar name={a.full_name} src={a.profile_image} size={28} />
+                          <span className="min-w-0">
+                            <span className="block truncate">{a.full_name}</span>
+                            {away && <span className="block text-[11px] text-[rgb(150_105_10)] dark:text-gold">{away}</span>}
+                          </span>
+                          {busy === a.id && <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+            {!mine && <p className="text-xs text-muted">{w.readOnly}</p>}
           </div>
         )}
         {view?.stars && (

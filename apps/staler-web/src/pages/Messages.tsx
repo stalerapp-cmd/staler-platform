@@ -10,7 +10,7 @@ import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { Avatar, Button, EmptyState, PageHeader, Sheet, Skeleton, cx } from '../components/ui';
 import { useConfirm } from '../components/Confirm';
-import { SupportQueue, SupportRating, SupportTopics, topicOf } from '../components/SupportDesk';
+import { HandoffInbox, SupportQueue, SupportRating, SupportTopics, topicOf } from '../components/SupportDesk';
 import { CallRequestsSheet } from '../components/CallRequests';
 import { useAuth } from '../lib/auth';
 import { usePerm } from '../lib/perm';
@@ -503,6 +503,7 @@ export default function Messages() {
       />
       <div className="card grid overflow-hidden lg:grid-cols-[320px_1fr]">
         <aside className={cx('border-line lg:border-e', id && 'hidden lg:block')}>
+          {desk && <HandoffInbox onTaken={() => void convs.reload()} />}
           {desk && <SupportQueue open={sp.get('queue') === '1'} onClaimed={() => void convs.reload()} />}
           {!convs.data ? (
             <div className="space-y-3 p-4">

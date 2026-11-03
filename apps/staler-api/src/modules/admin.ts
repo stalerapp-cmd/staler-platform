@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { placeOf } from '../lib/geo.js';
 import { z } from 'zod';
+import { leaveJson } from './leaves.js';
 import { env } from '../config/env.js';
 import { one, pool, S, tx } from '../lib/db.js';
 import { codeHash, numericCode } from '../lib/crypto.js';
@@ -487,7 +488,7 @@ adminRouter.get(
     if (!isSuper(req)) throw forbidden('Only the super admin can see this', 'SUPER_ONLY');
     const days = Number(req.query.days);
     const r = await pool.query(
-      `SELECT u.id, u.full_name, u.email, u.profile_image, u.admin_level, u.admin_permissions, u.last_login_at, u.status,
+      `SELECT u.id, u.full_name, u.email, u.profile_image, u.admin_level, u.admin_permissions, u.last_login_at, u.status, ${leaveJson('u.id')} AS leave,
               (SELECT count(*)::int FROM ${S}.conversations c WHERE c.assigned_to = u.id AND c.claimed_at > now() - make_interval(days => $1)) AS taken,
               (SELECT count(*)::int FROM ${S}.conversations c WHERE c.assigned_to = u.id AND c.status = 'active') AS open_now,
               (SELECT count(*)::int FROM ${S}.conversations c WHERE c.assigned_to = u.id AND c.closed_at > now() - make_interval(days => $1)) AS closed,

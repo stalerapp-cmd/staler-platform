@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Hand,
+  Plane,
   Ban,
   ArrowLeftRight,
   ArrowUpRight,
@@ -332,7 +334,9 @@ const TOPICS: Topic[] = [
     steps: [
       { icon: Users, title: ['Find anyone', 'لاقي أي حدا'], body: ['Search by name or e-mail, open a person to see their wallet, movements, devices and places, change their kind of account, freeze or sign them out.', 'دوّر بالاسم أو الإيميل، افتح الشخص لتشوف محفظته وحركاته وأجهزته وأماكنه، غيّر نوع حسابه، جمّده أو طلّعه.'], to: '/app/admin/users' },
       { icon: ClipboardList, title: ['Waiting sign-ups', 'التسجيلات المعلّقة'], body: ['Sign-ups that haven’t confirmed their e-mail wait here; approve them or clear the list.', 'التسجيلات اللي لسا ما أكّدت إيميلها بتستنى هون؛ وافق عليها أو امسح القائمة.'], to: '/app/admin/pending' },
-      { icon: Trophy, title: ['Team performance (super admin)', 'أداء الفريق (للسوبر أدمن)'], body: ['Who took support requests, how fast they first answered, their customer ratings and comments, and the disputes and reports they settled. Under “All support chats” filter by admin and open any chat: read it, carry on the reply yourself, or hand it to another admin — the customer and both admins are told.', 'مين استلم طلبات دعم، أديش بسرعة رد أول مرة، تقييمات الناس وتعليقاتهم، والنزاعات والبلاغات اللي حلّها. ومن «كل محادثات الدعم» فلتر حسب الأدمن وافتح أي محادثة: اقرأها، أو كمّل الرد إنت بداله، أو حوّلها لأدمن ثاني — وبيوصل إشعار للزبون وللأدمنين.'], to: '/app/admin/team' },
+      { icon: Trophy, title: ['Team performance (super admin)', 'أداء الفريق (للسوبر أدمن)'], body: ['Who took support requests, how fast they first answered, their customer ratings and comments, and the disputes and reports they settled. Under “All support chats” filter by admin and open any chat — waiting, active or closed — and watch it live as both sides write. Carry on the reply yourself, or hand it to another admin with a reason (a closed chat opens again); they take it or ask to move it, saying why. Admins on leave show it under their name.', 'مين استلم طلبات دعم، أديش بسرعة رد أول مرة، تقييمات الناس وتعليقاتهم، والنزاعات والبلاغات اللي حلّها. ومن «كل محادثات الدعم» فلتر حسب الأدمن وافتح أي محادثة — بتستنى، شغّالة أو مسكّرة — وشوف شو بينكتب أول بأول من الطرفين. كمّل الرد إنت، أو حوّلها لأدمن ثاني مع السبب (المسكّرة بترجع تنفتح)؛ وهو بيستلمها أو بيطلب تحويلها مع تفسير. واللي بإجازة بيبين تحت اسمه.'], to: '/app/admin/team?tab=chats' },
+      { icon: Plane, title: ['Leave', 'الإجازات'], body: ['Any admin asks for leave with dates and a reason; the super admin approves or declines. The super admin can also put an admin on leave or off support for a while — they are told. While away, an admin gets no new support requests; chats can still be handed to them for when they are back.', 'أي أدمن بيطلب إجازة بتاريخ وسبب، والسوبر أدمن بيوافق أو بيرفض. والسوبر أدمن كمان بيقدر يحط أدمن بإجازة أو يوقفه عن الدعم لفترة — وبيوصله إشعار. وقت الإجازة ما بتوصله طلبات دعم جديدة، وبتقدر تحوّله محادثات ليشتغلها بعد ما يرجع.'], to: '/app/admin/leaves' },
+      { icon: Hand, title: ['Chats handed to you', 'محادثات انحوّلتلك'], body: ['In Messages, “Handed to you” lists chats the super admin gave you, with the reason. Take it, or ask to move it and say why.', 'بالرسائل، «انحوّلتلك» بتبين المحادثات اللي حوّلها إلك السوبر أدمن مع السبب. استلمها، أو اطلب تحويلها واحكي ليش.'], to: '/app/messages?queue=1' },
       { icon: Crown, title: ['Admins and permissions', 'المشرفين والصلاحيات'], body: ['Only the super admin adds admins and chooses exactly what each one can open; every admin sees only their sections.', 'بس السوبر أدمن بيضيف مشرفين وبيحدد بالزبط شو كل واحد بيقدر يفتح؛ وكل مشرف بيشوف أقسامه بس.'], to: '/app/admin/admins' },
     ],
   },
