@@ -4,6 +4,7 @@
  * TalerBank — keep both copies identical.
  */
 const AR: Record<string, string> = {
+  'Choose who should get it': 'اختار لمين بدك تبعته',
   // ---------------------------------------------------------------- general
   'Authentication required': 'لازم تسجّل دخول أول',
   'You are not allowed to do this': 'ما إلك صلاحية تعمل هالإشي',

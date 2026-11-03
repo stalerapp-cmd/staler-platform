@@ -32,6 +32,7 @@ const en = {
     signOut: 'Sign out', menu: 'Menu', details: 'Details', total: 'Total', or: 'or', from: 'From', to: 'To', note: 'Reference', revoke: 'Revoke',
   },
   nav: {
+    notify: 'Notifications & announcements',
     overview: 'Overview', transfer: 'Transfer', transactions: 'Statements', requests: 'Payment requests', scan: 'Scan to pay', wallet: 'Send to S-Taler',
     apps: 'Linked apps', settings: 'Profile & security', notifications: 'Notifications', admin: 'Administration', customers: 'Customers',
     ledger: 'All transactions', exchange: 'Exchange & reserves', audit: 'Audit log', system: 'Bank settings', more: 'More', home: 'Home', statementsTab: 'Statement',
@@ -198,6 +199,7 @@ const ar: Dict = {
     menu: 'القائمة', details: 'التفاصيل', total: 'المجموع', or: 'أو', from: 'من', to: 'إلى', note: 'المرجع', revoke: 'إلغاء الصلاحية',
   },
   nav: {
+    notify: 'الإشعارات والتعميمات',
     overview: 'نظرة عامة', transfer: 'حوالة', transactions: 'كشوف الحساب', requests: 'طلبات الدفع', scan: 'امسح وادفع', wallet: 'إرسال إلى S‑Taler',
     apps: 'التطبيقات المرتبطة', settings: 'الملف والأمان', notifications: 'الإشعارات', admin: 'الإدارة', customers: 'العملاء', ledger: 'كل الحركات',
     exchange: 'الصرّاف والاحتياطي', audit: 'سجل التدقيق', system: 'إعدادات البنك', more: 'المزيد', home: 'الرئيسية', statementsTab: 'الكشوف',

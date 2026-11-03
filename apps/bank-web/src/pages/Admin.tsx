@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Users } from 'lucide-react';
+import { Megaphone, Search, Users } from 'lucide-react';
 import { get, post, put } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
@@ -8,7 +8,6 @@ import { date, money, relative } from '../lib/format';
 import { fmtIban } from '../components/Bank';
 import { useConfirm } from '../components/Confirm';
 import { usePerm } from '../lib/perm';
-import { BroadcastCard } from './AdminPeople';
 import { AreaChart } from '../components/Chart';
 import { useToast } from '../components/Toast';
 import { Avatar, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Segmented, Select, Sheet, Skeleton, Toggle, cx } from '../components/ui';
@@ -108,9 +107,15 @@ export function AdminOverview() {
         </section>
       </div>
       {can('notify') && (
-        <div className="mt-6">
-          <BroadcastCard />
-        </div>
+        <Link to="/app/admin/notify" className="card mt-6 flex items-center gap-4 p-5 transition hover:-translate-y-0.5">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/15 text-gold">
+            <Megaphone className="h-6 w-6" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-lg">{t.nav.notify}</span>
+            <span className="block text-sm text-muted">{lang === 'ar' ? 'ابعت إشعار للكل، لنوع حسابات، أو لأشخاص بعينهم — وبالإيميل كمان.' : 'Notify everyone, certain kinds of account, or specific people — by e-mail too.'}</span>
+          </span>
+        </Link>
       )}
     </div>
   );

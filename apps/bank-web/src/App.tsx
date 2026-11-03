@@ -30,6 +30,7 @@ const AdminAdmins = lazyRetry(() => import('./pages/AdminPeople').then((m) => ({
 const AdminLedger = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminLedger })));
 const AdminExchange = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminExchange })));
 const AdminAudit = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminAudit })));
+const AdminNotify = lazyRetry(() => import('./pages/AdminNotify').then((m) => ({ default: m.AdminNotify })));
 const AdminSettings = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminSettings })));
 
 export function Splash() {
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="admin/ledger" element={admin(<AdminLedger />)} />
           <Route path="admin/exchange" element={admin(<AdminExchange />)} />
           <Route path="admin/audit" element={admin(<AdminAudit />)} />
+          <Route path="admin/notify" element={admin(<AdminNotify />)} />
           <Route path="admin/settings" element={admin(<AdminSettings />)} />
           <Route path="admin/admins" element={admin(<AdminAdmins />)} />
         </Route>

@@ -451,6 +451,24 @@ describe('marketplace', () => {
     expect(live.rows[0].n).toBe(0);
   });
 
+  it('announcements: count first, then to everyone, to kinds of account, or to chosen people', async () => {
+    const admin = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const a = await walletUser(app, 'Notice A');
+    const b = await walletUser(app, 'Notice B', 'merchant');
+    const all = await request(app).post('/api/admin/broadcast').set(auth(admin)).send({ title: 'Hello', body: 'Hi all', dryRun: true });
+    const merchants = await request(app).post('/api/admin/broadcast').set(auth(admin)).send({ title: 'Hello', body: 'Hi', audience: 'roles', roles: ['merchant'], dryRun: true });
+    expect(all.body.data.count).toBeGreaterThan(merchants.body.data.count);
+    expect((await request(app).post('/api/admin/broadcast').set(auth(admin)).send({ title: 'Hello', body: 'Hi', audience: 'people', userIds: [] })).status).toBe(400);
+    const two = await request(app).post('/api/admin/broadcast').set(auth(admin)).send({ title: 'Just you two', body: 'Hello there', audience: 'people', userIds: [a.userId, b.userId], tone: 'important' });
+    expect(two.body.data.sent).toBe(2);
+    const na = await request(app).get('/api/notifications').set(auth(a.token));
+    expect(JSON.stringify(na.body)).toContain('Just you two');
+    // not for normal accounts
+    expect((await request(app).post('/api/admin/broadcast').set(auth(a.token)).send({ title: 'x1', body: 'x1' })).status).toBe(403);
+    const hist = await request(app).get('/api/admin/broadcasts').set(auth(admin));
+    expect(hist.body.data.items[0].details.title).toBe('Just you two');
+  });
+
   it('map place search: signed-in only, sensible queries', async () => {
     const u = await walletUser(app, 'Map Searcher');
     expect((await request(app).get('/api/geo/search?q=nablus')).status).toBe(401);

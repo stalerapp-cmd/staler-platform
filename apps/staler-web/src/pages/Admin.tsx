@@ -1,10 +1,10 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { CheckCircle2, RefreshCw, Scale, Search, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { CheckCircle2, Megaphone, RefreshCw, Scale, Search, X } from 'lucide-react';
 import { del, patch, post, put } from '../lib/api';
 import { usePerm } from '../lib/perm';
 import { useConfirm } from '../components/Confirm';
-import { BroadcastCard } from './AdminPeople';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
 import { money, relative } from '../lib/format';
@@ -131,7 +131,17 @@ export function AdminOverview() {
           )}
         </section>
         )}
-        {can('notify') && <BroadcastCard />}
+        {can('notify') && (
+          <Link to="/app/admin/notify" className="group card flex items-center gap-4 p-5 transition hover:-translate-y-0.5 hover:ring-ink/20">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-stitch/10 text-stitch">
+              <Megaphone className="h-6 w-6" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-lg">{t.nav.notify}</span>
+              <span className="block text-sm text-muted">{t.people.broadcastLead}</span>
+            </span>
+          </Link>
+        )}
       </div>
     </div>
   );

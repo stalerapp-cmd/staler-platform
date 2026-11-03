@@ -156,6 +156,7 @@ const en = {
     language: 'العربية', theme: 'Theme', signOut: 'Sign out', menu: 'Menu', you: 'You', details: 'Details', total: 'Total', or: 'or',
   },
   nav: {
+    notify: 'Notifications & announcements',
     help: 'How it works', contacts: 'Contacts', disputes: 'Disputes', myStores: 'Stores & branches', pickup: 'Pickup points', ads: 'Ads', cash: 'Cash vouchers',
     home: 'Home', activity: 'Activity', scan: 'Scan', store: 'Market', more: 'More', agents: 'Cash agents', agentDesk: 'Agent desk', desk: 'Desk', send: 'Send', receive: 'Receive', bank: 'Bank',
     messages: 'Messages', settings: 'Settings', orders: 'My orders', merchant: 'My store', products: 'Products', storeOrders: 'Store orders',
@@ -507,6 +508,7 @@ const ar: Dict = {
     download: 'تنزيل', refresh: 'تحديث', language: 'English', theme: 'المظهر', signOut: 'تسجيل الخروج', menu: 'القائمة', you: 'أنت', details: 'التفاصيل', total: 'المجموع', or: 'أو',
   },
   nav: {
+    notify: 'الإشعارات والتعميمات',
     help: 'كيف بتشتغل', contacts: 'جهات الاتصال', disputes: 'النزاعات', myStores: 'المتاجر والفروع', pickup: 'نقاط الاستلام', ads: 'الإعلانات', cash: 'قسائم نقدية',
     home: 'الرئيسية', activity: 'الحركات', scan: 'مسح', store: 'السوق', more: 'المزيد', agents: 'وكلاء الصرف', agentDesk: 'مكتب الصرف', desk: 'المكتب', send: 'تحويل', receive: 'استلام', bank: 'البنك', messages: 'الرسائل',
     settings: 'الإعدادات', orders: 'طلباتي', merchant: 'متجري', products: 'المنتجات', storeOrders: 'طلبات المتجر', vouchers: 'قسائم نقدية', admin: 'الإدارة',

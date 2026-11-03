@@ -28,8 +28,7 @@ import {
   Vault,
   Wallet,
   X,
-  Crown,
-} from 'lucide-react';
+  Crown, Megaphone } from 'lucide-react';
 import { usePerm } from '../lib/perm';
 import { RoleBadge } from '../components/RoleBadge';
 import { BioOffer } from '../components/AppLock';
@@ -111,6 +110,7 @@ function useNav() {
           { to: '/app/admin/support', label: t.navg.support, icon: LifeBuoy, perm: 'support' },
           { to: '/app/admin/ledger', label: t.nav.ledger, icon: Landmark, perm: 'ledger.view' },
           { to: '/app/admin/exchange', label: t.nav.exchange, icon: Vault, perm: 'exchange.view' },
+          { to: '/app/admin/notify', label: t.nav.notify, icon: Megaphone, perm: 'notify' },
           { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
           { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
           { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },

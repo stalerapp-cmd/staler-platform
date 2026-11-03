@@ -160,6 +160,7 @@ function useNav() {
       { to: '/app/admin/disputes', label: t.nav.disputes, icon: Scale, perm: 'orders.disputes' },
       { to: '/app/admin/pending', label: t.nav.pending, icon: UserPlus, perm: 'pending.manage' },
       { to: '/app/admin/bank', label: t.nav.bankOps, icon: Landmark, perm: 'bank.ops' },
+      { to: '/app/admin/notify', label: t.nav.notify, icon: Megaphone, perm: 'notify' },
       { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
       { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
       { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },

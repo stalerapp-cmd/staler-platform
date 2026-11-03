@@ -287,25 +287,94 @@ adminRouter.post(
     const target = await one<any>(`SELECT id FROM ${S}.users WHERE id = $1`, [req.params.id]);
     if (!target) throw notFound('User not found');
     await notify(undefined, target.id, 'admin_message', req.body.title, req.body.body);
-    await audit({ userId: req.auth!.userId, action: 'admin.user_notified', entityType: 'user', entityId: target.id }, req);
+    await audit({ userId: req.auth!.userId, action: 'admin.user_notified', entityType: 'user', entityId: target.id, details: { title: req.body.title, body: req.body.body.slice(0, 300) } }, req);
     res.json({ success: true });
   }),
 );
 
 /** In-app notification to everyone (optionally one role). */
+const BROADCAST_ROLES = ['user', 'merchant', 'exchange', 'admin'] as const;
+const broadcastBody = message
+  .extend({
+    /** Who gets it: everyone, chosen kinds of account, or chosen people. */
+    audience: z.enum(['all', 'roles', 'people']).default('all'),
+    roles: z.array(z.enum(BROADCAST_ROLES)).max(BROADCAST_ROLES.length).optional(),
+    userIds: z.array(idParam).max(200).optional(),
+    /** Older clients send one role. */
+    role: z.enum(BROADCAST_ROLES).optional(),
+    tone: z.enum(['info', 'important', 'offer']).default('info'),
+    /** Also send it by e-mail (up to 300 people). */
+    email: z.boolean().default(false),
+    /** Only count who would get it. */
+    dryRun: z.boolean().default(false),
+  })
+  .strict();
+
+/**
+ * In-app announcement to everyone, to some kinds of account, or to chosen people —
+ * optionally by e-mail too. With dryRun it only says how many people it would reach.
+ */
 adminRouter.post(
   '/broadcast',
   requirePerm('notify'),
-  validate({ body: message.extend({ role: z.enum(['user', 'merchant', 'exchange', 'admin']).optional() }).strict() }),
+  validate({ body: broadcastBody }),
   ah(async (req, res) => {
+    const b = req.body as z.infer<typeof broadcastBody>;
+    const roles = b.audience === 'roles' ? (b.roles ?? []) : b.role ? [b.role] : null;
+    const people = b.audience === 'people' ? [...new Set(b.userIds ?? [])] : null;
+    if (roles && !roles.length) throw badRequest('NO_AUDIENCE', 'Choose who should get it');
+    if (people && !people.length) throw badRequest('NO_AUDIENCE', 'Choose who should get it');
+    const where = `status = 'active' AND email NOT LIKE 'deleted+%@deleted.invalid' AND ($1::text[] IS NULL OR role = ANY($1)) AND ($2::uuid[] IS NULL OR id = ANY($2))`;
+    const params = [roles, people];
+    if (b.dryRun) {
+      const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.users WHERE ${where}`, params);
+      return res.json({ success: true, data: { count: n?.n ?? 0 } });
+    }
     const r = await pool.query(
       `INSERT INTO ${S}.notifications (user_id, type, title, body, metadata)
-       SELECT id, 'admin_message', $1, $2, '{}'::jsonb FROM ${S}.users
-        WHERE status = 'active' AND email NOT LIKE 'deleted+%@deleted.invalid' AND ($3::text IS NULL OR role = $3)`,
-      [req.body.title, req.body.body, req.body.role ?? null],
+       SELECT id, 'admin_message', $3, $4, jsonb_build_object('tone', $5::text, 'from', 'admin') FROM ${S}.users WHERE ${where}
+       RETURNING user_id`,
+      [...params, b.title, b.body, b.tone],
     );
-    await audit({ userId: req.auth!.userId, action: 'admin.broadcast', details: { title: req.body.title, role: req.body.role ?? 'all', count: r.rowCount } }, req);
-    res.json({ success: true, data: { sent: r.rowCount } });
+    let emailed = 0;
+    if (b.email) {
+      const to = await pool.query(`SELECT email, language FROM ${S}.users WHERE ${where} AND email NOT LIKE '%.invalid' LIMIT 300`, params);
+      emailed = to.rowCount ?? 0;
+      // One by one in the background, so the mail server isn't flooded.
+      const list = to.rows;
+      const next = (k: number) => {
+        if (k >= list.length) return;
+        void sendMail(noticeMail(list[k].email, b.title, b.body, list[k].language === 'en' ? 'en' : 'ar'));
+        setTimeout(() => next(k + 1), 400);
+      };
+      next(0);
+    }
+    await audit(
+      {
+        userId: req.auth!.userId,
+        action: 'admin.broadcast',
+        details: { title: b.title, body: b.body.slice(0, 300), audience: b.audience, roles, people: people?.length ?? null, tone: b.tone, email: b.email, emailed, count: r.rowCount },
+      },
+      req,
+    );
+    res.json({ success: true, data: { sent: r.rowCount, emailed } });
+  }),
+);
+
+/** What was sent before: announcements and messages to one person, newest first. */
+adminRouter.get(
+  '/broadcasts',
+  requirePerm('notify'),
+  ah(async (_req, res) => {
+    const r = await pool.query(
+      `SELECT l.id, l.action, l.details, l.created_at, l.entity_id, a.full_name AS by_name, a.email AS by_email, t.full_name AS to_name
+         FROM ${S}.audit_log l
+         LEFT JOIN ${S}.users a ON a.id = l.user_id
+         LEFT JOIN ${S}.users t ON t.id::text = l.entity_id::text AND l.action = 'admin.user_notified'
+        WHERE l.action IN ('admin.broadcast', 'admin.user_notified')
+        ORDER BY l.created_at DESC LIMIT 60`,
+    );
+    res.json({ success: true, data: { items: r.rows } });
   }),
 );
 

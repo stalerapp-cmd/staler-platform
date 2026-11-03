@@ -7,8 +7,8 @@ import { relative } from '../lib/format';
 import { Badge, Button, Sheet } from './ui';
 
 const W = {
-  en: { title: 'Device details', kind: 'Device', phone: 'Phone', tablet: 'Tablet', computer: 'Computer', app: 'App', web: 'Browser', browser: 'Browser', system: 'System', via: 'Signed in through', ip: 'Network address', first: 'Signed in', last: 'Last active', until: 'Stays signed in until', current: 'This device', out: 'Sign this device out', raw: 'Technical details', on: '{b} on {o}', place: 'Approximate place', placeNote: 'Worked out from the network address, so it shows the city or the internet provider’s nearest hub — not an exact spot. A place you don’t recognise? Sign that device out and change your password.' },
-  ar: { title: 'تفاصيل الجهاز', kind: 'نوع الجهاز', phone: 'جوال', tablet: 'تابلت', computer: 'كمبيوتر', app: 'التطبيق', web: 'المتصفح', browser: 'المتصفح', system: 'النظام', via: 'دخل من', ip: 'عنوان الشبكة', first: 'دخل بتاريخ', last: 'آخر نشاط', until: 'بضل داخل لحد', current: 'هاد الجهاز', out: 'اطلع من هالجهاز', raw: 'تفاصيل تقنية', on: '{b} على {o}', place: 'المكان التقريبي', placeNote: 'محسوب من عنوان الشبكة، فهو بيبين المدينة أو أقرب مقسم لمزوّد الإنترنت — مش المكان بالضبط. إذا شفت مكان مش معروف إلك، اطلع من هالجهاز وغيّر كلمة المرور.' },
+  en: { title: 'Device details', kind: 'Device', phone: 'Phone', tablet: 'Tablet', computer: 'Computer', app: 'App', web: 'Browser', browser: 'Browser', system: 'System', via: 'Signed in through', ip: 'Network address', first: 'Signed in', last: 'Last active', until: 'Longest it can last', untilNote: 'On the web it ends sooner — after 30 minutes without use — and you sign in again.', current: 'This device', out: 'Sign this device out', raw: 'Technical details', on: '{b} on {o}', place: 'Approximate place', placeNote: 'Worked out from the network address, so it shows the city or the internet provider’s nearest hub — not an exact spot. A place you don’t recognise? Sign that device out and change your password.' },
+  ar: { title: 'تفاصيل الجهاز', kind: 'نوع الجهاز', phone: 'جوال', tablet: 'تابلت', computer: 'كمبيوتر', app: 'التطبيق', web: 'المتصفح', browser: 'المتصفح', system: 'النظام', via: 'دخل من', ip: 'عنوان الشبكة', first: 'دخل بتاريخ', last: 'آخر نشاط', until: 'أطول مدة ممكنة', untilNote: 'على الويب بتنتهي قبل هيك — بعد نص ساعة بدون استعمال — وبترجع تسجّل دخول.', current: 'هاد الجهاز', out: 'اطلع من هالجهاز', raw: 'تفاصيل تقنية', on: '{b} على {o}', place: 'المكان التقريبي', placeNote: 'محسوب من عنوان الشبكة، فهو بيبين المدينة أو أقرب مقسم لمزوّد الإنترنت — مش المكان بالضبط. إذا شفت مكان مش معروف إلك، اطلع من هالجهاز وغيّر كلمة المرور.' },
 };
 
 const Icon = ({ kind, className }: { kind: string; className?: string }) => (kind === 'phone' ? <Smartphone className={className} /> : kind === 'tablet' ? <Tablet className={className} /> : <Laptop className={className} />);
@@ -103,6 +103,7 @@ export function DeviceList({ sessions, onRevoke, thisDevice, lastUsed, revoke }:
                 </div>
               ))}
             </dl>
+            <p className="mt-2 px-1 text-xs leading-relaxed text-muted">{w.untilNote}</p>
             {open.place?.lat != null && (
               <div className="mt-4">
                 <MapView className="h-48 rounded-2xl" zoom={10} pins={[{ lat: Number(open.place.lat), lng: Number(open.place.lng), kind: 'now', label: open.place.city ?? '' }]} />
