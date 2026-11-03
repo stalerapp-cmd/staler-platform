@@ -41,6 +41,7 @@ const AR: Record<string, string> = {
   'Nobody has answered this request yet': 'لسا ما حدا رد على الطلب',
   'This request is for another team': 'هالطلب لفريق ثاني',
   'Only the super admin can see every support chat': 'بس السوبر أدمن بيشوف كل محادثات الدعم',
+  'This admin does not handle support': 'هالأدمن مش من فريق الدعم',
   'Choose who to pay': 'اختار لمين بدك تدفع',
   'How many days between payments?': 'كل كم يوم بدك الدفعة؟',
   'Choose the last date': 'اختار آخر تاريخ',

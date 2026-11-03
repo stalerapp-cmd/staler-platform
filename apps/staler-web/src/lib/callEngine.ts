@@ -22,7 +22,16 @@ export interface CallView {
   incoming: { id: string; caller_name: string; caller_image: string | null; video: boolean } | null;
 }
 
-const ICE: RTCConfiguration = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
+const STUN: RTCConfiguration = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
+/** STUN plus a TURN relay (from our API) so calls also connect on networks that block the direct path. */
+async function iceConfig(): Promise<RTCConfiguration> {
+  try {
+    const r = await get<{ iceServers: RTCIceServer[] }>('/api/calls/ice');
+    return r.iceServers?.length ? { iceServers: r.iceServers } : STUN;
+  } catch {
+    return STUN;
+  }
+}
 
 class Engine {
   v: CallView = { state: 'idle', sessionId: null, other: null, muted: false, camera: false, screen: false, remoteVideo: false, startedAt: null, reason: null, local: null, remote: null, incoming: null };
@@ -59,8 +68,8 @@ class Engine {
     return s;
   }
 
-  private build(local: MediaStream) {
-    const pc = new RTCPeerConnection(ICE);
+  private build(local: MediaStream, ice: RTCConfiguration) {
+    const pc = new RTCPeerConnection(ice);
     this.pc = pc;
     const remote = new MediaStream();
     pc.ontrack = (e) => {
@@ -90,8 +99,8 @@ class Engine {
       this.set({ sessionId: s.id });
       const info = await get<{ session: any }>(`/api/calls/sessions/${s.id}`);
       this.set({ other: info.session.other });
-      const local = await this.media(video);
-      const pc = this.build(local);
+      const [local, ice] = await Promise.all([this.media(video), iceConfig()]);
+      const pc = this.build(local, ice);
       const t = pc.addTransceiver('video', { direction: 'sendrecv' });
       this.videoSender = t.sender;
       if (this.camTrack) await t.sender.replaceTrack(this.camTrack);
@@ -112,8 +121,8 @@ class Engine {
     this.set({ state: 'connecting', incoming: null, camera: video });
     try {
       await patch(`/api/calls/sessions/${id}`, { status: 'active' });
-      const local = await this.media(video);
-      this.build(local);
+      const [local, ice] = await Promise.all([this.media(video), iceConfig()]);
+      this.build(local, ice);
       this.loop();
     } catch (e: any) {
       this.end(e?.name === 'NotAllowedError' ? 'mic' : 'failed');

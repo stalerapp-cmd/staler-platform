@@ -8,6 +8,7 @@ import { audit } from '../lib/audit.js';
 import { requireAuth } from '../middleware/auth.js';
 import { canTake, SUPPORT_TOPICS, type SupportTopic } from './messages.js';
 import { notifyBi } from './walletCore.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * Support calls.
@@ -22,6 +23,40 @@ import { notifyBi } from './walletCore.js';
  */
 export const callsRouter = Router();
 callsRouter.use(requireAuth);
+
+// --------------------------------------------------------- network routes
+/**
+ * The ICE servers a call may use. STUN finds the direct path; TURN credentials
+ * (short-lived, from the call server at ICE_URL) carry the call when a network
+ * blocks the direct path. Cached for half the credentials' life.
+ */
+const STUN_ONLY = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }], source: 'stun' };
+let iceCache: { at: number; ttl: number; body: any } | null = null;
+export async function iceServers() {
+  const url = process.env.ICE_URL;
+  if (!url) return STUN_ONLY;
+  if (iceCache && Date.now() - iceCache.at < (iceCache.ttl * 1000) / 2) return iceCache.body;
+  try {
+    const r = await fetch(url, { headers: process.env.ICE_SECRET ? { authorization: `Bearer ${process.env.ICE_SECRET}` } : {}, signal: AbortSignal.timeout(4000) });
+    if (!r.ok) throw new Error(`ice ${r.status}`);
+    const b = (await r.json()) as { iceServers: unknown[]; ttl?: number; source?: string };
+    if (!Array.isArray(b.iceServers) || !b.iceServers.length) throw new Error('ice: empty');
+    const body = { iceServers: b.iceServers, source: b.source ?? 'turn' };
+    if (!iceCache) logger.info({ source: body.source }, 'call relay ready');
+    iceCache = { at: Date.now(), ttl: Math.max(600, Number(b.ttl) || 3600), body };
+    return body;
+  } catch (e) {
+    logger.warn({ err: String(e) }, 'call relay unreachable, using STUN only');
+    return iceCache?.body ?? STUN_ONLY;
+  }
+}
+
+callsRouter.get(
+  '/ice',
+  ah(async (_req, res) => {
+    res.json({ success: true, data: await iceServers() });
+  }),
+);
 
 const idParam = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Invalid id');
 const TOPIC = z.enum(Object.keys(SUPPORT_TOPICS) as [SupportTopic, ...SupportTopic[]]);

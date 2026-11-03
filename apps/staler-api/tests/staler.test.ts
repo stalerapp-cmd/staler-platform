@@ -671,7 +671,17 @@ describe('marketplace', () => {
     expect((await request(app).get(`/api/messages/conversations/${cid}/messages`).set(auth(shopAdmin))).status).toBe(404);
     const view = await request(app).get(`/api/messages/conversations/${cid}/messages`).set(auth(sup));
     expect(view.status).toBe(200);
-    await request(app).patch(`/api/messages/conversations/${cid}/close`).set(auth(owner));
+    // the super admin hands it to another admin, then carries on the reply themselves
+    const idOf = async (tok: string) => (await request(app).get('/api/auth/me').set(auth(tok))).body.data.user.id as string;
+    const shopId = await idOf(shopAdmin);
+    expect((await request(app).post(`/api/messages/support/${cid}/hand`).set(auth(bankAdmin)).send({ to: shopId })).status).toBe(403);
+    expect((await request(app).post(`/api/messages/support/${cid}/hand`).set(auth(sup)).send({ to: shopId })).status).toBe(200);
+    expect((await request(app).post(`/api/messages/conversations/${cid}/messages`).set(auth(shopAdmin)).send({ content: 'I can take it from here' })).status).toBe(201);
+    if (owner === bankAdmin) expect((await request(app).get(`/api/messages/conversations/${cid}/messages`).set(auth(bankAdmin))).status).toBe(404);
+    expect((await request(app).post(`/api/messages/support/${cid}/hand`).set(auth(sup)).send({ to: await idOf(sup) })).status).toBe(200);
+    expect((await request(app).post(`/api/messages/conversations/${cid}/messages`).set(auth(sup)).send({ content: 'Super admin here' })).status).toBe(201);
+    expect((await request(app).post(`/api/messages/conversations/${cid}/messages`).set(auth(shopAdmin)).send({ content: 'still here?' })).status).toBe(404);
+    await request(app).patch(`/api/messages/conversations/${cid}/close`).set(auth(sup));
     expect((await request(app).post(`/api/messages/conversations/${cid}/rate`).set(auth(cust.token)).send({ stars: 4, comment: 'Quick and kind' })).status).toBe(200);
     const all = await request(app).get('/api/messages/support/all').set(auth(sup));
     expect(all.body.data.items.find((x: any) => x.id === cid).stars).toBe(4);
@@ -746,6 +756,14 @@ describe('marketplace', () => {
     expect(new Date(r2.next_run_at).getTime()).toBeGreaterThan(Date.now() + 2 * 86400000);
     expect((await request(app).put(`/api/people/schedules/${s2.body.data.id}`).set(auth(owner.token)).send({ active: false })).status).toBe(200);
     expect((await request(app).put(`/api/people/schedules/${s2.body.data.id}`).set(auth(lender.token)).send({ active: false })).status).toBe(404);
+  });
+
+  it('calls: network routes fall back to STUN when no relay is set', async () => {
+    const u = await walletUser(app, 'Caller');
+    const r = await request(app).get('/api/calls/ice').set(auth(u.token));
+    expect(r.status).toBe(200);
+    expect(r.body.data.iceServers[0].urls[0]).toMatch(/^stun:/);
+    expect((await request(app).get('/api/calls/ice')).status).toBe(401);
   });
 
   it('support calls: request, accept, book a time, ring, answer, relay the handshake', async () => {

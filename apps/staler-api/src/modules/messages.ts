@@ -470,6 +470,46 @@ messagesRouter.post(
   }),
 );
 
+/**
+ * Super admin: move a chat to another admin, or to themselves to carry on the reply.
+ * The previous admin leaves the chat; the customer and the new admin are told.
+ */
+messagesRouter.post(
+  '/support/:id/hand',
+  validate({ params: z.object({ id: idParam }).strict(), body: z.object({ to: idParam }).strict() }),
+  ah(async (req, res) => {
+    const me = String(req.auth!.userId);
+    const a = await adminRow(me);
+    if (a?.admin_level !== 'super_admin') throw forbidden('Only the super admin can see every support chat', 'SUPER_ONLY');
+    const to = await adminRow(req.body.to);
+    if (!to || to.role !== 'admin' || (to.admin_level !== 'super_admin' && !(to.admin_permissions ?? []).includes('support')))
+      throw badRequest('NOT_SUPPORT_ADMIN', 'This admin does not handle support');
+    const c = await one<any>(`SELECT created_by, assigned_to, status FROM ${S}.conversations WHERE id = $1 AND type = 'support'`, [req.params.id]);
+    if (!c) throw notFound('Conversation not found');
+    if (c.status === 'closed') throw forbidden('This conversation is closed', 'CONVERSATION_CLOSED');
+    const from = c.assigned_to ? String(c.assigned_to) : null;
+    await pool.query(`UPDATE ${S}.conversations SET assigned_to = $2, claimed_at = COALESCE(claimed_at, now()), updated_at = now() WHERE id = $1`, [req.params.id, to.id]);
+    if (from && from !== String(to.id)) await pool.query(`DELETE FROM ${S}.conversation_participants WHERE conversation_id = $1 AND user_id = $2`, [req.params.id, from]);
+    await pool.query(
+      `INSERT INTO ${S}.conversation_participants (conversation_id, user_id) SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM ${S}.conversation_participants WHERE conversation_id = $1 AND user_id = $2)`,
+      [req.params.id, to.id],
+    );
+    if (String(to.id) !== me)
+      await notifyBi(undefined, to.id, 'support_new', ['A support chat was handed to you', `${a.full_name} gave you a support chat to carry on.`], ['انحوّلتلك محادثة دعم', `${a.full_name} حوّللك محادثة دعم لتكمّلها.`], {
+        conversationId: req.params.id,
+      });
+    if (from && from !== String(to.id) && from !== me)
+      await notifyBi(undefined, from, 'support_moved', ['A support chat moved', `${a.full_name} moved one of your support chats to ${to.full_name}.`], ['محادثة دعم انتقلت', `${a.full_name} نقل محادثة دعم من عندك لـ ${to.full_name}.`], {
+        conversationId: req.params.id,
+      });
+    if (from !== String(to.id))
+      await notifyBi(undefined, c.created_by, 'support_claimed', ['Someone is helping you', `${to.full_name} is carrying on with your request.`], ['في حدا عم يساعدك', `${to.full_name} رح يكمّل معك طلبك.`], {
+        conversationId: req.params.id,
+      });
+    res.json({ success: true, data: { assignedTo: to.id, name: to.full_name } });
+  }),
+);
+
 /** The customer rates the help they got (or says they'd rather not). One rating per chat; it can be changed. */
 messagesRouter.post(
   '/conversations/:id/rate',
