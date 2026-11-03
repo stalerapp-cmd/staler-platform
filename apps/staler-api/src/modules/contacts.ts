@@ -6,6 +6,7 @@ import { ah } from '../lib/http.js';
 import { validate } from '../lib/validate.js';
 import { requireAuth } from '../middleware/auth.js';
 import { idParam } from './commerce.js';
+import { workplacesOf } from './people.js';
 
 /** Saved people: name them your way, find them fast, pay or message in one tap. */
 export const contactsRouter = Router();
@@ -107,6 +108,6 @@ contactsRouter.get(
       [req.params.id, req.auth!.userId],
     );
     if (!u) throw notFound('User not found');
-    res.json({ success: true, data: { person: { ...u, me: String(u.id) === String(req.auth!.userId) } } });
+    res.json({ success: true, data: { person: { ...u, me: String(u.id) === String(req.auth!.userId), workplaces: await workplacesOf(String(u.id)) } } });
   }),
 );

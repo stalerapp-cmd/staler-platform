@@ -160,6 +160,25 @@ export function PersonSheet({ id, onClose, onNavigate }: { id: string | null; on
               </p>
             )}
           </div>
+          {p.workplaces?.length > 0 && (
+            <ul className="space-y-1.5">
+              {p.workplaces.map((x: any, i: number) => {
+                const m = x.since ? Math.floor((Date.now() - new Date(x.since).getTime()) / (30.44 * 86400000)) : null;
+                const y = m != null ? Math.floor(m / 12) : null;
+                return (
+                  <li key={i} className="flex items-center gap-2.5 rounded-2xl bg-sunk/70 px-3.5 py-2.5 text-sm">
+                    <BadgeCheck className="h-4 w-4 text-olive" />
+                    <span>
+                      {lang === 'ar' ? 'بيشتغل عند ' : 'Works at '}
+                      <b>{x.place}</b>
+                      {x.role_title ? ` · ${x.role_title}` : ''}
+                      {m != null && <span className="text-muted"> · {lang === 'ar' ? (y ? `من ${y} ${y === 1 ? 'سنة' : y === 2 ? 'سنتين' : 'سنين'}` : `من ${m} شهر`) : y ? `${y}y` : `${m}m`}</span>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           {p.store && (
             <button type="button" onClick={() => go(`/s/${p.store.slug}`)} className="flex w-full items-center gap-3 rounded-2xl bg-olive/[0.07] p-3.5 text-start ring-1 ring-olive/20 transition hover:bg-olive/[0.12]">
               <Avatar name={p.store.name} src={p.store.logo} size={42} />

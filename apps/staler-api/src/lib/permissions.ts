@@ -19,6 +19,7 @@ export const PERMISSIONS = [
   'agents.manage',
   'orders.disputes',
   'reports.manage',
+  'people.oversee',
   'pending.manage',
   'notify',
   'support',

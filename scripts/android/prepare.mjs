@@ -44,6 +44,13 @@ if (!m.includes('android.permission.CAMERA')) {
     `$1\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />`,
   );
 }
+// Support calls (voice, optional video) from the wallet app.
+if (scheme === 'taler' && !m.includes('android.permission.RECORD_AUDIO')) {
+  m = m.replace(
+    /(<uses-permission android:name="android.permission.INTERNET"\s*\/>)/,
+    `$1\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-feature android:name="android.hardware.microphone" android:required="false" />`,
+  );
+}
 // The wallet's map can centre on the person ("near me"). Only asked for when they tap that button.
 if (scheme === 'taler' && !m.includes('android.permission.ACCESS_FINE_LOCATION')) {
   m = m.replace(

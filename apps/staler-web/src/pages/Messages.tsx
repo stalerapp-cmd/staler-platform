@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Copy, CornerUpLeft, ExternalLink, LifeBuoy, MessageCirclePlus, MessagesSquare, Pencil, SendHorizontal, Smile, Trash2, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, PhoneCall, Copy, CornerUpLeft, ExternalLink, LifeBuoy, MessageCirclePlus, MessagesSquare, Pencil, SendHorizontal, Smile, Trash2, UserPlus, X } from 'lucide-react';
 import { del, get, patch, post, PUBLIC_ORIGIN } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useData, usePolling } from '../lib/hooks';
@@ -11,6 +11,7 @@ import { useToast } from '../components/Toast';
 import { Avatar, Button, EmptyState, PageHeader, Sheet, Skeleton, cx } from '../components/ui';
 import { useConfirm } from '../components/Confirm';
 import { SupportQueue, SupportRating, SupportTopics, topicOf } from '../components/SupportDesk';
+import { CallRequestsSheet } from '../components/CallRequests';
 import { useAuth } from '../lib/auth';
 import { usePerm } from '../lib/perm';
 
@@ -459,6 +460,7 @@ export default function Messages() {
   const convs = useData<{ conversations: any[] }>('/api/messages/conversations');
   usePolling(() => convs.reload(), 10_000);
   const [newOpen, setNewOpen] = useState(false);
+  const [callsOpen, setCallsOpen] = useState(() => new URLSearchParams(window.location.search).get('calls') === '1');
   const confirm = useConfirm();
   const current = convs.data?.conversations.find((c) => String(c.id) === id);
   const nav = useNavigate();
@@ -487,9 +489,16 @@ export default function Messages() {
       <PageHeader
         title={t.messages.title}
         actions={
-          <Button icon={<MessageCirclePlus className="h-4 w-4" />} onClick={() => setNewOpen(true)}>
-            {t.messages.newChat}
-          </Button>
+          <div className="flex gap-2">
+            {!staff && (
+              <Button variant="secondary" icon={<PhoneCall className="h-4 w-4" />} onClick={() => setCallsOpen(true)}>
+                <span className="hidden sm:inline">{lang === 'ar' ? 'مكالمة مع الدعم' : 'Call support'}</span>
+              </Button>
+            )}
+            <Button icon={<MessageCirclePlus className="h-4 w-4" />} onClick={() => setNewOpen(true)}>
+              {t.messages.newChat}
+            </Button>
+          </div>
         }
       />
       <div className="card grid overflow-hidden lg:grid-cols-[320px_1fr]">
@@ -627,6 +636,7 @@ export default function Messages() {
         </PhoneLayer>
       </div>
       <NewChat open={newOpen} onClose={() => setNewOpen(false)} />
+      <CallRequestsSheet open={callsOpen} onClose={() => setCallsOpen(false)} />
     </div>
   );
 }

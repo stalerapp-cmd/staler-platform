@@ -31,6 +31,8 @@ import {
   Scale,
   Flag,
   Trophy,
+  UsersRound,
+  PhoneCall,
   ScanLine,
   Send,
   ShieldCheck,
@@ -52,6 +54,7 @@ import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { localize, targetOf, type Notice } from '../lib/notifications';
 import { RichText, plainText } from '../components/Mentions';
+import { CallOverlay } from '../components/CallOverlay';
 import { useToast } from '../components/Toast';
 import { Logo, StitchBand } from '../components/Tatreez';
 import { StitchCorner } from '../components/HeaderStitch';
@@ -108,6 +111,7 @@ function useNav() {
         { to: '/app', label: t.nav.home, icon: Home, end: true },
         { to: '/app/activity', label: t.nav.activity, icon: Activity },
         { to: '/app/bank', label: t.nav.bank, icon: Landmark },
+        ...(role !== 'admin' ? [{ to: '/app/people', label: t.nav.peopleGroups, icon: UsersRound }] : []),
         ...(role === 'user' || role === 'merchant' ? [{ to: '/app/agents', label: t.nav.agents, icon: MapPin }] : []),
       ],
     },
@@ -164,6 +168,8 @@ function useNav() {
       { to: '/app/admin/agents', label: t.ctl.agents, icon: HandCoins, perm: 'agents.manage' },
       { to: '/app/admin/disputes', label: t.nav.disputes, icon: Scale, perm: 'orders.disputes' },
       { to: '/app/admin/reports', label: t.nav.reports, icon: Flag, perm: 'reports.manage' },
+      { to: '/app/admin/groups', label: t.nav.peopleGroups, icon: UsersRound, perm: 'people.oversee' },
+      { to: '/app/admin/calls', label: t.nav.calls, icon: PhoneCall, perm: 'support' },
       { to: '/app/admin/pending', label: t.nav.pending, icon: UserPlus, perm: 'pending.manage' },
       { to: '/app/admin/bank', label: t.nav.bankOps, icon: Landmark, perm: 'bank.ops' },
       { to: '/app/admin/notify', label: t.nav.notify, icon: Megaphone, perm: 'notify' },
@@ -623,6 +629,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
               </button>
               <MessagesButton />
               <Notifications />
+              <CallOverlay />
               <button onClick={signOut} className="hbtn hidden text-muted hover:bg-stitch/10 hover:text-stitch sm:grid" aria-label={t.common.signOut} title={t.common.signOut}>
                 <LogOut className="h-[19px] w-[19px] flip-rtl" />
               </button>

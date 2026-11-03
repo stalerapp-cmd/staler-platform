@@ -681,6 +681,79 @@ describe('marketplace', () => {
     expect((await request(app).get('/api/admin/team').set(auth(bankAdmin))).status).toBe(403);
   });
 
+  it('people groups: recurring transfers, a bonus, profile workplace on accept, admin pause', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const boss = await walletUser(app, 'Shop Boss', 'merchant');
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: boss.walletId, amount: '40' });
+    const worker = await walletUser(app, 'Shop Worker');
+    const g = await request(app).post('/api/people/groups').set(auth(boss.token)).send({ name: 'Team', kind: 'staff', workplace: 'Boss Bakery', seniorAfterMonths: 24 });
+    expect(g.status).toBe(201);
+    const add = await request(app).post(`/api/people/groups/${g.body.data.group.id}/members`).set(auth(boss.token)).send({ who: worker.walletId, roleTitle: 'Baker', since: '2020-05-01', invite: true });
+    expect(add.status).toBe(201);
+    const mid = add.body.data.id;
+    // a weekly transfer starting now runs straight away
+    const p = await request(app).post(`/api/people/members/${mid}/payouts`).set(auth(boss.token)).send({ amount: '10', every: 'week' });
+    expect(p.status).toBe(201);
+    expect(await walletBalance(app, worker)).toBe('10.00');
+    const list = await request(app).get('/api/people/groups').set(auth(boss.token));
+    const mem = list.body.data.groups[0].members[0];
+    expect(mem.payouts[0].runs).toBe(1);
+    expect(new Date(mem.payouts[0].next_run_at).getTime()).toBeGreaterThan(Date.now() + 6 * 86400000);
+    // a bonus now
+    expect((await request(app).post(`/api/people/members/${mid}/bonus`).set(auth(boss.token)).send({ amount: '5', note: 'Eid' })).status).toBe(200);
+    expect(await walletBalance(app, worker)).toBe('15.00');
+    // too much fails cleanly
+    expect((await request(app).post(`/api/people/members/${mid}/bonus`).set(auth(boss.token)).send({ amount: '500' })).status).toBe(400);
+    // the worker sees the invitation; the workplace shows on their card only after accepting
+    const wp = await request(app).get('/api/people/workplaces').set(auth(worker.token));
+    expect(wp.body.data.workplaces[0].link_status).toBe('invited');
+    const before = await request(app).get(`/api/contacts/people/${worker.userId}`).set(auth(funder.token));
+    expect(before.body.data.person.workplaces).toHaveLength(0);
+    await request(app).post(`/api/people/workplaces/${wp.body.data.workplaces[0].id}`).set(auth(worker.token)).send({ accept: true });
+    const after = await request(app).get(`/api/contacts/people/${worker.userId}`).set(auth(funder.token));
+    expect(after.body.data.person.workplaces[0].place).toBe('Boss Bakery');
+    // strangers can't touch it; an admin can see and pause it
+    expect((await request(app).delete(`/api/people/members/${mid}`).set(auth(worker.token))).status).toBe(404);
+    const owners = await request(app).get('/api/admin/people/owners').set(auth(sup));
+    expect(owners.body.data.owners.some((o: any) => o.id === boss.userId)).toBe(true);
+    expect((await request(app).post(`/api/admin/people/payouts/${mem.payouts[0].id}/pause`).set(auth(sup)).send({ paused: true, note: 'Checking' })).status).toBe(200);
+    expect((await request(app).get('/api/admin/people/owners').set(auth(worker.token))).status).toBe(403);
+  });
+
+  it('support calls: request, accept, book a time, ring, answer, relay the handshake', async () => {
+    const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
+    const supMe = await request(app).get('/api/auth/me').set(auth(sup));
+    const cust = await walletUser(app, 'Wants A Call');
+    expect((await request(app).post('/api/calls/requests').set(auth(cust.token)).send({ description: 'short' })).status).toBe(400);
+    const r = await request(app).post('/api/calls/requests').set(auth(cust.token)).send({ description: 'My bank top-up did not arrive', topic: 'bank' });
+    expect(r.status).toBe(201);
+    const q = await request(app).get('/api/calls/requests?scope=queue').set(auth(sup));
+    expect(q.body.data.requests.some((x: any) => x.id === r.body.data.id)).toBe(true);
+    expect((await request(app).get('/api/calls/requests?scope=queue').set(auth(cust.token))).status).toBe(403);
+    await request(app).post(`/api/calls/requests/${r.body.data.id}/answer`).set(auth(sup)).send({ accept: true });
+    const h = await request(app).get('/api/calls/hours').set(auth(cust.token));
+    expect(h.body.data.slots.length).toBeGreaterThan(0);
+    expect((await request(app).post(`/api/calls/requests/${r.body.data.id}/slot`).set(auth(cust.token)).send({ at: '2001-01-01T10:00:00.000Z' })).status).toBe(400);
+    expect((await request(app).post(`/api/calls/requests/${r.body.data.id}/slot`).set(auth(cust.token)).send({ at: h.body.data.slots[0] })).status).toBe(200);
+    // the customer can't ring until the team shows the button
+    expect((await request(app).post('/api/calls/sessions').set(auth(cust.token)).send({ requestId: r.body.data.id })).status).toBe(403);
+    const s = await request(app).post('/api/calls/sessions').set(auth(sup)).send({ requestId: r.body.data.id, video: false });
+    expect(s.status).toBe(201);
+    const inc = await request(app).get('/api/calls/incoming').set(auth(cust.token));
+    expect(inc.body.data.call.id).toBe(s.body.data.id);
+    await request(app).post(`/api/calls/sessions/${s.body.data.id}/signal`).set(auth(sup)).send({ kind: 'offer', payload: { sdp: 'v=0' } });
+    expect((await request(app).patch(`/api/calls/sessions/${s.body.data.id}`).set(auth(cust.token)).send({ status: 'active' })).status).toBe(200);
+    const sig = await request(app).get(`/api/calls/sessions/${s.body.data.id}/signals?after=0`).set(auth(cust.token));
+    expect(sig.body.data.signals[0].kind).toBe('offer');
+    expect(sig.body.data.status).toBe('active');
+    // a third person sees nothing
+    const other = await walletUser(app, 'Nosy');
+    expect((await request(app).get(`/api/calls/sessions/${s.body.data.id}/signals`).set(auth(other.token))).status).toBe(404);
+    await request(app).patch(`/api/calls/sessions/${s.body.data.id}`).set(auth(sup)).send({ status: 'ended' });
+    expect((await request(app).patch(`/api/calls/requests/${r.body.data.id}`).set(auth(cust.token)).send({ status: 'cancelled' })).status).toBe(200);
+    expect(supMe.status).toBe(200);
+  });
+
   it('cash agents: several places with days, and insights', async () => {
     const sup = await login(app, 'super@staler.test', 'Sup3r!Admin#Pass');
     const email = `${uniq('pl')}@x.com`;

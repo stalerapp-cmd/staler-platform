@@ -290,6 +290,83 @@ async function refundDeposit(opId: string, reason: string) {
   });
 }
 
+/**
+ * Bank → wallet for a linked account (used by the "top up" button and by scheduled transfers).
+ * "processing" means the bank didn't answer in time; the money lands when it does.
+ */
+export async function pullFromBank(userId: string, amount: string): Promise<{ status: 'completed' | 'processing'; operationId: string }> {
+  assertMaxTransfer(amount);
+  const l = await requireLink(userId);
+  const w = await walletOfUser(userId);
+  const { reservePub, reservePriv } = newReserveKeypair();
+  const requestUid = `stw_${randomToken(18)}`;
+  const op = await one<any>(
+    `INSERT INTO ${S}.bank_operations (user_id, wallet_ref, kind, status, amount, request_uid, reserve_pub, reserve_priv_enc, bank_iban)
+     VALUES ($1, $2, 'link_withdraw', 'pending', $3, $4, $5, $6, $7) RETURNING id`,
+    [userId, w.id, amount, requestUid, reservePub, encrypt(reservePriv, 'reserve'), l.bank_iban],
+  );
+  try {
+    await bank.linkWithdraw(linkToken(l), amount, reservePub, requestUid);
+  } catch (e) {
+    if (e instanceof BankRejected) {
+      await pool.query(`UPDATE ${S}.bank_operations SET status = 'failed', error = $2 WHERE id = $1`, [op.id, e.code]);
+      await onLinkError(userId, e);
+      throw e;
+    }
+    if (e instanceof BankUnreachable) return { status: 'processing', operationId: op.id };
+    throw e;
+  }
+  await finalizeIncoming(op.id);
+  return { status: 'completed', operationId: op.id };
+}
+
+/** Wallet → the person's linked bank account. */
+export async function pushToBank(userId: string, amount: string): Promise<{ status: 'completed' | 'processing'; operationId: string; balance: string }> {
+  assertMaxTransfer(amount);
+  const l = await requireLink(userId);
+  const requestUid = `std_${randomToken(18)}`;
+  const op = await tx(async (c) => {
+    const w = await walletOfUser(userId, c, true);
+    await assertDailyLimit(c, w.wallet_id, amount);
+    const balance = await debit(c, w.id, amount);
+    const o = await one<any>(
+      `INSERT INTO ${S}.bank_operations (user_id, wallet_ref, kind, status, amount, request_uid, bank_iban)
+       VALUES ($1, $2, 'deposit', 'pending', $3, $4, $5) RETURNING id`,
+      [userId, w.id, amount, requestUid, l.bank_iban],
+      c,
+    );
+    await writeLine(c, {
+      userId,
+      walletId: w.wallet_id,
+      type: 'deposit',
+      amount: `-${amount}`,
+      description: 'Sent to TalerBank',
+      from: w.wallet_id,
+      to: l.bank_iban,
+      counterparty: l.bank_holder,
+      status: 'pending',
+      reference: o.id,
+      balanceAfter: balance,
+    });
+    return { id: o.id as string, walletId: w.wallet_id, balance };
+  });
+  try {
+    await bank.wireTransfer(requestUid, amount, l.bank_payto, `S-Taler ${op.walletId}`);
+  } catch (e) {
+    if (e instanceof BankRejected) {
+      await refundDeposit(op.id, e.code);
+      throw e;
+    }
+    if (e instanceof BankUnreachable) return { status: 'processing', operationId: op.id, balance: op.balance };
+    throw e;
+  }
+  await finalizeDeposit(op.id);
+  return { status: 'completed', operationId: op.id, balance: op.balance };
+}
+
+/** Whether this person has a linked bank account. */
+export const hasBankLink = async (userId: string) => !!(await activeLink(userId));
+
 // ========================================================= bank -> wallet
 bankRouter.post(
   '/withdraw',
@@ -301,30 +378,9 @@ bankRouter.post(
     const key = req.headers['idempotency-key'] ? idempotencyKey.parse(req.headers['idempotency-key']) : undefined;
     const out = await idempotent(`bank-withdraw:${userId}`, key, req.body, async () => {
       const { amount } = req.body;
-      assertMaxTransfer(amount);
-      const l = await requireLink(userId);
-      const w = await walletOfUser(userId);
-      const { reservePub, reservePriv } = newReserveKeypair();
-      const requestUid = `stw_${randomToken(18)}`;
-      const op = await one<any>(
-        `INSERT INTO ${S}.bank_operations (user_id, wallet_ref, kind, status, amount, request_uid, reserve_pub, reserve_priv_enc, bank_iban)
-         VALUES ($1, $2, 'link_withdraw', 'pending', $3, $4, $5, $6, $7) RETURNING id`,
-        [userId, w.id, amount, requestUid, reservePub, encrypt(reservePriv, 'reserve'), l.bank_iban],
-      );
-      try {
-        await bank.linkWithdraw(linkToken(l), amount, reservePub, requestUid);
-      } catch (e) {
-        if (e instanceof BankRejected) {
-          await pool.query(`UPDATE ${S}.bank_operations SET status = 'failed', error = $2 WHERE id = $1`, [op.id, e.code]);
-          await onLinkError(userId, e);
-          throw e;
-        }
-        if (e instanceof BankUnreachable) {
-          return { status: 202, body: { success: true, data: { status: 'processing', operationId: op.id } } };
-        }
-        throw e;
-      }
-      await finalizeIncoming(op.id);
+      const r = await pullFromBank(userId, amount);
+      if (r.status === 'processing') return { status: 202, body: { success: true, data: { status: 'processing', operationId: r.operationId } } };
+      const op = { id: r.operationId };
       await audit({ userId, action: 'bank.withdraw', entityType: 'bank_operation', entityId: op.id, details: { amount } }, req);
       const balance = (await walletOfUser(userId)).balance;
       return { status: 201, body: { success: true, data: { status: 'completed', operationId: op.id, amount, balance } } };
@@ -344,48 +400,10 @@ bankRouter.post(
     const key = req.headers['idempotency-key'] ? idempotencyKey.parse(req.headers['idempotency-key']) : undefined;
     const out = await idempotent(`bank-deposit:${userId}`, key, req.body, async () => {
       const { amount, totp } = req.body;
-      assertMaxTransfer(amount);
       await requireSecondFactor(userId, totp);
-      const l = await requireLink(userId);
-      const requestUid = `std_${randomToken(18)}`;
-      const op = await tx(async (c) => {
-        const w = await walletOfUser(userId, c, true);
-        await assertDailyLimit(c, w.wallet_id, amount);
-        const balance = await debit(c, w.id, amount);
-        const o = await one<any>(
-          `INSERT INTO ${S}.bank_operations (user_id, wallet_ref, kind, status, amount, request_uid, bank_iban)
-           VALUES ($1, $2, 'deposit', 'pending', $3, $4, $5) RETURNING id`,
-          [userId, w.id, amount, requestUid, l.bank_iban],
-          c,
-        );
-        await writeLine(c, {
-          userId,
-          walletId: w.wallet_id,
-          type: 'deposit',
-          amount: `-${amount}`,
-          description: 'Sent to TalerBank',
-          from: w.wallet_id,
-          to: l.bank_iban,
-          counterparty: l.bank_holder,
-          status: 'pending',
-          reference: o.id,
-          balanceAfter: balance,
-        });
-        return { id: o.id as string, walletId: w.wallet_id, balance };
-      });
-      try {
-        await bank.wireTransfer(requestUid, amount, l.bank_payto, `S-Taler ${op.walletId}`);
-      } catch (e) {
-        if (e instanceof BankRejected) {
-          await refundDeposit(op.id, e.code);
-          throw e;
-        }
-        if (e instanceof BankUnreachable) {
-          return { status: 202, body: { success: true, data: { status: 'processing', operationId: op.id, balance: op.balance } } };
-        }
-        throw e;
-      }
-      await finalizeDeposit(op.id);
+      const r = await pushToBank(userId, amount);
+      if (r.status === 'processing') return { status: 202, body: { success: true, data: { status: 'processing', operationId: r.operationId, balance: r.balance } } };
+      const op = { id: r.operationId, balance: r.balance };
       await audit({ userId, action: 'bank.deposit', entityType: 'bank_operation', entityId: op.id, details: { amount } }, req);
       return { status: 201, body: { success: true, data: { status: 'completed', operationId: op.id, amount, balance: op.balance } } };
     });

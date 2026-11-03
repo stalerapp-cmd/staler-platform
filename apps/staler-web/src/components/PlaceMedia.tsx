@@ -85,7 +85,7 @@ export function MediaViewer({ media, index, title, onClose }: { media: PlaceShot
   return createPortal(
     <AnimatePresence>
       {index != null && m && (
-        <motion.div className="fixed inset-0 z-[3000] flex flex-col bg-black/92 text-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+        <motion.div className="fixed inset-0 z-[3000] flex flex-col bg-[rgb(8_10_24/0.94)] text-white backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
           <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))]">
             <div className="min-w-0">
               {title && <p className="truncate font-semibold">{title}</p>}
@@ -93,7 +93,7 @@ export function MediaViewer({ media, index, title, onClose }: { media: PlaceShot
                 {i + 1} / {media.length}
               </p>
             </div>
-            <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full bg-white/10 hover:bg-white/20" aria-label="✕">
+            <button type="button" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-full bg-white text-night shadow-lg ring-4 ring-white/20 transition hover:scale-105" aria-label="✕">
               <X className="h-5 w-5" />
             </button>
           </div>

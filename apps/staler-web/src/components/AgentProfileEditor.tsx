@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowDownToLine, ArrowUpFromLine, Camera, CircleCheck, Clock, Hourglass, ImagePlus, LocateFixed, MapPin, PauseCircle, Phone, Signpost, Store, Trash2, type LucideIcon } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Camera, CircleCheck, Clock, Hourglass, ImagePlus, LocateFixed, MapPin, PauseCircle, Phone, Signpost, SlidersHorizontal, Store, Trash2, Replace, type LucideIcon } from 'lucide-react';
 import { get, put, upload } from '../lib/api';
 import { MediaViewer, PlaceStrip, ShotThumb, type PlaceShot } from './PlaceMedia';
+import { ImageCropper } from './ImageCropper';
+import { assetUrl } from '../lib/api';
 import { AgentPlacesEditor, type AgentPlace } from './AgentPlaces';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -165,14 +167,28 @@ export function AgentProfileEditor() {
     );
   };
 
-  const addShot = async (file: File) => {
+  // Photos go through the cropper first (turn, mirror, zoom, frame); videos upload as they are.
+  const [crop, setCrop] = useState<{ index: number | null; file: File } | null>(null);
+  const pickShot = (file: File, index: number | null) => (file.type.startsWith('image/') ? setCrop({ index, file }) : void addShot(file, index));
+  const editShot = async (i: number) => {
+    try {
+      const b = await (await fetch(assetUrl(f.media[i].url)!)).blob();
+      setCrop({ index: i, file: new File([b], 'photo', { type: b.type || 'image/jpeg' }) });
+    } catch {
+      toast(lang === 'ar' ? 'ما قدرنا نفتح الصورة' : 'Couldn’t open the photo', 'error');
+    }
+  };
+  const addShot = async (file: File | Blob, index: number | null = null) => {
     setUploading(true);
     setError(null);
     try {
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', file, file instanceof File ? file.name : 'photo.jpg');
       const r = await upload<{ url: string; kind: 'image' | 'video' }>('/api/exchange/uploads/media', fd);
-      setF((x: any) => ({ ...x, media: [...x.media, { url: r.url, kind: r.kind, caption: '' }] }));
+      setF((x: any) => ({
+        ...x,
+        media: index == null ? [...x.media, { url: r.url, kind: r.kind, caption: '' }] : x.media.map((m: PlaceShot, k: number) => (k === index ? { ...m, url: r.url, kind: r.kind } : m)),
+      }));
     } catch (e2) {
       setError(err(e2));
     } finally {
@@ -312,6 +328,24 @@ export function AgentProfileEditor() {
                   placeholder={w.caption}
                   className="min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1.5 text-xs outline-none placeholder:text-muted/70 focus:bg-sunk"
                 />
+                {m.kind === 'image' && (
+                  <button type="button" onClick={() => editShot(i)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-sky/10 hover:text-sky" aria-label={lang === 'ar' ? 'عدّل' : 'Adjust'} title={lang === 'ar' ? 'قص، لف، اقلب، كبّر' : 'Crop, turn, mirror, zoom'}>
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </button>
+                )}
+                <label className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg text-muted transition hover:bg-gold/15 hover:text-ink" title={lang === 'ar' ? 'بدّلها' : 'Replace'}>
+                  <Replace className="h-4 w-4" />
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) pickShot(file, i);
+                    }}
+                  />
+                </label>
                 <button type="button" onClick={() => setShot(i, null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-stitch/10 hover:text-stitch" aria-label={w.remove} title={w.remove}>
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -335,7 +369,7 @@ export function AgentProfileEditor() {
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   e.target.value = '';
-                  if (file) void addShot(file);
+                  if (file) pickShot(file, null);
                 }}
               />
             </label>
@@ -384,6 +418,16 @@ export function AgentProfileEditor() {
       </Block>
 
       <MediaViewer media={f.media} index={view} title={f.displayName} onClose={() => setView(null)} />
+      <ImageCropper
+        file={crop?.file ?? null}
+        shape="wide"
+        onCancel={() => setCrop(null)}
+        onConfirm={async (blob) => {
+          const at = crop?.index ?? null;
+          setCrop(null);
+          await addShot(blob, at);
+        }}
+      />
       <ErrorNote>{error}</ErrorNote>
       <div>
         <Button size="lg" block loading={busy}>

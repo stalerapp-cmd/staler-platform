@@ -334,6 +334,7 @@ export default function Settings() {
 
       {tab === 'account' && (
         <>
+      <Workplaces />
       <Section title={t.settings.email} icon={AtSign} tone="bg-olive text-white" aside={emailStep === 'idle' && <Button size="sm" variant="secondary" onClick={() => setEmailStep('form')}>{t.settings.changeEmail}</Button>}>
         <p className="num">{user?.email}</p>
         {emailStep === 'form' && (
@@ -708,5 +709,56 @@ function StoreNotifications() {
         ))}
       </ul>
     </Section>
+  );
+}
+
+/** Places that added me (a shop's staff, a family…): accept to show it on my profile, or hide it. */
+function Workplaces() {
+  const { lang, err } = useI18n();
+  const ar = lang === 'ar';
+  const toast = useToast();
+  const data = useData<{ workplaces: any[] }>('/api/people/workplaces');
+  const list = data.data?.workplaces ?? [];
+  if (!list.length) return null;
+  const set = async (id: string, body: any) => {
+    try {
+      await post(`/api/people/workplaces/${id}`, body);
+      void data.reload();
+    } catch (e) {
+      toast(err(e), 'error');
+    }
+  };
+  return (
+    <section id="workplaces" className="card p-5 sm:p-6">
+      <h2 className="mb-1 text-lg">{ar ? 'وين بتشتغل / تابع لمين' : 'Where you work'}</h2>
+      <p className="mb-4 text-sm text-muted">{ar ? 'ناس ضافوك لفئة عندهم. إذا وافقت بيبين بملفك، وبتقدر تخفيه وقت ما بدك.' : 'People added you to a group. If you accept it shows on your profile; you can hide it any time.'}</p>
+      <ul className="space-y-2.5">
+        {list.map((w) => (
+          <li key={w.id} className="flex flex-wrap items-center gap-3 rounded-2xl p-3 ring-1 ring-line">
+            <Avatar name={w.store_name ?? w.owner_name} src={w.owner_image} size={40} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold">{w.workplace ?? w.store_name ?? w.owner_name}</p>
+              <p className="truncate text-xs text-muted">{[w.owner_name, w.role_title, w.since ? String(w.since).slice(0, 10) : null].filter(Boolean).join(' · ')}</p>
+            </div>
+            {w.link_status === 'invited' ? (
+              <div className="flex gap-1.5">
+                <Button size="sm" onClick={() => set(w.id, { accept: true })}>
+                  {ar ? 'وافق' : 'Accept'}
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => set(w.id, { accept: false })}>
+                  {ar ? 'لا' : 'Decline'}
+                </Button>
+              </div>
+            ) : w.link_status === 'accepted' ? (
+              <Toggle checked={w.show_on_profile} onChange={(v) => set(w.id, { show: v })} label={ar ? 'يبين بملفي' : 'On my profile'} />
+            ) : (
+              <button onClick={() => set(w.id, { accept: true })} className="text-xs text-sky">
+                {ar ? 'رفضت — غيّر رأيك' : 'Declined — change'}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

@@ -7,6 +7,8 @@ import {
   AtSign,
   BadgeCheck,
   BadgePercent,
+  PhoneCall,
+  Repeat,
   BarChart3,
   CalendarDays,
   Flag,
@@ -147,6 +149,20 @@ const TOPICS: Topic[] = [
     ],
   },
   {
+    id: 'people',
+    group: 'all',
+    icon: Users,
+    color: '#1F4D3A',
+    title: ['My people & transfers', 'ناسي والتحويلات'],
+    to: '/app/people',
+    steps: [
+      { icon: Users, title: ['Groups you name', 'فئات بتسمّيها'], body: ['Put people in groups — your children, your staff, relatives, or any name you like — with a nickname, a title and since when they’re with you. Star favourites and order them.', 'حط ناسك بفئات — ولادك، موظفينك، قرايبك، أو أي اسم بدك — مع اسم بتحبه وصفة ومن إمتى معك. علّم المفضّلين ورتّبهم.'], to: '/app/people' },
+      { icon: Repeat, title: ['Money on a schedule', 'مصاري لحالها كل فترة'], body: ['Set a weekly, two-weekly or monthly transfer from your wallet or your bank, to their wallet or their bank. Pause, change (with a quick % raise) or stop it any time.', 'حدّد تحويل كل أسبوع أو أسبوعين أو شهر، من محفظتك أو بنكك، لمحفظتهم أو بنكهم. وقّفه أو غيّره (مع زيادة بنسبة بكبسة) أو ألغيه وقت ما بدك.'] },
+      { icon: Gift, title: ['A bonus', 'مكافأة'], body: ['Send a one-off extra — a fixed amount or a share of the regular one — with a note.', 'ابعت مبلغ إضافي مرة وحدة — مبلغ ثابت أو نسبة من التحويل الدوري — مع ملاحظة.'] },
+      { icon: BadgeCheck, title: ['Shown on their profile, if they agree', 'بيبين بملفهم إذا وافقوا'], body: ['Ask someone to show they work with you; if they accept, their card says where and for how long. They can hide it again from Settings → Account.', 'اطلب من حدا يبين إنه بيشتغل عندك؛ إذا وافق بيبين بكرته وين ومن قديش. وبيقدر يخفيه من الإعدادات ← الحساب.'] },
+    ],
+  },
+  {
     id: 'digital',
     group: 'all',
     icon: BookOpen,
@@ -170,6 +186,7 @@ const TOPICS: Topic[] = [
       { icon: BellRing, title: ['The bell', 'الجرس'], body: ['Payments, orders, store news, agent updates and announcements arrive here. Tap one to jump to what it’s about.', 'الدفعات والطلبات وأخبار المتاجر وتحديثات الوكلاء والتعميمات بتوصل هون. اكبس على أي واحد لتروح لموضوعه.'] },
       { icon: AtSign, title: ['Names you can tap', 'أسماء بتنكبس'], body: ['A store, agent or person mentioned in a notification is a link: a store opens its page, an agent opens on the map, a person opens their card (message, pay or save).', 'المتجر أو الوكيل أو الشخص المذكور بالإشعار بيكون رابط: المتجر بيفتح صفحته، الوكيل بيفتح على الخريطة، والشخص بيفتح كرته (راسله، حوّله، أو احفظه).'] },
       { icon: LifeBuoy, title: ['Support, the right team', 'الدعم، للفريق المختص'], body: ['From Messages → New chat, choose what you need help with. It reaches the team for it, and whoever takes it stays with you until it’s solved.', 'من الرسائل ← محادثة جديدة، اختار بشو بدك مساعدة. بيوصل للفريق المختص، واللي بيستلمه بيضل معك لحد ما تنحل.'] },
+      { icon: PhoneCall, title: ['A call with support', 'مكالمة مع الدعم'], body: ['In Messages, “Call support”: describe the problem. If the team accepts, pick a time within their hours. They call you then — voice, with camera or screen sharing if you like — or show you a “Call” button. Sorted already? Cancel it.', 'بالرسائل، «مكالمة مع الدعم»: اكتب المشكلة. إذا قبل الفريق، اختار وقت ضمن ساعاتهم. بيتصلوا فيك فيه — صوت، ومع كاميرا أو مشاركة شاشة إذا بدك — أو بيظهرلك زر «اتصل». انحلّت؟ الغِها.'], to: '/app/messages?calls=1' },
       { icon: Star, title: ['Rate the help', 'قيّم المساعدة'], body: ['When a support chat closes you can rate it with stars and a word — or choose not to. Only the management sees it.', 'لما تنسكّر محادثة الدعم بتقدر تقيّمها بنجوم وكلمة — أو تختار ما تقيّم. الإدارة بس بتشوفها.'] },
     ],
   },
@@ -330,6 +347,8 @@ const TOPICS: Topic[] = [
       { icon: Users, title: ['Choose who', 'اختار لمين'], body: ['Everyone, kinds of account, chosen people, or by area — governorates and towns, optionally only merchants or agents there. The count updates as you choose.', 'للكل، أو حسب نوع الحساب، أو أشخاص بعينهم، أو حسب المنطقة — محافظات وبلدات، ومع إمكانية التجار أو الوكلاء فيها بس. العدد بيتحدّث وانت بتختار.'] },
       { icon: AtSign, title: ['Mention someone', 'منشن حدا'], body: ['Type @ in the message to mention a store, a cash agent or a person; readers tap the name to open their page.', 'اكتب @ بالرسالة لتمنشن متجر أو وكيل صرف أو شخص؛ واللي بيقرأ بيكبس على الاسم ليفتح صفحته.'] },
       { icon: MessageCircle, title: ['The support desk', 'مكتب الدعم'], body: ['In Messages, “Waiting support requests” lists the requests for your team (by your permissions). Take one and it’s yours alone; give it back to the queue if another team should handle it.', 'بالرسائل، «طلبات دعم بتستنى» فيها طلبات فريقك (حسب صلاحياتك). استلم طلب وبيصير إلك لحالك؛ ورجّعه للطابور إذا لازم فريق ثاني.'], to: '/app/messages' },
+      { icon: PhoneCall, title: ['Support calls', 'مكالمات الدعم'], body: ['Accept or decline call requests, set the team’s hours, call at the booked time or let the customer call, and ask anyone for a call when something’s wrong.', 'اقبل أو ارفض طلبات المكالمات، حدّد ساعات الفريق، اتصل بالموعد أو خلّي الزبون يتصل، واطلب مكالمة من أي حدا إذا صار خلل.'], to: '/app/admin/calls' },
+      { icon: Users, title: ['Groups & recurring transfers', 'الفئات والتحويلات الدورية'], body: ['See who sends money regularly to whom, every movement and failure, and pause any transfer with a reason the owner sees.', 'شوف مين بيحوّل بشكل دوري لمين، كل الحركات والفشل، وأوقف أي تحويل مع سبب بيوصل لصاحبه.'], to: '/app/admin/groups' },
       { icon: HandCoins, title: ['Agent requests', 'طلبات الوكلاء'], body: ['Agents asking to announce to their area appear at the top: approve to send it, or reject with a reason they’ll see.', 'الوكلاء اللي بدهم يعمّموا على منطقتهم بيبينوا فوق: وافق ليوصل، أو ارفض مع سبب بيوصلهم.'] },
       { icon: ShieldCheck, title: ['Preview and history', 'معاينة وسجل'], body: ['See exactly how it will look, send an e-mail copy if needed (up to 300), and look back at everything sent and by whom.', 'شوف بالزبط كيف رح تبين، ابعت نسخة بالإيميل إذا لازم (لحد 300)، وارجع لكل اللي انبعت ومين بعته.'] },
     ],
@@ -361,8 +380,8 @@ export default function Help() {
   const { user } = useAuth();
   const L = lang === 'ar' ? 1 : 0;
   const role = (user?.role ?? 'user') as Role;
-  // Admin guides only for admins; the store and agent guides are open to everyone (handy before applying).
-  const groups = GROUPS.filter((g) => g.k !== 'admin' || role === 'admin');
+  // Each account sees what concerns it: everyone's guide plus its own (admins see them all).
+  const groups = GROUPS.filter((g) => g.k === 'all' || role === 'admin' || ROLE_GROUP[role] === g.k);
   const [group, setGroup] = useState<Group>(ROLE_GROUP[role]);
   const inGroup = TOPICS.filter((x) => x.group === group);
   const [topic, setTopic] = useState(inGroup[0]!.id);
@@ -449,7 +468,8 @@ export default function Help() {
       ) : (
         <>
           {/* Who the guide is for */}
-          <div className={cx('mb-4 grid gap-2', groups.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')} role="tablist">
+          {groups.length > 1 && (
+          <div className={cx('mb-4 grid gap-2', groups.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2')} role="tablist">
             {groups.map((g) => {
               const on = g.k === group;
               const mine = ROLE_GROUP[role] === g.k;
@@ -471,6 +491,7 @@ export default function Help() {
               );
             })}
           </div>
+          )}
 
           <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:px-0" role="tablist">
             {inGroup.map((x) => {
