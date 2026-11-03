@@ -51,6 +51,7 @@ const Help = lazyRetry(() => import('./pages/Help'));
 const MerchantStores = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantStores })));
 const MerchantPickup = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantPickup })));
 const MerchantAds = lazyRetry(() => import('./pages/Merchant').then((m) => ({ default: m.MerchantAds })));
+const MerchantCRM = lazyRetry(() => import('./pages/MerchantCRM').then((m) => ({ default: m.MerchantCRM })));
 
 export function Splash() {
   return (
@@ -129,6 +130,7 @@ export default function App() {
           <Route path="merchant/orders" element={<Private roles={['merchant']}>{page(<MerchantOrders />)}</Private>} />
           <Route path="merchant/stores" element={<Private roles={['merchant']}>{page(<MerchantStores />)}</Private>} />
           <Route path="merchant/ads" element={<Private roles={['merchant']}>{page(<MerchantAds />)}</Private>} />
+          <Route path="merchant/customers" element={<Private roles={['merchant']}>{page(<MerchantCRM />)}</Private>} />
           <Route path="merchant/pickup" element={<Private roles={['merchant']}>{page(<MerchantPickup />)}</Private>} />
           <Route path="admin" element={<Private roles={['admin']}>{page(<AdminOverview />)}</Private>} />
           <Route path="admin/users" element={<Private roles={['admin']}>{page(<AdminUsers />)}</Private>} />

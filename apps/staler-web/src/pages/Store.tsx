@@ -60,6 +60,7 @@ import { PlacePicker, placeLabel } from '../components/PlacePicker';
 import { StarMotif } from '../components/Tatreez';
 import { useCategories } from '../lib/categories';
 
+import { OrderPerks } from '../components/Commerce';
 export { CartProvider, useCart } from '../components/Commerce';
 export type { Product } from '../components/Commerce';
 
@@ -655,6 +656,7 @@ function OrderCard({ o, i, onChanged }: { o: any; i: number; onChanged: () => vo
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="space-y-5 border-t border-line px-5 pb-5">
               {physical && o.status !== 'cancelled' && <Progress o={o} />}
+              <OrderPerks o={o} />
 
               <ul className="space-y-2">
                 {o.items.map((it: any) => (

@@ -2,8 +2,9 @@ import { motion } from 'framer-motion';
 import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AgentProfileEditor } from '../components/AgentProfileEditor';
-import { AtSign, Camera, HandCoins, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Palette, ShieldAlert, ShieldCheck, Trash2, UserRound, type LucideIcon } from 'lucide-react';
-import { applySession, del, patch, post, upload } from '../lib/api';
+import { StoreLogo } from './Stores';
+import { AtSign, BellRing, Camera, HandCoins, Check, KeyRound, Languages, LockKeyhole, LogOut, MonitorSmartphone, Palette, ShieldAlert, ShieldCheck, Trash2, UserRound, type LucideIcon } from 'lucide-react';
+import { applySession, del, patch, post, put, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
 import { BioToggle } from '../components/AppLock';
@@ -11,7 +12,7 @@ import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/hooks';
 import { useToast } from '../components/Toast';
-import { Avatar, Badge, Button, CodeInput, CopyButton, ErrorNote, Field, PasswordStrength, Sheet, cx } from '../components/ui';
+import { Avatar, Badge, Button, CodeInput, CopyButton, ErrorNote, Field, PasswordStrength, Sheet, Toggle, cx } from '../components/ui';
 import { StarMotif } from '../components/Tatreez';
 import { ImageCropper } from '../components/ImageCropper';
 import { fill } from '../lib/format';
@@ -279,6 +280,7 @@ export default function Settings() {
         <p className="mb-2 mt-5 text-sm font-medium text-ink/80">{t.settings.appearance}</p>
         <ThemePicker theme={theme} onChange={setTheme} />
       </Section>
+      <StoreNotifications />
         </>
       )}
 
@@ -622,5 +624,41 @@ function ThemePicker({ theme, onChange }: { theme: string; onChange: (v: 'light'
         );
       })}
     </div>
+  );
+}
+
+/** Stores I bought from or follow: turn each one's news and offers on or off. */
+function StoreNotifications() {
+  const { lang } = useI18n();
+  const ar = lang === 'ar';
+  const { data, setData } = useData<{ stores: any[] }>('/api/store/me/following');
+  if (!data?.stores.length) return null;
+  const toggle = async (st: any) => {
+    const next = !st.notify;
+    setData({ stores: data.stores.map((x) => (x.id === st.id ? { ...x, notify: next } : x)) });
+    try {
+      await put(`/api/store/me/follow/${st.id}`, { notify: next });
+    } catch {
+      setData({ stores: data.stores });
+    }
+  };
+  return (
+    <Section title={ar ? 'إشعارات المتاجر' : 'Store notifications'} icon={BellRing} tone="bg-stitch/10 text-stitch">
+      <p className="mb-3 text-sm text-muted">{ar ? 'المتاجر اللي اشتريت منها أو تابعتها. سكّر أي متجر ما بدك توصلك أخباره وعروضه.' : 'Stores you bought from or follow. Turn off any store whose news and offers you don’t want.'}</p>
+      <ul className="divide-y divide-line">
+        {data.stores.map((st) => (
+          <li key={st.id} className="flex items-center gap-3 py-3">
+            <StoreLogo s={st} size={40} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{st.store_name}</span>
+              <span className="block text-xs text-muted">
+                {st.orders > 0 ? (ar ? `${st.orders} طلب` : `${st.orders} orders`) : ar ? 'متابَع' : 'Following'}
+              </span>
+            </span>
+            <Toggle checked={st.notify} onChange={() => void toggle(st)} label="" />
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }

@@ -38,6 +38,7 @@ import {
   UserPlus,
   Users,
   X,
+  HeartHandshake,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { usePerm } from '../lib/perm';
@@ -133,6 +134,7 @@ function useNav() {
         { to: '/app/merchant', label: t.nav.merchant, icon: LayoutDashboard, end: true },
         { to: '/app/merchant/products', label: t.nav.products, icon: Package },
         { to: '/app/merchant/orders', label: t.nav.storeOrders, icon: ClipboardList },
+        { to: '/app/merchant/customers', label: t.nav.customers, icon: HeartHandshake },
         { to: '/app/merchant/stores', label: t.nav.myStores, icon: GitBranch },
         { to: '/app/merchant/ads', label: t.nav.ads, icon: Megaphone },
         { to: '/app/merchant/pickup', label: t.nav.pickup, icon: MapPin },

@@ -505,6 +505,59 @@ describe('marketplace', () => {
     expect((await request(app).get('/api/store/categories')).body.data.categories).not.toContain(slug);
   });
 
+  it('store CRM: loyalty, occasion offers, gifts, customer list, announcements and muting', async () => {
+    const m = await walletUser(app, 'Loyal Bakery', 'merchant');
+    const st = await request(app).post('/api/merchant/stores').set(auth(m.token)).send({ storeName: 'Loyal Bakery', category: 'food' });
+    const sid = st.body.data.store.id;
+    const p = await request(app).post('/api/merchant/products').set(auth(m.token)).set('x-store-id', sid).send({ name: 'Bread', price: '10', stock: 100 });
+    const pid = p.body.data.product.id;
+    const crm = (r: any) => r.set(auth(m.token)).set('x-store-id', sid);
+    // loyal after 2 orders → 10%; a 25% occasion offer for loyal customers; a gift on orders of 30+
+    expect((await crm(request(app).put('/api/merchant/crm/loyalty')).send({ loyalAfter: 2, loyalDiscount: 10 })).status).toBe(200);
+    expect((await crm(request(app).post('/api/merchant/crm/gifts')).send({ gift: 'Free cookie', rule: 'min_total', threshold: '30' })).status).toBe(201);
+    expect((await crm(request(app).post('/api/merchant/crm/gifts')).send({ gift: 'Welcome card', rule: 'first' })).status).toBe(201);
+    const buyer = await walletUser(app, 'Bread Lover');
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: buyer.walletId, amount: '200' });
+    const buy = (qty: number) => request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [{ productId: pid, quantity: qty }], fulfillment: 'pickup' });
+    const o1 = await buy(1);
+    expect(o1.status).toBe(201);
+    expect(o1.body.data.total).toBe('10.00');
+    await buy(1);
+    // third order: loyal now → 10% off, plus the 30+ gift
+    const q = await request(app).post('/api/store/me/quote').set(auth(buyer.token)).send({ items: [{ productId: pid, quantity: 3 }] });
+    expect(q.body.data.stores[0].percent).toBe(10);
+    expect(q.body.data.stores[0].gifts).toEqual(['Free cookie']);
+    const o3 = await buy(3);
+    expect(o3.body.data.total).toBe('27.00');
+    const mine = await request(app).get('/api/store/orders').set(auth(buyer.token));
+    const last = (mine.body.data.orders ?? []).find((o: any) => o.id === o3.body.data.orders[0].id);
+    expect(last.gifts).toEqual(['Free cookie']);
+    expect(last.discount_amount).toBe('3.00');
+    // an occasion offer bigger than loyalty wins
+    const end = new Date(Date.now() + 86400000).toISOString();
+    expect((await crm(request(app).post('/api/merchant/crm/promos')).send({ name: 'Eid', percent: 25, audience: 'loyal', endsAt: end })).status).toBe(201);
+    const q2 = await request(app).post('/api/store/me/quote').set(auth(buyer.token)).send({ items: [{ productId: pid, quantity: 1 }] });
+    expect(q2.body.data.stores[0].percent).toBe(25);
+    // the merchant sees the customer
+    const cust = await crm(request(app).get('/api/merchant/crm/customers'));
+    const c1 = cust.body.data.customers.find((c: any) => c.id === buyer.userId);
+    expect(c1.orders).toBe(3);
+    expect(c1.loyal).toBe(true);
+    const ins = await crm(request(app).get('/api/merchant/crm/insights'));
+    expect(ins.body.data.totals.customers).toBe(1);
+    // announcements reach buyers — until they mute the store
+    const dry = await crm(request(app).post('/api/merchant/crm/announce')).send({ title: 'Fresh bread', body: 'Out of the oven now', dryRun: true });
+    expect(dry.body.data.count).toBe(1);
+    expect((await crm(request(app).post('/api/merchant/crm/announce')).send({ title: 'Fresh bread', body: 'Out of the oven now' })).body.data.sent).toBe(1);
+    const notes = await request(app).get('/api/notifications').set(auth(buyer.token));
+    expect(JSON.stringify(notes.body)).toContain('Fresh bread');
+    expect((await request(app).put(`/api/store/me/follow/${sid}`).set(auth(buyer.token)).send({ notify: false })).status).toBe(200);
+    const after = await crm(request(app).post('/api/merchant/crm/announce')).send({ title: 'Again', body: 'Hello again', dryRun: true });
+    expect(after.body.data.count).toBe(0);
+    const following = await request(app).get('/api/store/me/following').set(auth(buyer.token));
+    expect(following.body.data.stores.find((x: any) => x.id === sid).notify).toBe(false);
+  });
+
   it('sells exactly the stock under concurrent checkouts', async () => {
     const m = await walletUser(app, 'Scarce Seller', 'merchant');
     await request(app).post('/api/merchant/profile').set(auth(m.token)).send({ storeName: 'Scarce' });

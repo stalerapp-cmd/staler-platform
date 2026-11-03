@@ -20,6 +20,7 @@ import { personalise } from '../lib/watermark.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { moneyLimiter } from '../middleware/security.js';
 import { requireSecondFactor } from './mfa.js';
+import { discountCents, perksFor } from './crm.js';
 import { assertDailyLimit, assertMaxTransfer, credit, debit, notifyBi, walletOfUser, writeLine } from './walletCore.js';
 
 /** Ids of legacy rows may be UUIDs or integers. */
@@ -435,13 +436,13 @@ storeRouter.post(
         const r = await c.query<any>(
           `SELECT p.id, p.merchant_id, p.name, p.price, p.stock, p.is_digital, p.digital_file_url, p.deposit_percent, p.deposit_refundable,
                   COALESCE(p.status,'active') AS status, m.user_id AS merchant_user_id, COALESCE(m.status,'active') AS merchant_status,
-                  m.offers_pickup, m.offers_delivery
+                  m.offers_pickup, m.offers_delivery, COALESCE(m.parent_id, m.id) AS main_id
              FROM ${S}.products p JOIN ${S}.merchants m ON m.id = p.merchant_id
             WHERE p.id = ANY($1) ORDER BY p.id FOR UPDATE OF p`,
           [Array.from(qty.keys())],
         );
         if (r.rowCount !== qty.size) throw notFound('One of the products no longer exists', 'PRODUCT_NOT_FOUND');
-        type G = { full: bigint; now: bigint; lines: any[]; digitalOnly: boolean; depositRefundable: boolean; merchantUser: string };
+        type G = { full: bigint; now: bigint; lines: any[]; digitalOnly: boolean; depositRefundable: boolean; merchantUser: string; mainId: string; off: bigint; note: string | null; gifts: string[] };
         const groups = new Map<string, G>();
         for (const p of r.rows) {
           const q = qty.get(String(p.id))!;
@@ -451,7 +452,7 @@ storeRouter.post(
           if (!p.is_digital && Number(p.stock) < q) throw conflict('OUT_OF_STOCK', `Only ${p.stock} left of ${p.name}`);
           if (!p.is_digital && b.fulfillment === 'pickup' && p.offers_pickup === false) throw badRequest('NO_PICKUP', 'This store does not offer pickup');
           if (!p.is_digital && b.fulfillment === 'delivery' && p.offers_delivery === false) throw badRequest('NO_DELIVERY', 'This store does not deliver');
-          const g: G = groups.get(String(p.merchant_id)) ?? { full: 0n, now: 0n, lines: [], digitalOnly: true, depositRefundable: true, merchantUser: p.merchant_user_id };
+          const g: G = groups.get(String(p.merchant_id)) ?? { full: 0n, now: 0n, lines: [], digitalOnly: true, depositRefundable: true, merchantUser: p.merchant_user_id, mainId: String(p.main_id), off: 0n, note: null, gifts: [] };
           const line = toCents(p.price) * BigInt(q);
           const dep = !p.is_digital && Number(p.deposit_percent) > 0 ? (line * BigInt(p.deposit_percent) + 99n) / 100n : line;
           g.full += line;
@@ -460,6 +461,19 @@ storeRouter.post(
           g.digitalOnly &&= Boolean(p.is_digital);
           if (!p.is_digital && Number(p.deposit_percent) > 0 && !p.deposit_refundable) g.depositRefundable = false;
           groups.set(String(p.merchant_id), g);
+        }
+        // The store's own perks: the best discount (occasion offer or loyalty) and any gifts.
+        for (const g of groups.values()) {
+          const pk = await perksFor(c, g.mainId, userId, g.full);
+          g.gifts = pk.gifts;
+          const off = discountCents(g.full, pk.percent);
+          if (off > 0n) {
+            const nowOff = g.full > 0n ? (off * g.now) / g.full : 0n;
+            g.full -= off;
+            g.now -= nowOff;
+            g.off = off;
+            g.note = `${pk.note ?? ''} (${pk.percent}%)`;
+          }
         }
         const hasPhysical = Array.from(groups.values()).some((g) => !g.digitalOnly);
         if (hasPhysical && b.fulfillment === 'delivery' && !b.address) throw badRequest('ADDRESS_REQUIRED', 'Add a delivery address');
@@ -518,6 +532,8 @@ storeRouter.post(
           );
           const pt = pickup.get(merchantId);
           if (pt) await c.query(`UPDATE ${S}.orders SET pickup_point_id = $2, pickup_info = $3 WHERE id = $1`, [order.id, pt.id, JSON.stringify(pt)]);
+          if (g.off > 0n || g.gifts.length)
+            await c.query(`UPDATE ${S}.orders SET discount_amount = $2, discount_note = $3, gifts = $4 WHERE id = $1`, [order.id, fromCents(g.off), g.note, JSON.stringify(g.gifts)]);
           for (const l of g.lines) {
             await c.query(
               `INSERT INTO ${S}.order_items (order_id, product_id, quantity, price, is_digital, digital_file_url, product_name, licence_code)
@@ -536,8 +552,8 @@ storeRouter.post(
               c,
               g.merchantUser,
               'new_order',
-              ['New order', `Order #${short(order.id)} — ${money(fromCents(g.full))}${due > 0n ? ` (deposit ${money(fromCents(g.now))} paid)` : ''}`],
-              ['طلب جديد', `الطلب #${short(order.id)} — ${money(fromCents(g.full))}${due > 0n ? ` (العربون ${money(fromCents(g.now))} مدفوع)` : ''}`],
+              ['New order', `Order #${short(order.id)} — ${money(fromCents(g.full))}${due > 0n ? ` (deposit ${money(fromCents(g.now))} paid)` : ''}${g.gifts.length ? ` — gift to pack: ${g.gifts.join(', ')}` : ''}`],
+              ['طلب جديد', `الطلب #${short(order.id)} — ${money(fromCents(g.full))}${due > 0n ? ` (العربون ${money(fromCents(g.now))} مدفوع)` : ''}${g.gifts.length ? ` — حط معه هدية: ${g.gifts.join('، ')}` : ''}`],
               { orderId: order.id },
             );
           orders.push({ ...order, status: g.digitalOnly ? 'completed' : 'processing' });
@@ -558,7 +574,7 @@ async function ordersWithItems(where: string, params: unknown[], opts: { buyer?:
     `SELECT o.id, o.user_id, o.merchant_id, o.total_amount, o.amount_paid, o.balance_due, o.balance_paid_via, o.deposit_refundable, o.status,
             o.payment_status, o.escrow_status, o.created_at, o.paid_at, o.accepted_at, o.shipped_at, o.delivered_at, o.completed_at,
             o.fulfillment, o.delivery_address, o.delivery_phone, o.delivery_lat, o.delivery_lng, o.buyer_note, o.dispute_status, o.dispute_reason,
-            o.cancel_reason, o.pickup_info, ${opts.buyer ? 'o.handover_code,' : ''}
+            o.cancel_reason, o.pickup_info, o.discount_amount, o.discount_note, o.gifts, ${opts.buyer ? 'o.handover_code,' : ''}
             m.store_name, m.branch_name, m.slug AS store_slug, m.logo_url AS store_logo, m.lat AS store_lat, m.lng AS store_lng, m.address AS store_address,
             m.user_id AS merchant_user_id, u.full_name AS buyer_name,
             COALESCE((SELECT json_agg(json_build_object('kind', e.kind, 'actor', e.actor, 'note', e.note, 'lat', e.lat, 'lng', e.lng, 'at', e.created_at) ORDER BY e.created_at)
@@ -778,7 +794,7 @@ export const merchantRouter = Router();
 merchantRouter.use(requireAuth, requireRole('merchant'));
 
 /** The store this request acts on: the x-store-id header (must be owned), else the first store. */
-async function myMerchant(req: Request | string, c?: pg.PoolClient) {
+export async function myMerchant(req: Request | string, c?: pg.PoolClient) {
   const userId = typeof req === 'string' ? req : req.auth!.userId;
   const wanted = typeof req === 'string' ? undefined : String(req.headers['x-store-id'] ?? '').trim();
   const m = wanted && idParam.safeParse(wanted).success

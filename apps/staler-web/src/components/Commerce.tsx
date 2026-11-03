@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, CheckCircle2, FileDown, LocateFixed, MapPin, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Store as StoreIcon, Trash2, Truck } from 'lucide-react';
+import { BadgePercent, BookOpen, CheckCircle2, Gift, FileDown, LocateFixed, MapPin, Minus, Plus, Share2, ShieldCheck, ShoppingCart, Store as StoreIcon, Trash2, Truck } from 'lucide-react';
 import { ApiError, assetUrl, get, newIdempotencyKey, post, PUBLIC_ORIGIN } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -355,8 +355,27 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
   const secure = useSecureAction();
   const confirm = useConfirm();
   const physical = lines.some((l) => !l.product.is_digital);
-  const full = lines.reduce((s, l) => s + cents(l.product.price) * l.qty, 0);
-  const now = lines.reduce((s, l) => s + payNowCents(l.product, l.qty), 0);
+  const fullRaw = lines.reduce((s, l) => s + cents(l.product.price) * l.qty, 0);
+  const nowRaw = lines.reduce((s, l) => s + payNowCents(l.product, l.qty), 0);
+  // The stores' own perks (offer or loyalty discount, gifts), asked before paying.
+  const [quote, setQuote] = useState<{ stores: { discount: string; percent: number; note: string | null; gifts: string[] }[] } | null>(null);
+  const cartSig = lines.map((l) => `${l.product.id}:${l.qty}`).join(',');
+  useEffect(() => {
+    if (!open || !user || !lines.length) return setQuote(null);
+    let alive = true;
+    post<{ stores: any[] }>('/api/store/me/quote', { items: lines.map((l) => ({ productId: l.product.id, quantity: l.qty })) })
+      .then((q) => alive && setQuote(q))
+      .catch(() => alive && setQuote(null));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, user?.id, cartSig]);
+  const offCents = Math.round((quote?.stores ?? []).reduce((s, x) => s + Number(x.discount) * 100, 0));
+  const full = fullRaw - offCents;
+  const now = nowRaw - (fullRaw ? Math.floor((offCents * nowRaw) / fullRaw) : 0);
+  const perkLines = (quote?.stores ?? []).filter((x) => Number(x.discount) > 0);
+  const giftLines = (quote?.stores ?? []).flatMap((x) => x.gifts);
 
   const locate = () => {
     if (!navigator.geolocation) return;
@@ -420,6 +439,24 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
   const footer =
     !done && lines.length ? (
       <div>
+        {(perkLines.length > 0 || giftLines.length > 0) && (
+          <div className="mb-3 space-y-1.5">
+            {perkLines.map((x, i) => (
+              <p key={i} className="flex items-center justify-between gap-3 rounded-xl bg-olive/10 px-3 py-2 text-sm text-olive">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <BadgePercent className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{x.note ?? ''} · {x.percent}%</span>
+                </span>
+                <span className="num shrink-0 font-semibold">−{money(x.discount, lang)}</span>
+              </p>
+            ))}
+            {giftLines.map((g, i) => (
+              <p key={`g${i}`} className="flex items-center gap-1.5 rounded-xl bg-gold/12 px-3 py-2 text-sm text-[rgb(150_105_10)] dark:text-gold">
+                <Gift className="h-4 w-4 shrink-0" /> {lang === 'ar' ? 'هدية مع طلبك:' : 'A gift comes with your order:'} <span className="font-semibold">{g}</span>
+              </p>
+            ))}
+          </div>
+        )}
         <div className="flex items-end justify-between gap-3">
           <div>
             {now !== full && (
@@ -582,5 +619,28 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
         </div>
       )}
     </Sheet>
+  );
+}
+
+/** The store's discount and gifts on one order (for buyer and store alike). */
+export function OrderPerks({ o, forStore = false }: { o: any; forStore?: boolean }) {
+  const { lang } = useI18n();
+  const gifts: string[] = Array.isArray(o.gifts) ? o.gifts : [];
+  const off = Number(o.discount_amount ?? 0);
+  if (!gifts.length && !(off > 0)) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {off > 0 && (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-olive/10 px-3 py-1.5 text-xs font-medium text-olive">
+          <BadgePercent className="h-3.5 w-3.5" /> {o.discount_note ?? ''} −{money(off, lang)}
+        </span>
+      )}
+      {gifts.map((g) => (
+        <span key={g} className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 px-3 py-1.5 text-xs font-semibold text-[rgb(150_105_10)] dark:text-gold">
+          <Gift className="h-3.5 w-3.5" /> {forStore ? (lang === 'ar' ? 'حط معه: ' : 'Pack: ') : lang === 'ar' ? 'هدية: ' : 'Gift: '}
+          {g}
+        </span>
+      ))}
+    </div>
   );
 }

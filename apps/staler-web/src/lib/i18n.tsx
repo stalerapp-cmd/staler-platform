@@ -157,6 +157,7 @@ const en = {
   },
   nav: {
     notify: 'Notifications & announcements',
+    customers: 'Customers & offers',
     help: 'How it works', contacts: 'Contacts', disputes: 'Disputes', myStores: 'Stores & branches', pickup: 'Pickup points', ads: 'Ads', cash: 'Cash vouchers',
     home: 'Home', activity: 'Activity', scan: 'Scan', store: 'Market', more: 'More', agents: 'Cash agents', agentDesk: 'Agent desk', desk: 'Desk', send: 'Send', receive: 'Receive', bank: 'Bank',
     messages: 'Messages', settings: 'Settings', orders: 'My orders', merchant: 'My store', products: 'Products', storeOrders: 'Store orders',
@@ -509,6 +510,7 @@ const ar: Dict = {
   },
   nav: {
     notify: 'الإشعارات والتعميمات',
+    customers: 'الزباين والعروض',
     help: 'كيف بتشتغل', contacts: 'جهات الاتصال', disputes: 'النزاعات', myStores: 'المتاجر والفروع', pickup: 'نقاط الاستلام', ads: 'الإعلانات', cash: 'قسائم نقدية',
     home: 'الرئيسية', activity: 'الحركات', scan: 'مسح', store: 'السوق', more: 'المزيد', agents: 'وكلاء الصرف', agentDesk: 'مكتب الصرف', desk: 'المكتب', send: 'تحويل', receive: 'استلام', bank: 'البنك', messages: 'الرسائل',
     settings: 'الإعدادات', orders: 'طلباتي', merchant: 'متجري', products: 'المنتجات', storeOrders: 'طلبات المتجر', vouchers: 'قسائم نقدية', admin: 'الإدارة',

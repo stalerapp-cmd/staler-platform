@@ -17,6 +17,7 @@ import { cors, globalLimiter, noStore, permissionsPolicy, requestId, securityHea
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { authRouter } from './modules/auth.js';
 import { geoRouter } from './modules/geo.js';
+import { crmRouter, followRouter } from './modules/crm.js';
 import { notificationsRouter, walletRouter } from './modules/wallet.js';
 import { bankRouter, webhookRouter } from './modules/bank.js';
 import { exchangeRouter } from './modules/exchange.js';
@@ -120,7 +121,9 @@ export function createApp(): Express {
   app.use('/api/bank/webhook', noStore, webhookRouter);
   app.use('/api/bank', noStore, bankRouter);
   app.use('/api/exchange', noStore, exchangeRouter);
+  app.use('/api/store/me', noStore, followRouter);
   app.use('/api/store', noStore, storeRouter);
+  app.use('/api/merchant/crm', noStore, crmRouter);
   app.use('/api/merchant', noStore, merchantRouter);
   app.use('/api/messages', noStore, messagesRouter);
   app.use('/api/contacts', noStore, contactsRouter);

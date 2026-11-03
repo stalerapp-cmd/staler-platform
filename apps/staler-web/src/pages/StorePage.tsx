@@ -5,8 +5,9 @@ import { cityWithGov } from './Stores';
 import { fill } from '../lib/format';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Bike, ClipboardList, Facebook, GitBranch, Instagram, Map as MapIcon, MapPin, MessageCircle, Music2, Package, Phone, Quote, Search, Share2, ShoppingBag, Store as StoreIcon, Tag, Truck } from 'lucide-react';
-import { assetUrl, get, PUBLIC_ORIGIN } from '../lib/api';
+import { BadgePercent, BellOff, BellRing, Bike, ClipboardList, Crown, Facebook, GitBranch, Instagram, Map as MapIcon, MapPin, MessageCircle, Music2, Package, Phone, Quote, Search, Share2, ShoppingBag, Store as StoreIcon, Tag, Truck } from 'lucide-react';
+import { assetUrl, get, PUBLIC_ORIGIN, put } from '../lib/api';
+import { useToast } from '../components/Toast';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { CartSheet, ProductCard, ProductSheet, useCart, type Product } from '../components/Commerce';
@@ -312,6 +313,8 @@ export default function StorePage() {
             )}
           </AnimatePresence>
 
+          {user && <StorePerks merchantId={String(s.main?.id ?? s.id)} />}
+
           {/* --------------------------------------------------------- ads */}
           {data!.ads.length > 0 && (
             <section className="mt-8">
@@ -456,5 +459,87 @@ export default function StorePage() {
       <CartSheet open={cart} onClose={() => setCart(false)} ordersHref="/app/orders" />
       {s && <ShareSheet open={share} onClose={() => setShare(false)} url={shareUrl} title={s.store_name} />}
     </PublicShell>
+  );
+}
+
+/**
+ * What this store gives me: its running offer, my way to "loyal customer", and a
+ * bell to turn its news on or off.
+ */
+function StorePerks({ merchantId }: { merchantId: string }) {
+  const { lang } = useI18n();
+  const toast = useToast();
+  const ar = lang === 'ar';
+  const [p, setP] = useState<any>(null);
+  useEffect(() => {
+    let alive = true;
+    get<any>(`/api/store/me/perks/${merchantId}`)
+      .then((d) => alive && setP(d))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [merchantId]);
+  if (!p) return null;
+  const toggle = async () => {
+    const next = !p.notify;
+    setP({ ...p, notify: next });
+    try {
+      await put(`/api/store/me/follow/${merchantId}`, { notify: next });
+      toast(next ? (ar ? 'رح توصلك أخبار وعروض هالمتجر' : 'You’ll get this store’s news and offers') : ar ? 'ما رح توصلك إشعارات من هالمتجر' : 'No more notifications from this store');
+    } catch {
+      setP({ ...p, notify: !next });
+    }
+  };
+  const left = p.loyalAfter ? Math.max(0, p.loyalAfter - p.orders) : null;
+  const pct = p.loyalAfter ? Math.min(100, Math.round((p.orders / p.loyalAfter) * 100)) : 0;
+  return (
+    <div className="mt-4 grid gap-3 sm:mx-8 sm:grid-cols-[1fr_auto]">
+      <div className="flex flex-col gap-2.5">
+        {p.promo && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-stitch to-[#9C2238] p-4 text-white shadow-lift">
+            <span className="pointer-events-none absolute -end-6 -top-6 h-24 w-24 rounded-full border border-dashed border-white/30" />
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <BadgePercent className="h-5 w-5" /> {p.promo.name}
+            </p>
+            <p className="mt-1 text-2xl font-bold">
+              {ar ? `خصم ${Number(p.promo.percent)}%` : `${Number(p.promo.percent)}% off`}
+              <span className="ms-2 text-sm font-normal text-white/75">
+                {p.promo.audience === 'loyal' ? (ar ? 'للزباين المميزين' : 'for loyal customers') : ar ? 'على كل المتجر' : 'on the whole store'}
+              </span>
+            </p>
+          </motion.div>
+        )}
+        {p.loyalAfter && (
+          <div className="rounded-2xl bg-surface p-4 shadow-card ring-1 ring-line/60">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <Crown className="h-4 w-4 text-gold" />
+              {p.loyal
+                ? ar
+                  ? `انت زبون مميز هون${p.loyalDiscount ? ` — خصم ${p.loyalDiscount}% على طلباتك` : ''}`
+                  : `You’re a loyal customer here${p.loyalDiscount ? ` — ${p.loyalDiscount}% off your orders` : ''}`
+                : ar
+                  ? `باقيلك ${left} ${left === 1 ? 'طلب' : 'طلبات'} لتصير زبون مميز${p.loyalDiscount ? ` وتاخد خصم ${p.loyalDiscount}%` : ''}`
+                  : `${left} more order${left === 1 ? '' : 's'} to become a loyal customer${p.loyalDiscount ? ` and get ${p.loyalDiscount}% off` : ''}`}
+            </p>
+            <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-sunk">
+              <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} className="h-full rounded-full bg-gradient-to-l from-gold to-[#E9C060]" />
+            </div>
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-pressed={p.notify}
+        className={cx(
+          'flex items-center justify-center gap-2 self-start rounded-2xl px-4 py-3 text-sm font-semibold transition sm:flex-col sm:py-4',
+          p.notify ? 'bg-night text-white shadow-lift dark:bg-white/15' : 'bg-surface text-ink/80 ring-1 ring-line hover:text-ink',
+        )}
+      >
+        {p.notify ? <BellRing className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
+        {p.notify ? (ar ? 'إشعاراته مفعّلة' : 'Notifications on') : ar ? 'فعّل إشعاراته' : 'Get its news'}
+      </button>
+    </div>
   );
 }

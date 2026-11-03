@@ -5,6 +5,14 @@
  */
 const AR: Record<string, string> = {
   'Choose who should get it': 'اختار لمين بدك تبعته',
+  'The offer must end after it starts': 'العرض لازم يخلص بعد ما يبلّش',
+  'You can have up to 10 running offers': 'بتقدر يكون عندك لحد 10 عروض شغّالة',
+  'Set the order amount for this gift': 'حدّد قيمة الطلب لهالهدية',
+  'You can have up to 10 gift rules': 'بتقدر يكون عندك لحد 10 هدايا',
+  'Set when a customer becomes loyal first': 'حدّد أول إمتى الزبون بيصير مميز',
+  'Offer not found': 'العرض مش موجود',
+  'Gift not found': 'الهدية مش موجودة',
+  'You can send up to 5 announcements a day': 'بتقدر تبعت لحد 5 إشعارات باليوم',
   // ---------------------------------------------------------------- general
   'Authentication required': 'لازم تسجّل دخول أول',
   'You are not allowed to do this': 'ما إلك صلاحية تعمل هالإشي',

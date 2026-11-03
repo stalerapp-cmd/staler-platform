@@ -43,6 +43,7 @@ import { AmountInput, Badge, Button, Chips, CodeInput, EmptyState, ErrorNote, Fi
 import { StoreCover, StoreLogo } from './Stores';
 import { useCategories } from '../lib/categories';
 import { TownField } from '../components/TownField';
+import { OrderPerks } from '../components/Commerce';
 import { ImageCropper } from '../components/ImageCropper';
 
 interface MStore {
@@ -1206,6 +1207,9 @@ export function MerchantOrders() {
                       {o.dispute_status === 'open' ? t.ord.disputed : t.ord.st[o.status] ?? o.status}
                     </Badge>
                   </div>
+                </div>
+                <div className="mt-3">
+                  <OrderPerks o={o} forStore />
                 </div>
                 {o.fulfillment !== 'digital' && (
                   <div className="mt-3 grid gap-2 rounded-2xl bg-sunk/60 p-3 text-sm sm:grid-cols-2">
