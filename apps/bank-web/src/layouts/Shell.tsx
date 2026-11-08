@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
+  Repeat,
   ArrowRightLeft,
   Bell,
   ChevronDown,
@@ -38,6 +39,7 @@ import { get, post } from '../lib/api';
 import { usePolling } from '../lib/hooks';
 import { relative } from '../lib/format';
 import { localize, type Notice } from '../lib/notifications';
+import { ScheduledInvite } from '../components/ScheduledInvite';
 import { Emblem, Guilloche } from '../components/Guilloche';
 import { usePublicConfig } from '../lib/config';
 import { Avatar, Sheet, cx } from '../components/ui';
@@ -88,6 +90,7 @@ function useNav() {
       items: [
         { to: '/app', label: t.nav.overview, icon: Home, end: true },
         { to: '/app/transactions', label: t.nav.transactions, icon: BookText },
+        { to: '/app/scheduled', label: t.nav.scheduled, icon: Repeat },
       ],
     },
     {
@@ -111,6 +114,7 @@ function useNav() {
           { to: '/app/admin/ledger', label: t.nav.ledger, icon: Landmark, perm: 'ledger.view' },
           { to: '/app/admin/exchange', label: t.nav.exchange, icon: Vault, perm: 'exchange.view' },
           { to: '/app/admin/notify', label: t.nav.notify, icon: Megaphone, perm: 'notify' },
+          { to: '/app/admin/scheduled', label: t.nav.adminScheduled, icon: Repeat, perm: 'customers.view' },
           { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
           { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
           { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },
@@ -316,6 +320,7 @@ function Notifications() {
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{l.title}</p>
                     {l.body && <p className="break-words text-sm text-muted">{l.body}</p>}
+                    {n.type === 'scheduled_invite' && typeof n.metadata?.orderId === 'string' && <ScheduledInvite orderId={n.metadata.orderId} />}
                     <p className="mt-1 text-xs text-muted">{relative(n.created_at, lang)}</p>
                   </div>
                 </li>

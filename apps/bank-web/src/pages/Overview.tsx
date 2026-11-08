@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MoreLink } from '../components/Fun';
 import { ActionDock, type DockAction } from '../components/ActionDock';
-import { ArrowRightLeft, BookText, KeyRound, QrCode, Wallet } from 'lucide-react';
+import { ArrowRightLeft, BookText, QrCode, Repeat, Wallet } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useData } from '../lib/hooks';
@@ -9,6 +9,7 @@ import { useAccounts } from '../lib/accounts';
 import { money } from '../lib/format';
 import { AccountCard, BankTxDetails, BankTxRow, type BankTx } from '../components/Bank';
 import { AreaChart } from '../components/Chart';
+import { ScheduledInvite } from '../components/ScheduledInvite';
 import { EmptyState, Sheet, Skeleton } from '../components/ui';
 
 export default function Overview() {
@@ -18,11 +19,12 @@ export default function Overview() {
   const detail = useData<any>(primary ? `/api/accounts/${primary.id}` : null, [primary?.id]);
   const txs = useData<{ transactions: BankTx[] }>(primary ? `/api/accounts/${primary.id}/transactions?limit=8` : null, [primary?.id]);
   const [open, setOpen] = useState<BankTx | null>(null);
+  const sched = useData<{ incoming: any[] }>(user?.role === 'admin' ? null : '/api/scheduled');
   const actions: DockAction[] = [
     { to: '/app/transfer', icon: ArrowRightLeft, label: t.dock.transfer, tone: 'gold', motion: 'send', primary: true },
     { to: '/app/wallet', icon: Wallet, label: t.dock.wallet, tone: 'olive', motion: 'in' },
     { to: '/app/requests', icon: QrCode, label: t.dock.requests, tone: 'sky', motion: 'pulse' },
-    { to: '/app/apps', icon: KeyRound, label: t.dock.apps, tone: 'night', motion: 'pulse' },
+    { to: '/app/scheduled', icon: Repeat, label: lang === 'ar' ? 'مجدولة' : 'Scheduled', tone: 'night', motion: 'pulse' },
   ];
   const series = detail.data?.series ?? [];
   return (
@@ -32,6 +34,15 @@ export default function Overview() {
           {primary ? <AccountCard docked account={primary} holder={user?.full_name ?? ''} /> : <Skeleton className="h-64 rounded-3xl" />}
           <ActionDock actions={actions} />
         </div>
+        {(sched.data?.incoming ?? []).filter((o) => o.consent === 'pending').map((o) => (
+          <div key={o.id} className="rounded-3xl bg-gold/[0.08] p-4 ring-1 ring-gold/40">
+            <p className="font-semibold">{lang === 'ar' ? `${o.owner_name} بدّه يبعتلك دفعات مجدولة` : `${o.owner_name} wants to send you scheduled payments`}</p>
+            <p className="text-sm text-muted">
+              {money(o.amount, lang)} {o.title ? `· ${o.title}` : ''}
+            </p>
+            <ScheduledInvite orderId={o.id} />
+          </div>
+        ))}
         <section className="card p-5">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <h2 className="text-xl">{t.home.flow}</h2>

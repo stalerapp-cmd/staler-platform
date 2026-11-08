@@ -74,6 +74,11 @@ export async function move(c: pg.PoolClient, input: MoveInput): Promise<LedgerTx
   if (from.is_locked && !input.allowLockedSource) throw forbidden('The source account is frozen', 'ACCOUNT_LOCKED');
   if (to.is_locked) throw forbidden('The destination account cannot receive money right now', 'DESTINATION_LOCKED');
   if (from.currency !== to.currency) throw badRequest('CURRENCY_MISMATCH', 'Accounts use different currencies');
+  // No transfers between people who blocked each other (either way).
+  if (input.type === 'transfer' && from.user_id !== to.user_id) {
+    const bl = await c.query(`SELECT 1 FROM ${S}.user_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1`, [from.user_id, to.user_id]);
+    if (bl.rowCount) throw forbidden('You can’t deal with this account', 'BLOCKED');
+  }
 
   const debited = await c.query<{ balance: string }>(
     `UPDATE ${S}.bank_accounts SET balance = balance - $2::numeric

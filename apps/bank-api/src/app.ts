@@ -15,6 +15,8 @@ import { cors, globalLimiter, noStore, permissionsPolicy, requestId, securityHea
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { authRouter } from './modules/auth.js';
 import { bankingRouter } from './modules/banking.js';
+import { requireAuth } from './middleware/auth.js';
+import { scheduledAdminRouter, scheduledRouter } from './modules/scheduled.js';
 import { withdrawalsRouter, integrationRouter } from './modules/withdrawals.js';
 import { linkCustomerRouter, linkExchangeRouter } from './modules/link.js';
 import { wireRouter } from './modules/wire.js';
@@ -98,7 +100,9 @@ export function createApp(): Express {
   app.use('/api/withdrawals', noStore, withdrawalsRouter);
   app.use('/api', noStore, supportRouter);
   app.use('/api/admin', noStore, adminRouter);
+  app.use('/api/admin', noStore, requireAuth, scheduledAdminRouter);
   app.use('/api', noStore, linkCustomerRouter);
+  app.use('/api', noStore, scheduledRouter);
   app.use('/api', noStore, bankingRouter);
   app.use('/taler-integration', noStore, integrationRouter);
   app.use('/taler-wire-gateway', noStore, wireRouter);

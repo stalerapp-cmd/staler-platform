@@ -661,3 +661,43 @@ describe('support chat', () => {
     expect((await request(app).get('/api/support/unread').set(auth(c.token))).body.data.unread).toBe(0);
   });
 });
+
+describe('scheduled payments and blocks', () => {
+  it('waits for the receiver, then pays on its own; instalments end; decline stops re-adding; blocks stop transfers', async () => {
+    const a = await registerCustomer(app, 'Sched Payer');
+    const b = await registerCustomer(app, 'Sched Payee');
+    const before = await balance(app, b);
+    const s = await request(app).post('/api/scheduled').set(auth(a.token)).send({ fromAccountId: a.accountId, to: b.iban, title: 'Rent', amount: '5', every: 'month', ends: 'count', maxRuns: 2 });
+    expect(s.status).toBe(201);
+    expect(s.body.data.consent).toBe('pending');
+    expect(await balance(app, b)).toBe(before);
+    const inc = await request(app).get('/api/scheduled').set(auth(b.token));
+    expect(inc.body.data.incoming[0].title).toBe('Rent');
+    expect((await request(app).post(`/api/scheduled/incoming/${s.body.data.id}`).set(auth(b.token)).send({ action: 'accept' })).status).toBe(200);
+    expect(Number(await balance(app, b))).toBe(Number(before) + 5);
+    expect((await request(app).post(`/api/scheduled/${s.body.data.id}/pay-now`).set(auth(a.token)).send({})).status).toBe(200);
+    const mine = (await request(app).get('/api/scheduled').set(auth(a.token))).body.data.orders.find((o: any) => o.id === s.body.data.id);
+    expect(mine.runs).toBe(2);
+    expect(mine.active).toBe(false);
+    // a second one goes straight through: already accepted
+    const s2 = await request(app).post('/api/scheduled').set(auth(a.token)).send({ fromAccountId: a.accountId, to: b.iban, amount: '1', every: 'week', auto: false });
+    expect(s2.body.data.consent).toBe('accepted');
+    // the payee declines and stops further requests
+    expect((await request(app).post(`/api/scheduled/incoming/${s2.body.data.id}`).set(auth(b.token)).send({ action: 'decline', stop: true })).status).toBe(200);
+    expect((await request(app).post('/api/scheduled').set(auth(a.token)).send({ fromAccountId: a.accountId, to: b.iban, amount: '1', every: 'week' })).status).toBe(403);
+    // blocks
+    expect((await request(app).post('/api/blocks').set(auth(b.token)).send({ to: a.iban })).status).toBe(201);
+    expect((await request(app).post('/api/transfers').set(auth(a.token)).send({ fromAccountId: a.accountId, to: b.iban, amount: '1' })).status).toBe(403);
+    expect((await request(app).get(`/api/accounts/lookup?q=${b.iban}`).set(auth(a.token))).status).toBe(403);
+    expect((await request(app).get('/api/blocks').set(auth(b.token))).body.data.blocks[0].id).toBe(a.userId);
+    expect((await request(app).delete(`/api/blocks/${a.userId}`).set(auth(b.token))).status).toBe(200);
+    expect((await request(app).post('/api/transfers').set(auth(a.token)).send({ fromAccountId: a.accountId, to: b.iban, amount: '1' })).status).toBe(201);
+    // the bank's staff see and pause scheduled payments, and keep two people apart
+    const adm = (await request(app).post('/api/auth/login').send({ login: 'admin@talerbank.local', password: process.env.BANK_ADMIN_PASSWORD })).body.data.accessToken;
+    const all = await request(app).get('/api/admin/scheduled').set(auth(adm));
+    expect(all.status).toBe(200);
+    expect((await request(app).post('/api/admin/blocks').set(auth(adm)).send({ blockerId: b.userId, blockedId: a.userId })).status).toBe(201);
+    expect((await request(app).delete(`/api/blocks/${a.userId}`).set(auth(b.token))).status).toBe(403);
+    expect((await request(app).get('/api/admin/scheduled').set(auth(a.token))).status).toBe(403);
+  });
+});

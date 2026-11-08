@@ -33,6 +33,7 @@ const en = {
   },
   nav: {
     notify: 'Notifications & announcements',
+    scheduled: 'Scheduled payments', adminScheduled: 'Scheduled & blocks',
     overview: 'Overview', transfer: 'Transfer', transactions: 'Statements', requests: 'Payment requests', scan: 'Scan to pay', wallet: 'Send to S-Taler',
     apps: 'Linked apps', settings: 'Profile & security', notifications: 'Notifications', admin: 'Administration', customers: 'Customers',
     ledger: 'All transactions', exchange: 'Exchange & reserves', audit: 'Audit log', system: 'Bank settings', more: 'More', home: 'Home', statementsTab: 'Statement',
@@ -200,6 +201,7 @@ const ar: Dict = {
   },
   nav: {
     notify: 'الإشعارات والتعميمات',
+    scheduled: 'الدفعات المجدولة', adminScheduled: 'الدفعات المجدولة والبلوكات',
     overview: 'نظرة عامة', transfer: 'حوالة', transactions: 'كشوف الحساب', requests: 'طلبات الدفع', scan: 'امسح وادفع', wallet: 'إرسال إلى S‑Taler',
     apps: 'التطبيقات المرتبطة', settings: 'الملف والأمان', notifications: 'الإشعارات', admin: 'الإدارة', customers: 'العملاء', ledger: 'كل الحركات',
     exchange: 'الصرّاف والاحتياطي', audit: 'سجل التدقيق', system: 'إعدادات البنك', more: 'المزيد', home: 'الرئيسية', statementsTab: 'الكشوف',

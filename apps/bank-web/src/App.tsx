@@ -18,6 +18,8 @@ const AdminSupportThread = lazyRetry(() => import('./pages/Support').then((m) =>
 const Transfer = lazyRetry(() => import('./pages/Transfer'));
 const Transactions = lazyRetry(() => import('./pages/Transactions'));
 const Requests = lazyRetry(() => import('./pages/Requests'));
+const Scheduled = lazyRetry(() => import('./pages/Scheduled'));
+const AdminScheduled = lazyRetry(() => import('./pages/AdminScheduled'));
 const Pay = lazyRetry(() => import('./pages/Requests').then((m) => ({ default: m.Pay })));
 const Scan = lazyRetry(() => import('./pages/Scan'));
 const WalletWithdraw = lazyRetry(() => import('./pages/WalletWithdraw'));
@@ -87,6 +89,7 @@ export default function App() {
           <Route path="transfer" element={page(<Transfer />)} />
           <Route path="transactions" element={page(<Transactions />)} />
           <Route path="requests" element={page(<Requests />)} />
+          <Route path="scheduled" element={page(<Scheduled />)} />
           <Route path="pay/:id" element={page(<Pay />)} />
           <Route path="scan" element={page(<Scan />)} />
           <Route path="wallet" element={page(<WalletWithdraw />)} />
@@ -103,6 +106,7 @@ export default function App() {
           <Route path="admin/exchange" element={admin(<AdminExchange />)} />
           <Route path="admin/audit" element={admin(<AdminAudit />)} />
           <Route path="admin/notify" element={admin(<AdminNotify />)} />
+          <Route path="admin/scheduled" element={admin(<AdminScheduled />)} />
           <Route path="admin/settings" element={admin(<AdminSettings />)} />
           <Route path="admin/admins" element={admin(<AdminAdmins />)} />
         </Route>

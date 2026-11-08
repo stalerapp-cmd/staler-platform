@@ -14,6 +14,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { moneyLimiter } from '../middleware/security.js';
 import { assertDailyLimit, assertMaxTransfer, move, notify } from './ledger.js';
 import { requireSecondFactor } from './mfa.js';
+import { assertNotBlocked } from './scheduled.js';
 
 export const bankingRouter = Router();
 bankingRouter.use(requireAuth);
@@ -38,13 +39,13 @@ export const maskName = (name: string) =>
     .join(' ');
 
 /** Resolves a recipient by IBAN, account number or username. */
-async function resolveRecipient(raw: string) {
+export async function resolveRecipient(raw: string) {
   const q = raw.trim();
   let row: any = null;
   if (/^[A-Za-z]{2}\d{2}[A-Za-z0-9 ]{10,40}$/.test(q)) {
     const iban = normalizeIban(q);
     row = await one(
-      `SELECT a.id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.status
+      `SELECT a.id, a.user_id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.status
          FROM ${S}.bank_accounts a JOIN ${S}.users u ON u.id = a.user_id WHERE a.iban = $1`,
       [iban],
     );
@@ -52,13 +53,13 @@ async function resolveRecipient(raw: string) {
     if (!row && !isValidIban(iban)) throw badRequest('INVALID_IBAN', 'This IBAN is not valid (check digits)');
   } else if (/^TB\d{10}$/i.test(q)) {
     row = await one(
-      `SELECT a.id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.status
+      `SELECT a.id, a.user_id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.status
          FROM ${S}.bank_accounts a JOIN ${S}.users u ON u.id = a.user_id WHERE a.account_number = $1`,
       [q.toUpperCase()],
     );
   } else if (/^@?[a-z0-9_]{3,32}$/i.test(q)) {
     row = await one(
-      `SELECT a.id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.status
+      `SELECT a.id, a.user_id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.status
          FROM ${S}.users u JOIN ${S}.bank_accounts a ON a.user_id = u.id
         WHERE u.username = $1 AND u.role = 'user' ORDER BY a.is_primary DESC, a.created_at ASC LIMIT 1`,
       [q.replace(/^@/, '').toLowerCase()],
@@ -89,6 +90,7 @@ bankingRouter.get(
   validate({ query: z.object({ q: z.string().trim().min(3).max(64) }).strict() }),
   ah(async (req, res) => {
     const r = await resolveRecipient(String(req.query.q));
+    await assertNotBlocked(req.auth!.userId, String(r.user_id));
     res.json({ success: true, data: { iban: r.iban, accountNumber: r.account_number, holder: maskName(r.full_name) } });
   }),
 );

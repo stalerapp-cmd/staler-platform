@@ -53,6 +53,8 @@ const AR: Record<string, string> = {
   'The last day is before the first': 'آخر يوم قبل أول يوم',
   'Only the super admin can do this': 'هاد بس للسوبر أدمن',
   'Pick a date': 'اختار تاريخ',
+  'Use a transfer between your own accounts': 'لحساباتك استخدم تحويل عادي بينها',
+  'This person asked not to receive scheduled payments from you': 'هالشخص طلب ما توصله دفعات مجدولة منك',
   'Choose who to pay': 'اختار لمين بدك تدفع',
   'How many days between payments?': 'كل كم يوم بدك الدفعة؟',
   'Choose the last date': 'اختار آخر تاريخ',
