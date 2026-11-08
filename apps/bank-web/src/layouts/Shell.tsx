@@ -5,6 +5,9 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Repeat,
+  Trophy,
+  Plane,
+  CircleHelp,
   ArrowRightLeft,
   Bell,
   ChevronDown,
@@ -99,6 +102,7 @@ function useNav() {
       items: [
         { to: '/app/wallet', label: t.nav.wallet, icon: Wallet },
         { to: '/app/apps', label: t.nav.apps, icon: KeyRound },
+        ...(user?.role === 'admin' ? [] : [{ to: '/app/help', label: t.nav.help, icon: CircleHelp }]),
       ],
     },
   ];
@@ -118,7 +122,10 @@ function useNav() {
           { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
           { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
           { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },
+          { to: '/app/admin/team', label: t.nav.team, icon: Trophy, perm: 'admins.manage' },
         ] as NavItem[]).filter((i) => can(i.perm!)),
+        { to: '/app/admin/leaves', label: t.nav.leaves, icon: Plane },
+        { to: '/app/help', label: t.nav.help, icon: CircleHelp },
       ],
     });
   }

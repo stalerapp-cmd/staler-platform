@@ -8,6 +8,7 @@ import { useI18n } from '../lib/i18n';
 import { Emblem, Guilloche } from '../components/Guilloche';
 import { Button, CodeInput, ErrorNote, Field, PasswordStrength, Segmented } from '../components/ui';
 import { AuthPrefs } from '../components/Fun';
+import { KINDS, type Kind } from '../lib/kinds';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
 import { AuthBack, MailTips, ResendCode } from '../components/AuthExtras';
@@ -190,7 +191,8 @@ export function Register() {
   const cfg = usePublicConfig();
   const [method, setMethod] = useState<'email' | 'sms'>('email');
   const prefill = (useLocation() as { state?: { email?: string } }).state?.email ?? '';
-  const [f, setF] = useState({ fullName: '', email: prefill, username: '', password: '', phone: '' });
+  const [f, setF] = useState({ fullName: '', email: prefill, username: '', password: '', phone: '', businessName: '' });
+  const [kind, setKind] = useState<Kind>('personal');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fe, setFe] = useState<Record<string, string>>({});
@@ -219,6 +221,8 @@ export function Register() {
               language: lang,
               ...(f.phone.trim() ? { phone: f.phone.trim() } : {}),
               method,
+              customerType: kind,
+              ...(kind !== 'personal' ? { businessName: f.businessName.trim() } : {}),
             });
             nav('/verify', { state: { email: f.email.trim(), sms: method === 'sms' ? f.phone.trim() : undefined } });
           } catch (e2) {
@@ -229,7 +233,41 @@ export function Register() {
           }
         }}
       >
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-ink/80">{lang === 'ar' ? 'نوع الحساب' : 'Account type'}</legend>
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.keys(KINDS) as Kind[]).map((k) => {
+              const K = KINDS[k];
+              const on = kind === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setKind(k)}
+                  className={`flex flex-col items-center gap-1.5 rounded-2xl p-3 text-center ring-1 transition ${on ? 'bg-night text-white ring-night dark:bg-white/15' : 'bg-surface ring-line hover:ring-ink/30'}`}
+                >
+                  <span className={`grid h-9 w-9 place-items-center rounded-xl ${on ? 'bg-white/15' : K.tone}`}>
+                    <K.icon className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="text-sm font-semibold">{lang === 'ar' ? K.ar : K.en}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-xs text-muted">{lang === 'ar' ? KINDS[kind].arLead : KINDS[kind].enLead}</p>
+        </fieldset>
         <Field label={t.auth.fullName} value={f.fullName} onChange={set('fullName')} autoComplete="name" required error={fe.fullName} />
+        {kind !== 'personal' && (
+          <Field
+            label={kind === 'business' ? (lang === 'ar' ? 'اسم المتجر أو الشركة' : 'Shop or company name') : lang === 'ar' ? 'اسم محل الصرافة' : 'Exchange shop name'}
+            value={f.businessName}
+            onChange={set('businessName')}
+            required
+            maxLength={80}
+            error={fe.businessName}
+          />
+        )}
         <Field label={t.auth.email} type="email" value={f.email} onChange={set('email')} autoComplete="email" dir="ltr" required error={fe.email} />
         <Field label={t.auth.username} value={f.username} onChange={set('username')} autoComplete="username" dir="ltr" required hint={t.auth.usernameHint} error={fe.username} />
         <Field label={`${t.auth.phone} (${t.common.optional})`} type="tel" value={f.phone} onChange={set('phone')} autoComplete="tel" dir="ltr" error={fe.phone} />

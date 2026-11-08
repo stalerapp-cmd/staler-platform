@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { BadgeCheck } from 'lucide-react';
 import { ApiError, get, newIdempotencyKey, post } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { kindOf } from '../lib/kinds';
 import { useAccounts, useConfig } from '../lib/accounts';
 import { AMOUNT_RE, money } from '../lib/format';
 import { fmtIban } from '../components/Bank';
@@ -19,7 +20,7 @@ export default function Transfer() {
   const [to, setTo] = useState(params.get('to') ?? '');
   const [amount, setAmount] = useState('');
   const [subject, setSubject] = useState('');
-  const [who, setWho] = useState<{ holder: string; iban: string } | null>(null);
+  const [who, setWho] = useState<{ holder: string; iban: string; kind?: string; business?: string | null } | null>(null);
   const [step, setStep] = useState<'form' | 'review' | 'done'>('form');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +95,12 @@ export default function Transfer() {
               <p className="text-sm text-muted">{t.transfer.beneficiary}</p>
               <p className="mt-1 flex items-center gap-2 font-display text-2xl">
                 {who.holder} <BadgeCheck className="h-5 w-5 text-olive" />
+                {who.kind && who.kind !== 'personal' && (
+                  <span className={`ms-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${kindOf(who.kind).tone}`}>
+                    {lang === 'ar' ? kindOf(who.kind).ar : kindOf(who.kind).en}
+                    {who.business ? ` · ${who.business}` : ''}
+                  </span>
+                )}
               </p>
               <p className="num mt-1 text-sm text-muted">{fmtIban(who.iban)}</p>
             </div>

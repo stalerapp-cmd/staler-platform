@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Banknote, BellRing, ChevronLeft, Crown, KeyRound, LogOut, Megaphone, ShieldCheck, ShieldOff, Snowflake, Trash2, UserCog, UserPlus } from 'lucide-react';
 import { ApiError, del, patch, post } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { KINDS, kindOf, type Kind } from '../lib/kinds';
 import { useData } from '../lib/hooks';
 import { usePerm } from '../lib/perm';
 import { AMOUNT_RE, date, fill, money, relative } from '../lib/format';
@@ -122,7 +123,7 @@ export function AdminCustomer() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (data?.user) setF({ fullName: data.user.full_name, email: data.user.email, username: data.user.username ?? '', phone: data.user.phone ?? '', language: data.user.language ?? 'ar' });
+    if (data?.user) setF({ fullName: data.user.full_name, email: data.user.email, username: data.user.username ?? '', phone: data.user.phone ?? '', language: data.user.language ?? 'ar', customerType: data.user.customer_type ?? 'personal', businessName: data.user.business_name ?? '' });
   }, [data]);
   if (error) return <ErrorNote>{err(error)}</ErrorNote>;
   if (!data || !f) return <Skeleton className="h-64 rounded-2xl" />;
@@ -165,6 +166,7 @@ export function AdminCustomer() {
             <div className="mt-3 flex flex-wrap gap-1.5">
               <Badge tone={u.status === 'active' ? 'good' : 'bad'}>{u.status === 'active' ? t.admin.active : t.admin.suspended}</Badge>
               <Badge tone="info">{t.admin.roles[u.role] ?? u.role}</Badge>
+              {u.role === 'user' && <Badge>{lang === 'ar' ? kindOf(u.customer_type).ar : kindOf(u.customer_type).en}{u.business_name ? ` · ${u.business_name}` : ''}</Badge>}
               {u.totp_enabled && <Badge tone="good">2FA</Badge>}
               <Badge>{date(u.created_at, lang, false)}</Badge>
             </div>
@@ -225,6 +227,8 @@ export function AdminCustomer() {
                   if (f.username.trim() && f.username.trim().toLowerCase() !== (u.username ?? '')) body.username = f.username.trim().toLowerCase();
                   if ((f.phone.trim() || null) !== (u.phone ?? null)) body.phone = f.phone.trim() || null;
                   if (f.language !== (u.language ?? 'ar')) body.language = f.language;
+                  if (u.role === 'user' && f.customerType !== (u.customer_type ?? 'personal')) body.customerType = f.customerType;
+                  if (u.role === 'user' && (f.businessName.trim() || null) !== (u.business_name ?? null)) body.businessName = f.businessName.trim() || null;
                   if (!Object.keys(body).length) return;
                   await run({ t: Q.saveT, b: Q.saveB, ok: Q.saveOk }, () => patch(`/api/admin/users/${u.id}`, body));
                 }}
@@ -234,6 +238,18 @@ export function AdminCustomer() {
                 <Field label={t.auth.username} dir="ltr" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} />
                 <Field label={t.people.phone} type="tel" dir="ltr" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
                 <Select block className="sm:col-span-2" label={t.people.language} value={f.language} onChange={(v) => setF({ ...f, language: v })} options={[{ value: 'ar', label: 'العربية' }, { value: 'en', label: 'English' }]} />
+                {u.role === 'user' && (
+                  <>
+                    <Select
+                      block
+                      label={lang === 'ar' ? 'نوع الحساب' : 'Account type'}
+                      value={f.customerType}
+                      onChange={(v) => setF({ ...f, customerType: v })}
+                      options={(Object.keys(KINDS) as Kind[]).map((k) => ({ value: k, label: lang === 'ar' ? KINDS[k].ar : KINDS[k].en }))}
+                    />
+                    {f.customerType !== 'personal' && <Field label={lang === 'ar' ? 'اسم النشاط' : 'Business name'} value={f.businessName} onChange={(e) => setF({ ...f, businessName: e.target.value })} maxLength={80} />}
+                  </>
+                )}
                 <div className="sm:col-span-2">
                   <Button>{t.people.save}</Button>
                 </div>

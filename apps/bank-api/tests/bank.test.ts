@@ -660,6 +660,71 @@ describe('support chat', () => {
     expect(mine.body.data.messages.map((m: any) => m.from_staff)).toEqual([false, true]);
     expect((await request(app).get('/api/support/unread').set(auth(c.token))).body.data.unread).toBe(0);
   });
+  it('one staff member takes a chat; close and rate; the super admin hands it on, even closed; leave', async () => {
+    const sup = auth((await request(app).post('/api/auth/login').send({ login: 'admin@talerbank.local', password: process.env.BANK_ADMIN_PASSWORD })).body.data.accessToken);
+    const mail = `${uniq('desk')}@bank.test`;
+    const made = await request(app).post('/api/admin/admins').set(sup).send({ email: mail, fullName: 'Support Desk', password: STRONG, permissions: ['support'] });
+    const desk = auth((await request(app).post('/api/auth/login').send({ login: mail, password: STRONG })).body.data.accessToken);
+    const c = await registerCustomer(app, 'Queue Customer');
+    expect((await request(app).post('/api/support').set(auth(c.token)).send({ body: 'Help with a transfer', topic: 'transfers' })).status).toBe(201);
+    const q = await request(app).get('/api/admin/support?view=queue').set(desk);
+    expect(q.body.data.threads.find((t: any) => t.user_id === c.userId).topic).toBe('transfers');
+    expect((await request(app).get('/api/admin/support?view=all').set(desk)).status).toBe(403);
+    // the desk replies: it's theirs now; the super admin can read but not reply
+    expect((await request(app).post(`/api/admin/support/${c.userId}`).set(desk).send({ body: 'On it' })).status).toBe(201);
+    expect((await request(app).get(`/api/admin/support/${c.userId}`).set(sup)).status).toBe(200);
+    expect((await request(app).post(`/api/admin/support/${c.userId}`).set(sup).send({ body: 'me too' })).status).toBe(403);
+    expect((await request(app).post(`/api/admin/support/${c.userId}/close`).set(desk)).status).toBe(200);
+    const me = await request(app).get('/api/support').set(auth(c.token));
+    expect(me.body.data.thread.ratingPending).toBe(true);
+    expect((await request(app).post('/api/support/rating').set(auth(c.token)).send({ stars: 5, comment: 'Fast and kind' })).status).toBe(200);
+    // the super admin hands the closed chat back to the desk; it opens again and waits for the desk's answer
+    const deskId = made.body.data.id;
+    const h = await request(app).post(`/api/admin/support/${c.userId}/hand`).set(sup).send({ to: deskId, reason: 'Follow up' });
+    expect(h.body.data.reopened).toBe(true);
+    const inbox = await request(app).get('/api/admin/support-handoffs').set(desk);
+    const ho = inbox.body.data.items.find((x: any) => x.user_id === c.userId);
+    expect((await request(app).post(`/api/admin/support-handoffs/${ho.id}`).set(desk).send({ action: 'decline' })).status).toBe(400);
+    expect((await request(app).post(`/api/admin/support-handoffs/${ho.id}`).set(desk).send({ action: 'decline', answer: 'Away tomorrow' })).status).toBe(200);
+    const all = await request(app).get('/api/admin/support?view=all').set(sup);
+    expect(all.body.data.threads.find((t: any) => t.user_id === c.userId).handoff.answer).toBe('Away tomorrow');
+    const team = await request(app).get('/api/admin/support-team').set(sup);
+    const row = team.body.data.admins.find((a: any) => a.id === deskId);
+    expect(row.stars).toBe('5.0');
+    expect((await request(app).get('/api/admin/support-team').set(desk)).status).toBe(403);
+    // leave: asked by the desk, approved by the super admin, shown on the team page
+    const lv = await request(app).post('/api/admin/leaves').set(desk).send({ startsOn: '2020-01-01', endsOn: '2099-01-01', reason: 'Family trip' });
+    expect(lv.status).toBe(201);
+    expect((await request(app).post(`/api/admin/leaves/${lv.body.data.id}/decide`).set(desk).send({ approve: true })).status).toBe(403);
+    expect((await request(app).post(`/api/admin/leaves/${lv.body.data.id}/decide`).set(sup).send({ approve: true })).status).toBe(200);
+    expect((await request(app).get('/api/admin/support-team').set(sup)).body.data.admins.find((a: any) => a.id === deskId).leave.kind).toBe('leave');
+    expect((await request(app).get('/api/admin/leaves').set(auth(c.token))).status).toBe(403);
+  });
+});
+
+describe('customer types', () => {
+  it('signs up as a business with a name; lookups show it; staff filter, change it and set a limit per type', async () => {
+    const username = uniq('biz');
+    const email = `${username}@example.com`;
+    expect((await request(app).post('/api/auth/register').send({ fullName: 'Shop Owner', email, username, password: STRONG, customerType: 'business' })).status).toBe(400);
+    expect((await request(app).post('/api/auth/register').send({ fullName: 'Shop Owner', email, username, password: STRONG, customerType: 'business', businessName: 'Nablus Books' })).status).toBe(201);
+    const v = await request(app).post('/api/auth/verify-email').send({ email, code: lastCode(email) });
+    expect(v.body.data.user.customer_type).toBe('business');
+    const acc = (await request(app).get('/api/accounts').set(auth(v.body.data.accessToken))).body.data.accounts[0];
+    const c = await registerCustomer(app, 'Looks Up');
+    const look = await request(app).get(`/api/accounts/lookup?q=${acc.iban}`).set(auth(c.token));
+    expect(look.body.data.kind).toBe('business');
+    expect(look.body.data.business).toBe('Nablus Books');
+    const sup = auth((await request(app).post('/api/auth/login').send({ login: 'admin@talerbank.local', password: process.env.BANK_ADMIN_PASSWORD })).body.data.accessToken);
+    const list = await request(app).get('/api/admin/users?type=business').set(sup);
+    expect(list.body.data.users.every((u: any) => u.customer_type === 'business')).toBe(true);
+    expect((await request(app).patch(`/api/admin/users/${c.userId}`).set(sup).send({ customerType: 'agent', businessName: 'Corner Exchange' })).status).toBe(200);
+    // a tiny limit for cash agents stops a bigger transfer
+    expect((await request(app).put('/api/admin/settings').set(sup).send({ limit_agent: '1' })).status).toBe(200);
+    const big = await request(app).post('/api/transfers').set(auth(c.token)).send({ fromAccountId: c.accountId, to: acc.iban, amount: '2' });
+    expect(big.body.error?.code ?? big.body.code).toBe('DAILY_LIMIT');
+    await request(app).put('/api/admin/settings').set(sup).send({ limit_agent: null });
+  });
 });
 
 describe('scheduled payments and blocks', () => {

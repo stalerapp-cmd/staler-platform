@@ -3,6 +3,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { applySession, clearSession, post, get, refreshSession, session } from './api';
 
 export interface User {
+  customer_type?: 'personal' | 'business' | 'agent';
+  business_name?: string | null;
   id: string;
   admin_level?: string | null;
   admin_permissions?: string[] | null;

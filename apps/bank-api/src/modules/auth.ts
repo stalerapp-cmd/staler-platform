@@ -41,7 +41,7 @@ const lang = z.enum(['en', 'ar']).default('en');
 
 export async function publicUser(userId: string) {
   return one(
-    `SELECT u.id, u.full_name, u.email, u.username, u.role, u.admin_level, u.admin_permissions, u.status, u.language, u.theme, u.phone, u.email_verified,
+    `SELECT u.id, u.full_name, u.email, u.username, u.role, u.customer_type, u.business_name, u.admin_level, u.admin_permissions, u.status, u.language, u.theme, u.phone, u.email_verified,
             u.totp_enabled, u.created_at, u.last_login_at,
             COALESCE(cardinality(u.totp_recovery_hashes), 0) AS recovery_codes_left
        FROM ${S}.users u WHERE u.id = $1`,
@@ -50,12 +50,12 @@ export async function publicUser(userId: string) {
 }
 
 /** Creates the customer, their first account (valid IBAN) and pays the optional sign-up bonus. */
-async function createCustomer(p: { full_name: string; email: string; username: string; password_hash: string; language: string; phone?: string | null }) {
+async function createCustomer(p: { full_name: string; email: string; username: string; password_hash: string; language: string; phone?: string | null; customer_type?: string | null; business_name?: string | null }) {
   return tx(async (c) => {
     const user = await one<{ id: string; role: string; token_version: number }>(
-      `INSERT INTO ${S}.users (full_name, email, username, password_hash, role, status, email_verified, language, password_changed_at, phone)
-       VALUES ($1, $2, $3, $4, 'user', 'active', true, $5, now(), $6) RETURNING id, role, token_version`,
-      [p.full_name, p.email, p.username, p.password_hash, p.language, p.phone ?? null],
+      `INSERT INTO ${S}.users (full_name, email, username, password_hash, role, status, email_verified, language, password_changed_at, phone, customer_type, business_name)
+       VALUES ($1, $2, $3, $4, 'user', 'active', true, $5, now(), $6, $7, $8) RETURNING id, role, token_version`,
+      [p.full_name, p.email, p.username, p.password_hash, p.language, p.phone ?? null, p.customer_type ?? 'personal', p.customer_type && p.customer_type !== 'personal' ? (p.business_name ?? null) : null],
       c,
     );
     const iban = generateIban();
@@ -97,11 +97,14 @@ authRouter.post(
         language: lang,
         phone: z.string().trim().regex(/^\+?[0-9 ()-]{7,20}$/).optional(),
         method: z.enum(['email', 'sms']).default('email'),
+        customerType: z.enum(['personal', 'business', 'agent']).default('personal'),
+        businessName: z.string().trim().min(2).max(80).optional(),
       })
-      .strict(),
+      .strict()
+      .refine((b) => b.customerType === 'personal' || b.businessName, 'Write the business name'),
   }),
   ah(async (req, res) => {
-    const { fullName: name, email: mail, username: uname, password, language, phone, method } = req.body;
+    const { fullName: name, email: mail, username: uname, password, language, phone, method, customerType, businessName } = req.body;
     if (method === 'sms' && (!phone || !smsEnabled())) throw badRequest('SMS_DISABLED', 'SMS codes are not available — use e-mail');
     const setting = await one<{ value: unknown }>(`SELECT value FROM ${S}.settings WHERE key = 'allow_registrations'`);
     if (setting && setting.value === false) throw forbidden('Registrations are currently closed', 'REGISTRATION_CLOSED');
@@ -124,13 +127,13 @@ authRouter.post(
 
     const code = numericCode(6);
     await pool.query(
-      `INSERT INTO ${S}.pending_users (full_name, email, username, password_hash, role, verification_code, code_expires_at, expires_at, attempts, language, phone, verification_method)
-       VALUES ($1, $2, $3, $4, 'user', $5, now() + interval '${CODE_TTL_MIN} minutes', now() + interval '24 hours', 0, $6, $7, $8)
+      `INSERT INTO ${S}.pending_users (full_name, email, username, password_hash, role, verification_code, code_expires_at, expires_at, attempts, language, phone, verification_method, customer_type, business_name)
+       VALUES ($1, $2, $3, $4, 'user', $5, now() + interval '${CODE_TTL_MIN} minutes', now() + interval '24 hours', 0, $6, $7, $8, $9, $10)
        ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, username = EXCLUDED.username,
          password_hash = EXCLUDED.password_hash, verification_code = EXCLUDED.verification_code,
          code_expires_at = EXCLUDED.code_expires_at, expires_at = EXCLUDED.expires_at, attempts = 0, language = EXCLUDED.language,
-         phone = EXCLUDED.phone, verification_method = EXCLUDED.verification_method`,
-      [name, mail, uname, await hashPassword(password), codeHash('verify', mail, code), language, phone ?? null, method],
+         phone = EXCLUDED.phone, verification_method = EXCLUDED.verification_method, customer_type = EXCLUDED.customer_type, business_name = EXCLUDED.business_name`,
+      [name, mail, uname, await hashPassword(password), codeHash('verify', mail, code), language, phone ?? null, method, customerType, customerType === 'personal' ? null : (businessName ?? null)],
     );
     if (method === 'sms') await sendSmsCode(phone!, language);
     else await sendMail(codeMail(mail, 'verify', code, language));
@@ -164,6 +167,8 @@ authRouter.post(
       password_hash: p.password_hash,
       language: p.language ?? 'en',
       phone: p.phone ?? null,
+      customer_type: p.customer_type ?? 'personal',
+      business_name: p.business_name ?? null,
     });
     await audit({ userId: user.id, action: 'auth.registered' }, req);
     const session = await issueSession(req, res, user);

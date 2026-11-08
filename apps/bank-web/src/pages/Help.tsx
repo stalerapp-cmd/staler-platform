@@ -1,0 +1,265 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  ArrowLeftRight,
+  Ban,
+  ChevronDown,
+  Crown,
+  KeyRound,
+  Landmark,
+  LifeBuoy,
+  Megaphone,
+  Plane,
+  QrCode,
+  Repeat,
+  Search,
+  ShieldCheck,
+  UserRound,
+  Users,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
+import { useAuth } from '../lib/auth';
+import { useI18n } from '../lib/i18n';
+import { PageHeader, cx } from '../components/ui';
+
+type L = [string, string];
+interface Topic {
+  id: string;
+  who: 'all' | 'admin';
+  icon: LucideIcon;
+  title: L;
+  to?: string;
+  steps: L[];
+}
+
+/** The bank's guide: what each part does and how — customers see theirs, staff see everything. */
+const TOPICS: Topic[] = [
+  {
+    id: 'types',
+    who: 'all',
+    icon: UserRound,
+    title: ['Your account type', 'نوع حسابك'],
+    to: '/app/settings',
+    steps: [
+      ['When you sign up you choose: personal (your everyday money), business (a shop or company) or cash agent (you take and hand out cash). Business and agent accounts add the business name.', 'لما تفتح حساب بتختار: شخصي (مصاريك اليومية)، تجاري (متجر أو شركة) أو صرّاف (بتستلم وبتسلّم كاش للناس). الحساب التجاري والصرّاف بينضافلهم اسم النشاط.'],
+      ['People who send you money see the type and the business name, so they know they reached the right place.', 'اللي بيحوّلك بيشوف نوع الحساب واسم النشاط، فبيعرف إنه وصل للمكان الصح.'],
+      ['Each type can have its own daily transfer limit. To change your type, write to support.', 'كل نوع إله سقف تحويل يومي خاص فيه. لتغيّر النوع احكي مع الدعم.'],
+    ],
+  },
+  {
+    id: 'transfer',
+    who: 'all',
+    icon: ArrowLeftRight,
+    title: ['Transfers', 'الحوالات'],
+    to: '/app/transfer',
+    steps: [
+      ['Type an IBAN, an account number or @username. We show the holder’s name before you confirm.', 'اكتب IBAN، رقم حساب أو @اسم المستخدم. منبيّنلك اسم صاحب الحساب قبل ما تأكد.'],
+      ['Big transfers ask for your 2-step code if you turned it on.', 'الحوالات الكبيرة بتطلب رمز التحقق إذا مفعّله.'],
+    ],
+  },
+  {
+    id: 'requests',
+    who: 'all',
+    icon: QrCode,
+    title: ['Payment requests & QR', 'طلبات الدفع والـ QR'],
+    to: '/app/requests',
+    steps: [['Create a request for an amount and share its link or QR; whoever scans it pays you straight away.', 'اعمل طلب بمبلغ وشارك رابطه أو الـ QR؛ اللي بيمسحه بيدفعلك فورًا.']],
+  },
+  {
+    id: 'scheduled',
+    who: 'all',
+    icon: Repeat,
+    title: ['Scheduled payments', 'الدفعات المجدولة'],
+    to: '/app/scheduled',
+    steps: [
+      ['Money that leaves your account on time by itself: once, weekly, every two weeks, monthly or every N days — forever, until a date or for N payments (instalments).', 'مصاري بتطلع من حسابك لحالها بالموعد: مرة وحدة، كل أسبوع، أسبوعين، شهر أو كل كم يوم — للأبد، لتاريخ، أو عدد دفعات (تقسيط).'],
+      ['The first time, the receiver accepts — in the notification, on their home page or under “To you”. They can decline and stop you asking again.', 'أول مرة، المستلم بيوافق — من الإشعار، من صفحته الرئيسية أو من «دفعات إلك». وبيقدر يرفض ويمنعك تطلب مرة ثانية.'],
+      ['Sent by itself, or only a reminder you pay with one tap; reminders the same day, a day, two days or a week before. Pause, skip, pay now or edit any time.', 'بتنبعت لحالها أو بس تذكير وإنت بتدفع بكبسة؛ والتذكير بنفس اليوم، قبل بيوم، يومين أو أسبوع. وقّف، تخطّى، ادفع هلّأ أو عدّل وقت ما بدك.'],
+    ],
+  },
+  {
+    id: 'privacy',
+    who: 'all',
+    icon: Ban,
+    title: ['Privacy & blocking', 'الخصوصية والبلوك'],
+    to: '/app/scheduled?tab=blocked',
+    steps: [
+      ['Block someone by IBAN, account number or @username. A block stops transfers, QR payments, lookups and scheduled payments between you both ways; they aren’t told.', 'بلّك حدا بالـ IBAN، رقم الحساب أو @اسم المستخدم. البلوك بيوقف الحوالات والـ QR والبحث والدفعات المجدولة بينكم بالاتجاهين، وما بيوصله إشعار.'],
+      ['Settings → Account type & privacy has your blocked list and payments waiting for your yes.', 'من الإعدادات ← نوع الحساب والخصوصية بتلاقي المحظورين والدفعات اللي بتستنى موافقتك.'],
+    ],
+  },
+  {
+    id: 'wallet',
+    who: 'all',
+    icon: Wallet,
+    title: ['Wallet & S-Taler', 'المحفظة وS‑Taler'],
+    to: '/app/wallet',
+    steps: [['Link your S-Taler wallet with a one-time code and move money between the bank and the wallet.', 'اربط محفظة S‑Taler برمز لمرة وحدة، وحوّل بين البنك والمحفظة.']],
+  },
+  {
+    id: 'security',
+    who: 'all',
+    icon: ShieldCheck,
+    title: ['Security', 'الأمان'],
+    to: '/app/settings',
+    steps: [['Turn on 2-step codes, see your signed-in devices and sign them out, and manage linked apps.', 'فعّل رمز التحقق بخطوتين، شوف الأجهزة اللي داخلة وطلّعها، وتحكّم بالتطبيقات المربوطة.']],
+  },
+  {
+    id: 'support',
+    who: 'all',
+    icon: LifeBuoy,
+    title: ['Support', 'الدعم'],
+    to: '/app/support',
+    steps: [
+      ['Pick what it’s about and write. One team member takes it and stays with you; you see who.', 'اختار موضوعك واكتب. حدا من الفريق بيستلمه وبيضل معك، وبتشوف مين.'],
+      ['When it’s closed, rate the help. Write again any time to start a new conversation.', 'لما تتسكّر قيّم المساعدة. واكتب وقت ما بدك لتبلّش محادثة جديدة.'],
+    ],
+  },
+  // ---------------------------------------------------------------- staff
+  {
+    id: 'a-customers',
+    who: 'admin',
+    icon: Users,
+    title: ['Customers & account types', 'الزباين وأنواع الحسابات'],
+    to: '/app/admin/customers',
+    steps: [
+      ['Filter customers by personal, business or cash agent; open one to change their type and business name — they are told.', 'فلتر الزباين حسب شخصي، تجاري أو صرّاف؛ وافتح أي زبون لتغيّر نوع حسابه واسم نشاطه — وبيوصله إشعار.'],
+      ['System settings: a daily transfer limit for each type (empty uses the bank-wide limit).', 'إعدادات النظام: سقف تحويل يومي لكل نوع (فاضي = السقف العام).'],
+    ],
+  },
+  {
+    id: 'a-support',
+    who: 'admin',
+    icon: LifeBuoy,
+    title: ['Answering support', 'الرد على الدعم'],
+    to: '/app/admin/support',
+    steps: [
+      ['New requests wait in the Queue. Take one (or just reply) and it’s yours — only you answer it. Release it back if you can’t.', 'الطلبات الجديدة بتستنى بالطابور. استلم واحد (أو رد عليه) وبيصير إلك — بس إنت بترد. ورجّعه للطابور إذا ما بتقدر.'],
+      ['Close it when done; the customer is asked to rate you.', 'سكّره لما تخلص؛ والزبون بينطلب منه يقيّمك.'],
+      ['“Handed to you” lists chats the super admin gave you, with the reason. Take it, or ask to move it and say why.', '«انحوّلتلك» بتبين المحادثات اللي حوّلها إلك السوبر أدمن مع السبب. استلمها، أو اطلب تحويلها واحكي ليش.'],
+    ],
+  },
+  {
+    id: 'a-team',
+    who: 'admin',
+    icon: Crown,
+    title: ['Super admin: team & every chat', 'السوبر أدمن: الفريق وكل المحادثات'],
+    to: '/app/admin/team',
+    steps: [
+      ['Team performance: chats each member took, open now, first-reply time, ratings and comments.', 'أداء الفريق: كم محادثة استلم كل واحد، المفتوحة معه، سرعة أول رد، التقييمات والتعليقات.'],
+      ['Support → Everything: filter by staff member and status, read any chat live, hand it to someone with a reason (a closed chat opens again) or to yourself to reply.', 'الدعم ← كل المحادثات: فلتر حسب الموظف والحالة، اقرأ أي محادثة أول بأول، وحوّلها لحدا مع السبب (المسكّرة بترجع تنفتح) أو لنفسك لترد.'],
+    ],
+  },
+  {
+    id: 'a-leave',
+    who: 'admin',
+    icon: Plane,
+    title: ['Leave', 'الإجازات'],
+    to: '/app/admin/leaves',
+    steps: [['Any staff member asks for leave with dates and a reason; the super admin approves, declines, or puts someone on leave or off support. While away they get no new requests, and it shows under their name when handing chats.', 'أي موظف بيطلب إجازة بتاريخ وسبب؛ والسوبر أدمن بيوافق، بيرفض، أو بيحط حدا بإجازة أو بيوقفه عن الدعم. وقت الإجازة ما بتوصله طلبات جديدة، وبيبين تحت اسمه لما تحوّل محادثات.']],
+  },
+  {
+    id: 'a-scheduled',
+    who: 'admin',
+    icon: Repeat,
+    title: ['Scheduled payments & blocks', 'الدفعات المجدولة والبلوكات'],
+    to: '/app/admin/scheduled',
+    steps: [['See who pays whom on a schedule and who hasn’t accepted; pause any payment with a reason both sides see. See every block, lift one, or keep two customers apart (they can’t lift a bank block).', 'شوف مين بيدفع لمين بشكل مجدول ومين لسا ما وافق؛ وقّف أي دفعة مع سبب بيوصل للطرفين. وشوف كل البلوكات، شيل أي واحد، أو افصل بين زبونين (وما بيقدروا يشيلوا بلوك البنك).']],
+  },
+  {
+    id: 'a-notify',
+    who: 'admin',
+    icon: Megaphone,
+    title: ['Notifications', 'الإشعارات'],
+    to: '/app/admin/notify',
+    steps: [['Send a notice to everyone or to chosen customers.', 'ابعت إشعار للكل أو لزباين بتختارهم.']],
+  },
+  {
+    id: 'a-ledger',
+    who: 'admin',
+    icon: Landmark,
+    title: ['Ledger, teller & audit', 'الدفتر والصندوق والسجل'],
+    to: '/app/admin/ledger',
+    steps: [['Every movement in the bank, cash in/out at the counter, and an audit log of every staff action.', 'كل حركة بالبنك، إيداع وسحب كاش من الصندوق، وسجل لكل إجراء عمله الموظفين.']],
+  },
+  {
+    id: 'a-admins',
+    who: 'admin',
+    icon: KeyRound,
+    title: ['Staff & permissions', 'الموظفين والصلاحيات'],
+    to: '/app/admin/admins',
+    steps: [['Only the super admin adds staff and chooses exactly what each one may do.', 'بس السوبر أدمن بيضيف موظفين وبيحدد بالضبط شو مسموح لكل واحد.']],
+  },
+];
+
+export default function Help() {
+  const { lang } = useI18n();
+  const ar = lang === 'ar';
+  const { user } = useAuth();
+  const staff = user?.role === 'admin';
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
+  const i = ar ? 1 : 0;
+  const list = TOPICS.filter((t) => (staff ? true : t.who === 'all')).filter((t) => {
+    if (!q.trim()) return true;
+    const hay = `${t.title[i]} ${t.steps.map((s) => s[i]).join(' ')}`.toLowerCase();
+    return hay.includes(q.trim().toLowerCase());
+  });
+  return (
+    <div className="mx-auto max-w-3xl">
+      <PageHeader title={ar ? 'كيف بتشتغل' : 'How it works'} lead={staff ? (ar ? 'كل أقسام البنك — للزباين وللفريق.' : 'Every part of the bank — for customers and for staff.') : ar ? 'كل اللي بتقدر تعمله بحسابك، خطوة بخطوة.' : 'Everything you can do with your account, step by step.'} />
+      <label className="relative mb-4 block">
+        <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={ar ? 'دوّر…' : 'Search…'} className="field h-12 rounded-2xl ps-12" type="search" />
+      </label>
+      {(['all', 'admin'] as const)
+        .filter((g) => g === 'all' || staff)
+        .map((g) => {
+          const items = list.filter((t) => t.who === g);
+          if (!items.length) return null;
+          return (
+            <section key={g} className="mb-6">
+              {staff && <h2 className="mb-2 text-lg">{g === 'all' ? (ar ? 'للزباين' : 'For customers') : ar ? 'للفريق' : 'For staff'}</h2>}
+              <ul className="card divide-y divide-line overflow-hidden">
+                {items.map((t) => {
+                  const on = open === t.id;
+                  return (
+                    <li key={t.id}>
+                      <button onClick={() => setOpen(on ? null : t.id)} aria-expanded={on} className="flex w-full items-center gap-3 px-4 py-3.5 text-start transition hover:bg-sunk/60">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-sunk">
+                          <t.icon className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1 font-semibold">{t.title[i]}</span>
+                        <ChevronDown className={cx('h-5 w-5 shrink-0 text-muted transition', on && 'rotate-180')} />
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {on && (
+                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                            <ol className="space-y-2 px-4 pb-4 ps-[4.25rem]">
+                              {t.steps.map((s, n) => (
+                                <li key={n} className="flex gap-2.5 text-sm leading-relaxed">
+                                  {t.steps.length > 1 && <span className="num mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-night text-[11px] text-white dark:bg-white/20">{n + 1}</span>}
+                                  <span>{s[i]}</span>
+                                </li>
+                              ))}
+                            </ol>
+                            {t.to && (
+                              <Link to={t.to} className="mx-4 mb-4 ms-[4.25rem] inline-flex rounded-xl bg-night px-3.5 py-2 text-sm font-semibold text-white dark:bg-white/15">
+                                {ar ? 'افتحها' : 'Open it'}
+                              </Link>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
+    </div>
+  );
+}

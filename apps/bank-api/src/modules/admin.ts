@@ -35,7 +35,10 @@ adminRouter.get(
                 count(*) FILTER (WHERE role = 'user' AND status = 'active')::int AS active,
                 count(*) FILTER (WHERE role = 'user' AND status = 'suspended')::int AS suspended,
                 count(*) FILTER (WHERE role = 'admin')::int AS admins,
-                count(*) FILTER (WHERE totp_enabled)::int AS with_2fa
+                count(*) FILTER (WHERE totp_enabled)::int AS with_2fa,
+                count(*) FILTER (WHERE role = 'user' AND customer_type = 'personal')::int AS personal,
+                count(*) FILTER (WHERE role = 'user' AND customer_type = 'business')::int AS business,
+                count(*) FILTER (WHERE role = 'user' AND customer_type = 'agent')::int AS agents
            FROM ${S}.users`,
       ),
       one(
@@ -72,7 +75,7 @@ adminRouter.get(
   '/users',
   requirePerm('customers.view'),
   validate({
-    query: pageQuery.extend({ q: z.string().trim().max(64).optional(), status: z.enum(['active', 'suspended', 'pending']).optional() }).strict(),
+    query: pageQuery.extend({ q: z.string().trim().max(64).optional(), status: z.enum(['active', 'suspended', 'pending']).optional(), type: z.enum(['personal', 'business', 'agent']).optional() }).strict(),
   }),
   ah(async (req, res) => {
     const q = req.query as any;
@@ -86,9 +89,13 @@ adminRouter.get(
       params.push(q.status);
       where.push(`u.status = $${params.length}`);
     }
+    if (q.type) {
+      params.push(q.type);
+      where.push(`u.role = 'user' AND u.customer_type = $${params.length}`);
+    }
     params.push(q.limit, q.offset);
     const r = await pool.query(
-      `SELECT u.id, u.full_name, u.email, u.username, u.role, u.status, u.totp_enabled, u.created_at, u.last_login_at,
+      `SELECT u.id, u.full_name, u.email, u.username, u.role, u.customer_type, u.business_name, u.status, u.totp_enabled, u.created_at, u.last_login_at,
               COALESCE((SELECT SUM(balance) FROM ${S}.bank_accounts WHERE user_id = u.id), 0)::text AS total_balance,
               COUNT(*) OVER() AS total
          FROM ${S}.users u WHERE ${where.join(' AND ')}
@@ -105,7 +112,7 @@ adminRouter.get(
   validate({ params: z.object({ id: uuid }).strict() }),
   ah(async (req, res) => {
     const user = await one(
-      `SELECT id, full_name, email, username, role, admin_level, admin_permissions, status, phone, language, totp_enabled, email_verified, failed_login_count,
+      `SELECT id, full_name, email, username, role, customer_type, business_name, admin_level, admin_permissions, status, phone, language, totp_enabled, email_verified, failed_login_count,
               locked_until, created_at, last_login_at FROM ${S}.users WHERE id = $1 AND role <> 'exchange'`,
       [req.params.id],
     );
@@ -144,16 +151,18 @@ adminRouter.patch(
         phone: z.string().trim().regex(/^\+?[0-9 ]{7,20}$/, 'Invalid phone number').nullable().optional(),
         language: z.enum(['en', 'ar']).optional(),
         status: z.enum(['active', 'suspended']).optional(),
+        customerType: z.enum(['personal', 'business', 'agent']).optional(),
+        businessName: z.string().trim().min(2).max(80).nullable().optional(),
       })
       .strict(),
   }),
   ah(async (req, res) => {
     const b = req.body;
-    const target = await one<any>(`SELECT id, email, role, admin_level, language FROM ${S}.users WHERE id = $1 AND role <> 'exchange'`, [req.params.id]);
+    const target = await one<any>(`SELECT id, email, role, admin_level, language, customer_type FROM ${S}.users WHERE id = $1 AND role <> 'exchange'`, [req.params.id]);
     if (!target) throw notFound('User not found');
     assertCanManage(req, target);
     const need: string[] = [];
-    if (b.fullName !== undefined || b.email !== undefined || b.username !== undefined || b.phone !== undefined || b.language !== undefined) need.push('customers.edit');
+    if (b.fullName !== undefined || b.email !== undefined || b.username !== undefined || b.phone !== undefined || b.language !== undefined || b.customerType !== undefined || b.businessName !== undefined) need.push('customers.edit');
     if (b.status !== undefined) need.push('customers.status');
     for (const p of need) if (!isSuper(req) && !(req.auth!.permissions ?? []).includes(p)) throw forbidden('You do not have permission for this action', 'NO_PERMISSION');
     if (b.email && b.email !== target.email.toLowerCase() && (await one(`SELECT 1 FROM ${S}.users WHERE lower(email) = $1 AND id <> $2`, [b.email, target.id]))) {
@@ -168,6 +177,21 @@ adminRouter.patch(
         WHERE id = $1`,
       [target.id, b.fullName ?? null, b.email ?? null, b.username ?? null, b.phone !== undefined, b.phone ?? null, b.language ?? null, b.status ?? null],
     );
+    if (b.customerType !== undefined || b.businessName !== undefined) {
+      await pool.query(`UPDATE ${S}.users SET customer_type = COALESCE($2, customer_type), business_name = CASE WHEN $3 THEN $4 ELSE business_name END WHERE id = $1`, [
+        target.id,
+        b.customerType ?? null,
+        b.businessName !== undefined,
+        b.businessName ?? null,
+      ]);
+      if (b.customerType && b.customerType !== target.customer_type) {
+        const T: Record<string, [string, string]> = { personal: ['personal', 'شخصي'], business: ['business', 'تجاري'], agent: ['cash agent', 'صرّاف'] };
+        await notify(undefined, target.id, 'account_type', 'Your account type changed', `Your account is now ${T[b.customerType]![0]}.`, {
+          ar: { title: 'تغيّر نوع حسابك', body: `حسابك صار ${T[b.customerType]![1]}.` },
+          link: '/app/settings',
+        });
+      }
+    }
     forgetUser(target.id);
     if (b.status === 'suspended') await revokeAllSessions(target.id);
     if (b.email && b.email !== target.email.toLowerCase()) {
@@ -593,6 +617,9 @@ const SETTINGS_SCHEMA = z
   .object({
     allow_registrations: z.boolean().optional(),
     maintenance_mode: z.boolean().optional(),
+    limit_personal: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
+    limit_business: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
+    limit_agent: z.string().regex(/^\d+(\.\d{1,2})?$/).nullable().optional(),
     bank_name: z.string().trim().min(2).max(60).optional(),
   })
   .strict();
@@ -601,8 +628,8 @@ adminRouter.get(
   '/settings',
   requirePerm('settings.manage'),
   ah(async (_req, res) => {
-    const r = await pool.query(`SELECT key, value FROM ${S}.settings WHERE key = ANY($1)`, [['allow_registrations', 'maintenance_mode', 'bank_name']]);
-    res.json({ success: true, data: { settings: Object.fromEntries(r.rows.map((x) => [x.key, x.value])) } });
+    const r = await pool.query(`SELECT key, value FROM ${S}.settings WHERE key = ANY($1)`, [['allow_registrations', 'maintenance_mode', 'bank_name', 'limit_personal', 'limit_business', 'limit_agent']]);
+    res.json({ success: true, data: { settings: Object.fromEntries(r.rows.map((x) => [x.key, x.value])), defaultLimit: env.DAILY_TRANSFER_LIMIT } });
   }),
 );
 

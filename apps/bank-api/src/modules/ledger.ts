@@ -128,9 +128,21 @@ export async function assertDailyLimit(c: pg.PoolClient, userId: string, amount:
     [userId],
     c,
   );
-  if (toCents(r?.total ?? '0') + toCents(amount) > toCents(env.DAILY_TRANSFER_LIMIT)) {
-    throw new AppError(409, 'DAILY_LIMIT', `Daily limit of ${env.DAILY_TRANSFER_LIMIT} ${env.CURRENCY} reached`);
+  const limit = await dailyLimitFor(userId, c);
+  if (toCents(r?.total ?? '0') + toCents(amount) > toCents(limit)) {
+    throw new AppError(409, 'DAILY_LIMIT', `Daily limit of ${limit} ${env.CURRENCY} reached`);
   }
+}
+
+/** Each kind of customer can have its own daily limit (set by staff); otherwise the bank-wide one. */
+export async function dailyLimitFor(userId: string, c?: pg.PoolClient): Promise<string> {
+  const r = await one<{ v: unknown }>(
+    `SELECT s.value AS v FROM ${S}.users u LEFT JOIN ${S}.settings s ON s.key = 'limit_' || u.customer_type WHERE u.id = $1`,
+    [userId],
+    c,
+  );
+  const v = r?.v;
+  return v != null && /^\d+(\.\d{1,2})?$/.test(String(v)) ? String(v) : env.DAILY_TRANSFER_LIMIT;
 }
 
 export function assertMaxTransfer(amount: string): void {

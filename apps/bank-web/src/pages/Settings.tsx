@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { LogOut, ShieldAlert, ShieldCheck, Lock } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Ban, Inbox, LogOut, ShieldAlert, ShieldCheck, Lock } from 'lucide-react';
 import { applySession, del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
 import { BioToggle } from '../components/AppLock';
 import { useI18n } from '../lib/i18n';
+import { kindOf } from '../lib/kinds';
 import { useTheme } from '../lib/theme';
 import { ThemePicker } from '../components/ThemePicker';
 import { fill } from '../lib/format';
@@ -110,6 +111,46 @@ export default function Settings() {
         </form>
       </Section>
 
+      {user?.role === 'user' && (
+        <Section title={lang === 'ar' ? 'نوع الحساب والخصوصية' : 'Account type & privacy'}>
+          {(() => {
+            const K = kindOf(user.customer_type);
+            return (
+              <div className="flex items-center gap-3 rounded-2xl bg-sunk/60 p-3.5">
+                <span className={`grid h-11 w-11 place-items-center rounded-xl ${K.tone}`}>
+                  <K.icon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">
+                    {lang === 'ar' ? `حساب ${K.ar}` : `${K.en} account`}
+                    {user.business_name ? ` · ${user.business_name}` : ''}
+                  </p>
+                  <p className="text-xs text-muted">{lang === 'ar' ? 'لتغييره (مثلًا من شخصي لتجاري) احكي مع الدعم.' : 'To change it (e.g. personal to business), talk to support.'}</p>
+                </div>
+                <Link to="/app/support" className="shrink-0 text-sm font-semibold text-sky">
+                  {lang === 'ar' ? 'الدعم' : 'Support'}
+                </Link>
+              </div>
+            );
+          })()}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <Link to="/app/scheduled?tab=incoming" className="flex items-center gap-3 rounded-2xl p-3.5 ring-1 ring-line transition hover:bg-sunk/60">
+              <Inbox className="h-5 w-5 text-olive" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{lang === 'ar' ? 'دفعات مجدولة إلك' : 'Payments scheduled to you'}</span>
+                <span className="block text-xs text-muted">{lang === 'ar' ? 'وافق، ارفض، أو امنع حدا يطلب' : 'Accept, decline, or stop someone asking'}</span>
+              </span>
+            </Link>
+            <Link to="/app/scheduled?tab=blocked" className="flex items-center gap-3 rounded-2xl p-3.5 ring-1 ring-line transition hover:bg-sunk/60">
+              <Ban className="h-5 w-5 text-stitch" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{lang === 'ar' ? 'المحظورين' : 'Blocked'}</span>
+                <span className="block text-xs text-muted">{lang === 'ar' ? 'بلّك حدا أو شيل البلوك' : 'Block someone or unblock'}</span>
+              </span>
+            </Link>
+          </div>
+        </Section>
+      )}
       <Section title={t.settings.password}>
         {pwStep === 'form' ? (
           <form

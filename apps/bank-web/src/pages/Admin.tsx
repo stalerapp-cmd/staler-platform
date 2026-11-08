@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Megaphone, Search, Users } from 'lucide-react';
 import { get, post, put } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { KINDS, kindOf, type Kind } from '../lib/kinds';
 import { useData } from '../lib/hooks';
 import { date, money, relative } from '../lib/format';
 import { fmtIban } from '../components/Bank';
@@ -10,7 +11,7 @@ import { useConfirm } from '../components/Confirm';
 import { usePerm } from '../lib/perm';
 import { AreaChart } from '../components/Chart';
 import { useToast } from '../components/Toast';
-import { Avatar, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Segmented, Select, Sheet, Skeleton, Toggle, cx } from '../components/ui';
+import { AmountInput, Avatar, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Segmented, Select, Sheet, Skeleton, Toggle, cx } from '../components/ui';
 
 function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: 'gold' | 'olive' | 'stitch' }) {
   return (
@@ -79,6 +80,7 @@ export function AdminOverview() {
         <Stat label={t.admin.volume} value={money(d.activity.volume_7d, lang)} tone="olive" />
         <Stat label={t.admin.customers} value={d.users.customers} />
         <Stat label={t.admin.with2fa} value={`${d.users.with_2fa}`} />
+        <Stat label={lang === 'ar' ? 'شخصي · تجاري · صرّاف' : 'Personal · business · agent'} value={`${d.users.personal ?? 0} · ${d.users.business ?? 0} · ${d.users.agents ?? 0}`} />
         <Stat label={t.admin.tx24} value={d.activity.tx_24h} />
         <Stat label={t.admin.pending} value={d.pendingWithdrawals} tone={d.money.frozen_accounts ? 'stitch' : undefined} />
       </div>
@@ -125,7 +127,8 @@ export function AdminCustomers() {
   const { t, lang, err } = useI18n();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'' | 'active' | 'suspended'>('');
-  const list = usePaged<any>('/api/admin/users', 'users', { q, status });
+  const [type, setType] = useState<'' | Kind>('');
+  const list = usePaged<any>('/api/admin/users', 'users', { q, status, type });
   return (
     <div>
       <PageHeader title={t.admin.customers} />
@@ -144,6 +147,17 @@ export function AdminCustomers() {
             { value: 'suspended', label: t.admin.suspended },
           ]}
         />
+        <div className="flex w-full flex-wrap gap-1.5">
+          {(['', 'personal', 'business', 'agent'] as const).map((k) => {
+            const K = k ? KINDS[k] : null;
+            return (
+              <button key={k || 'all'} onClick={() => setType(k)} className={cx('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition', type === k ? 'bg-night text-white dark:bg-white/15' : 'bg-sunk text-ink/80 hover:text-ink')}>
+                {K && <K.icon className="h-4 w-4" />}
+                {K ? (lang === 'ar' ? K.ar : K.en) : lang === 'ar' ? 'كل الأنواع' : 'All types'}
+              </button>
+            );
+          })}
+        </div>
       </div>
       {list.error ? <ErrorNote>{err(list.error)}</ErrorNote> : null}
       <div className="card overflow-hidden">
@@ -156,9 +170,14 @@ export function AdminCustomers() {
                 <Link to={`/app/admin/customers/${u.id}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-sunk">
                   <Avatar name={u.full_name} size={40} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{u.full_name}</p>
+                    <p className="flex min-w-0 items-center gap-1.5 font-medium">
+                      <span className="truncate">{u.full_name}</span>
+                      {u.role === 'user' && u.customer_type && u.customer_type !== 'personal' && (
+                        <span className={cx('shrink-0 rounded-full px-2 py-0.5 text-[11px]', kindOf(u.customer_type).tone)}>{lang === 'ar' ? kindOf(u.customer_type).ar : kindOf(u.customer_type).en}</span>
+                      )}
+                    </p>
                     <p className="num truncate text-xs text-muted">
-                      @{u.username} · {u.email}
+                      {u.business_name ? `${u.business_name} · ` : ''}@{u.username} · {u.email}
                     </p>
                   </div>
                   <div className="hidden text-end sm:block">
@@ -347,14 +366,22 @@ export function AdminAudit() {
 }
 
 export function AdminSettings() {
-  const { t, err } = useI18n();
+  const { t, err, lang } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
-  const { data, reload } = useData<{ settings: Record<string, any> }>('/api/admin/settings');
+  const { data, reload } = useData<{ settings: Record<string, any>; defaultLimit?: string }>('/api/admin/settings');
   const [s, setS] = useState<Record<string, any> | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (data) setS({ allow_registrations: data.settings.allow_registrations !== false, maintenance_mode: data.settings.maintenance_mode === true, bank_name: data.settings.bank_name ?? 'TalerBank' });
+    if (data)
+      setS({
+        allow_registrations: data.settings.allow_registrations !== false,
+        maintenance_mode: data.settings.maintenance_mode === true,
+        bank_name: data.settings.bank_name ?? 'TalerBank',
+        limit_personal: data.settings.limit_personal ?? '',
+        limit_business: data.settings.limit_business ?? '',
+        limit_agent: data.settings.limit_agent ?? '',
+      });
   }, [data]);
   if (!s) return <Loading />;
   return (
@@ -367,7 +394,8 @@ export function AdminSettings() {
           if (!(await confirm({ title: t.ask.saveTitle, body: t.ask.saveBody, confirmLabel: t.common.save }))) return;
           setBusy(true);
           try {
-            await put('/api/admin/settings', { ...s, bank_name: String(s.bank_name).trim() });
+            const lim = (v: string) => (String(v).trim() ? String(v).trim() : null);
+            await put('/api/admin/settings', { ...s, bank_name: String(s.bank_name).trim(), limit_personal: lim(s.limit_personal), limit_business: lim(s.limit_business), limit_agent: lim(s.limit_agent) });
             toast(t.common.saved);
             void reload();
           } catch (e2) {
@@ -380,6 +408,13 @@ export function AdminSettings() {
         <Field label={t.admin.bankName} value={s.bank_name} onChange={(e) => setS({ ...s, bank_name: e.target.value })} minLength={2} maxLength={60} required />
         <Toggle checked={s.allow_registrations} onChange={(v) => setS({ ...s, allow_registrations: v })} label={t.admin.registrations} />
         <Toggle checked={s.maintenance_mode} onChange={(v) => setS({ ...s, maintenance_mode: v })} label={t.admin.maintenance} description={t.admin.maintenanceD} />
+        <fieldset className="space-y-3 rounded-2xl bg-sunk/50 p-4">
+          <legend className="px-1 text-sm font-semibold">{lang === 'ar' ? 'سقف التحويل اليومي حسب نوع الحساب' : 'Daily transfer limit per account type'}</legend>
+          <p className="text-xs text-muted">{lang === 'ar' ? `فاضي = السقف العام (${data?.defaultLimit ?? ''}).` : `Empty = the bank-wide limit (${data?.defaultLimit ?? ''}).`}</p>
+          {(Object.keys(KINDS) as Kind[]).map((k) => (
+            <AmountInput key={k} label={lang === 'ar' ? `حساب ${KINDS[k].ar}` : `${KINDS[k].en} account`} value={s[`limit_${k}`]} onChange={(v) => setS({ ...s, [`limit_${k}`]: v })} />
+          ))}
+        </fieldset>
         <Button loading={busy}>{t.common.save}</Button>
       </form>
       <MailCheck />

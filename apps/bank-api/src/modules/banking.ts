@@ -45,7 +45,7 @@ export async function resolveRecipient(raw: string) {
   if (/^[A-Za-z]{2}\d{2}[A-Za-z0-9 ]{10,40}$/.test(q)) {
     const iban = normalizeIban(q);
     row = await one(
-      `SELECT a.id, a.user_id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.status
+      `SELECT a.id, a.user_id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.customer_type, u.business_name, u.status
          FROM ${S}.bank_accounts a JOIN ${S}.users u ON u.id = a.user_id WHERE a.iban = $1`,
       [iban],
     );
@@ -53,13 +53,13 @@ export async function resolveRecipient(raw: string) {
     if (!row && !isValidIban(iban)) throw badRequest('INVALID_IBAN', 'This IBAN is not valid (check digits)');
   } else if (/^TB\d{10}$/i.test(q)) {
     row = await one(
-      `SELECT a.id, a.user_id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.status
+      `SELECT a.id, a.user_id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.customer_type, u.business_name, u.status
          FROM ${S}.bank_accounts a JOIN ${S}.users u ON u.id = a.user_id WHERE a.account_number = $1`,
       [q.toUpperCase()],
     );
   } else if (/^@?[a-z0-9_]{3,32}$/i.test(q)) {
     row = await one(
-      `SELECT a.id, a.user_id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.status
+      `SELECT a.id, a.user_id, a.iban, a.account_number, a.is_locked, a.is_taler_exchange, u.full_name, u.customer_type, u.business_name, u.status
          FROM ${S}.users u JOIN ${S}.bank_accounts a ON a.user_id = u.id
         WHERE u.username = $1 AND u.role = 'user' ORDER BY a.is_primary DESC, a.created_at ASC LIMIT 1`,
       [q.replace(/^@/, '').toLowerCase()],
@@ -91,7 +91,7 @@ bankingRouter.get(
   ah(async (req, res) => {
     const r = await resolveRecipient(String(req.query.q));
     await assertNotBlocked(req.auth!.userId, String(r.user_id));
-    res.json({ success: true, data: { iban: r.iban, accountNumber: r.account_number, holder: maskName(r.full_name) } });
+    res.json({ success: true, data: { iban: r.iban, accountNumber: r.account_number, holder: maskName(r.full_name), kind: r.customer_type ?? 'personal', business: r.customer_type && r.customer_type !== 'personal' ? r.business_name : null } });
   }),
 );
 
