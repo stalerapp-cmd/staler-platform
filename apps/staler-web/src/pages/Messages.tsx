@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, PhoneCall, Copy, CornerUpLeft, ExternalLink, LifeBuoy, MessageCirclePlus, MessagesSquare, Pencil, SendHorizontal, Smile, Trash2, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Ban, PhoneCall, Copy, CornerUpLeft, ExternalLink, LifeBuoy, MessageCirclePlus, MessagesSquare, Pencil, SendHorizontal, Smile, Trash2, UserPlus, X } from 'lucide-react';
 import { del, get, patch, post, PUBLIC_ORIGIN } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useData, usePolling } from '../lib/hooks';
@@ -10,6 +10,7 @@ import { relative } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { Avatar, Button, EmptyState, PageHeader, Sheet, Skeleton, cx } from '../components/ui';
 import { useConfirm } from '../components/Confirm';
+import { BlockPicker } from '../components/PrivacySettings';
 import { HandoffInbox, SupportQueue, SupportRating, SupportTopics, topicOf } from '../components/SupportDesk';
 import { CallRequestsSheet } from '../components/CallRequests';
 import { useAuth } from '../lib/auth';
@@ -474,6 +475,7 @@ export default function Messages() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const other = current?.type !== 'support' ? current?.participants?.[0] : null;
+  const [blocking, setBlocking] = useState(false);
   const wide = useWide();
   const { user } = useAuth();
   const { can } = usePerm();
@@ -572,6 +574,8 @@ export default function Messages() {
                     <button
                       className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm text-muted transition hover:bg-sunk hover:text-ink"
                       onClick={async () => {
+                        const name = other.full_name ?? title(current, t);
+                        if (!(await confirm({ title: lang === 'ar' ? `تضيف ${name} لجهات اتصالك؟` : `Add ${name} to your contacts?`, body: lang === 'ar' ? 'بيصير يبين عندك بجهات الاتصال، وبتقدر تبعتله مصاري أو تراسله بسرعة.' : 'They show in your contacts, for quick messages and payments.', confirmLabel: lang === 'ar' ? 'أضف' : 'Add' }))) return;
                         try {
                           await post('/api/contacts', { userId: other.id });
                           toast(t.messages.saved);
@@ -585,6 +589,12 @@ export default function Messages() {
                       <span className="hidden sm:inline">{t.messages.saveContact}</span>
                     </button>
                   )}
+                  {other && current?.type !== 'support' && (
+                    <button className="grid h-9 w-9 place-items-center rounded-xl text-muted transition hover:bg-stitch/10 hover:text-stitch" onClick={() => setBlocking(true)} title={lang === 'ar' ? 'بلّك' : 'Block'} aria-label={lang === 'ar' ? 'بلّك' : 'Block'}>
+                      <Ban className="h-4 w-4" />
+                    </button>
+                  )}
+                  {other && <BlockPicker open={blocking} onClose={() => setBlocking(false)} preset={{ id: other.id, full_name: other.full_name ?? title(current, t), profile_image: other.profile_image }} onDone={() => (setBlocking(false), nav('/app/messages'))} />}
                   {staff && current?.status === 'active' && current.type === 'support' && String(current.assigned_to) === String(user?.id) && (
                     <button
                       className="rounded-xl px-2.5 py-2 text-sm text-muted hover:text-ink"

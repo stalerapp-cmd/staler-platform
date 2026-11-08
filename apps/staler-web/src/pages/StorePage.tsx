@@ -5,7 +5,7 @@ import { cityWithGov } from './Stores';
 import { fill } from '../lib/format';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { BadgePercent, BellOff, BellRing, Bike, ClipboardList, Crown, Facebook, GitBranch, Instagram, Map as MapIcon, MapPin, MessageCircle, Music2, Package, Phone, Quote, Search, Share2, ShoppingBag, Store as StoreIcon, Tag, Truck } from 'lucide-react';
+import { ArrowUpDown, BadgePercent, BellOff, BellRing, Bike, Check, ClipboardList, Crown, Facebook, GitBranch, Instagram, Map as MapIcon, MapPin, MessageCircle, Music2, Package, Phone, Quote, Search, Share2, ShoppingBag, Store as StoreIcon, Tag, Truck } from 'lucide-react';
 import { assetUrl, get, PUBLIC_ORIGIN, put } from '../lib/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../lib/auth';
@@ -336,7 +336,7 @@ export default function StorePage() {
 
           {/* --------------------------------------------------------- ads */}
           {data!.ads.length > 0 && (
-            <section className="mt-8">
+            <section className="mt-10">
               <h2 className="mb-3 px-1 text-xl">{t.shop.ads}</h2>
               <ScrollRow nudgeKey={`ads-${slug}`} label={t.shop.ads}>
                 {data!.ads.map((ad, i) => (
@@ -380,7 +380,10 @@ export default function StorePage() {
 
           {/* ----------------------------------------------------- branches */}
           {data!.branches.length > 1 && (
-            <section className="mt-6">
+            <section className="mt-8">
+              <h2 className="mb-3 flex items-center gap-2 text-xl">
+                <GitBranch className="h-5 w-5 text-gold" /> {t.shop.branches}
+              </h2>
               <ScrollRow label={t.shop.branches} innerClassName="gap-2">
                 {data!.branches.map((b) => {
                   const on = b.slug === slug;
@@ -416,11 +419,14 @@ export default function StorePage() {
               <CountChip n={products?.length ?? null} />
             </div>
             <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-4 mb-4 flex flex-col gap-2.5 bg-bg/85 px-4 py-2.5 backdrop-blur-md sm:mx-0 sm:flex-row sm:items-center sm:rounded-2xl sm:px-3">
-              <label className="relative block min-w-0 flex-1">
-                <span className="sr-only">{t.common.search}</span>
-                <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={fill(t.shop.searchIn, { store: s.store_name })} className="field h-12 rounded-2xl ps-12" type="search" />
-              </label>
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <label className="relative block min-w-0 flex-1">
+                  <span className="sr-only">{t.common.search}</span>
+                  <Search className="pointer-events-none absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={fill(t.shop.searchIn, { store: s.store_name })} className="field h-12 rounded-2xl ps-12" type="search" />
+                </label>
+                <SortMenu value={sort} onChange={setSort} accent={accent} />
+              </div>
               <ScrollRow label={t.tx.filter} innerClassName="gap-2 pb-0.5" bleed={false} className="sm:max-w-[55%] sm:shrink-0">
                 {[
                   { value: 'all', label: t.common.all },
@@ -441,7 +447,7 @@ export default function StorePage() {
                 ))}
               </ScrollRow>
             </div>
-            <div className="mb-4 flex flex-wrap items-center gap-2">
+            {picked.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-2">
               {picked.map((k) => {
                 const name = k === 'deals' ? (lang === 'ar' ? 'عروض وخصومات' : 'On offer') : k === 'wholesale' ? (lang === 'ar' ? 'أسعار الجملة' : 'Wholesale') : (data!.sections ?? []).find((x) => x.id === k)?.name;
                 return (
@@ -455,14 +461,7 @@ export default function StorePage() {
                   {lang === 'ar' ? 'امسح الكل' : 'Clear all'}
                 </button>
               )}
-              <select value={sort} onChange={(e) => setSort(e.target.value)} className="field ms-auto h-9 w-auto rounded-full py-0 text-sm" aria-label={lang === 'ar' ? 'رتّب' : 'Sort'}>
-                <option value="new">{lang === 'ar' ? 'الأحدث' : 'Newest'}</option>
-                <option value="popular">{lang === 'ar' ? 'الأكثر مبيعًا' : 'Best selling'}</option>
-                <option value="price_asc">{lang === 'ar' ? 'السعر: من الأقل' : 'Price: low to high'}</option>
-                <option value="price_desc">{lang === 'ar' ? 'السعر: من الأعلى' : 'Price: high to low'}</option>
-                <option value="name">{lang === 'ar' ? 'الاسم' : 'Name'}</option>
-              </select>
-            </div>
+            </div>}
             {!products ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -601,6 +600,79 @@ function StorePerks({ merchantId, onPerks }: { merchantId: string; onPerks?: (p:
         {p.notify ? <BellRing className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
         {p.notify ? (ar ? 'إشعاراته مفعّلة' : 'Notifications on') : ar ? 'فعّل إشعاراته' : 'Get its news'}
       </button>
+    </div>
+  );
+}
+
+const SORTS: [string, string, string][] = [
+  ['new', 'الأحدث', 'Newest'],
+  ['popular', 'الأكثر مبيعًا', 'Best selling'],
+  ['price_asc', 'السعر: من الأقل', 'Price: low to high'],
+  ['price_desc', 'السعر: من الأعلى', 'Price: high to low'],
+  ['name', 'حسب الاسم', 'By name'],
+];
+
+/** Sort products: a compact button that opens a clean list with the choice ticked. */
+function SortMenu({ value, onChange, accent }: { value: string; onChange: (v: string) => void; accent: string }) {
+  const { lang } = useI18n();
+  const ar = lang === 'ar';
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('pointerdown', away);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+  const cur = SORTS.find((x) => x[0] === value) ?? SORTS[0]!;
+  return (
+    <div ref={wrap} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ar ? 'رتّب المنتجات' : 'Sort products'}
+        className={cx('flex h-12 items-center gap-2 rounded-2xl bg-surface px-3.5 text-sm ring-1 transition hover:ring-ink/25', open ? 'ring-ink/30' : 'ring-line', value !== 'new' && 'font-semibold')}
+      >
+        <ArrowUpDown className="h-[18px] w-[18px]" style={value !== 'new' ? { color: accent } : undefined} />
+        <span className="hidden whitespace-nowrap min-[480px]:inline">{ar ? cur[1] : cur[2]}</span>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.ul
+            role="listbox"
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.14 }}
+            className="absolute end-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-2xl bg-surface p-1.5 shadow-lift ring-1 ring-line"
+          >
+            <li className="px-3 pb-1 pt-1.5 text-xs text-muted">{ar ? 'رتّب حسب' : 'Sort by'}</li>
+            {SORTS.map(([k, a, e]) => (
+              <li key={k}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={value === k}
+                  onClick={() => (onChange(k), setOpen(false))}
+                  className={cx('flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-start text-sm transition hover:bg-sunk', value === k && 'font-semibold')}
+                >
+                  {ar ? a : e}
+                  {value === k && <Check className="h-4 w-4" style={{ color: accent }} />}
+                </button>
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
