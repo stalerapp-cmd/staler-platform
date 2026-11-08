@@ -1,7 +1,7 @@
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Fingerprint, KeySquare, Scale, KeyRound } from 'lucide-react';
+import { Check, Eye, EyeOff, Fingerprint, KeySquare, Scale, KeyRound } from 'lucide-react';
 import { ApiError, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -234,40 +234,72 @@ export function Register() {
         }}
       >
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-ink/80">{lang === 'ar' ? 'نوع الحساب' : 'Account type'}</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(KINDS) as Kind[]).map((k) => {
+          <legend className="mb-2.5 text-sm font-medium text-ink/80">{lang === 'ar' ? 'نوع الحساب' : 'Account type'}</legend>
+          <div role="radiogroup" aria-label={lang === 'ar' ? 'نوع الحساب' : 'Account type'} className="space-y-2">
+            {(Object.keys(KINDS) as Kind[]).map((k, i) => {
               const K = KINDS[k];
               const on = kind === k;
               return (
-                <button
+                <motion.button
                   key={k}
                   type="button"
-                  aria-pressed={on}
+                  role="radio"
+                  aria-checked={on}
                   onClick={() => setKind(k)}
-                  className={`flex flex-col items-center gap-1.5 rounded-2xl p-3 text-center ring-1 transition ${on ? 'bg-night text-white ring-night dark:bg-white/15' : 'bg-surface ring-line hover:ring-ink/30'}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 * i, duration: 0.3 }}
+                  whileTap={{ scale: 0.985 }}
+                  className={`relative flex w-full items-center gap-3.5 overflow-hidden rounded-2xl px-3.5 py-3 text-start ring-1 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${on ? 'text-white ring-transparent' : 'bg-surface ring-line hover:ring-ink/25'}`}
                 >
-                  <span className={`grid h-9 w-9 place-items-center rounded-xl ${on ? 'bg-white/15' : K.tone}`}>
-                    <K.icon className="h-[18px] w-[18px]" />
+                  {on && (
+                    <motion.span
+                      layoutId="kind-pick"
+                      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                      className="absolute inset-0 rounded-2xl bg-night shadow-[0_10px_30px_-12px_rgb(var(--vault)/0.6)] ring-1 ring-gold/60 dark:bg-white/[0.12]"
+                      aria-hidden
+                    />
+                  )}
+                  <motion.span
+                    animate={{ scale: on ? 1.06 : 1, rotate: on ? -4 : 0 }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 20 }}
+                    className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl ${on ? 'bg-gold text-night' : K.tone}`}
+                  >
+                    <K.icon className="h-5 w-5" />
+                  </motion.span>
+                  <span className="relative min-w-0 flex-1">
+                    <span className="block font-semibold leading-tight">{lang === 'ar' ? K.ar : K.en}</span>
+                    <span className={`mt-0.5 block text-xs leading-snug ${on ? 'text-white/70' : 'text-muted'}`}>{lang === 'ar' ? K.arLead : K.enLead}</span>
                   </span>
-                  <span className="text-sm font-semibold">{lang === 'ar' ? K.ar : K.en}</span>
-                </button>
+                  <span className={`relative grid h-6 w-6 shrink-0 place-items-center rounded-full ring-1 transition-colors ${on ? 'bg-gold text-night ring-gold' : 'ring-line'}`} aria-hidden>
+                    <AnimatePresence>
+                      {on && (
+                        <motion.span key="tick" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: 'spring', stiffness: 500, damping: 22 }}>
+                          <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </span>
+                </motion.button>
               );
             })}
           </div>
-          <p className="mt-1.5 text-xs text-muted">{lang === 'ar' ? KINDS[kind].arLead : KINDS[kind].enLead}</p>
         </fieldset>
         <Field label={t.auth.fullName} value={f.fullName} onChange={set('fullName')} autoComplete="name" required error={fe.fullName} />
-        {kind !== 'personal' && (
-          <Field
-            label={kind === 'business' ? (lang === 'ar' ? 'اسم المتجر أو الشركة' : 'Shop or company name') : lang === 'ar' ? 'اسم محل الصرافة' : 'Exchange shop name'}
-            value={f.businessName}
-            onChange={set('businessName')}
-            required
-            maxLength={80}
-            error={fe.businessName}
-          />
-        )}
+        <AnimatePresence initial={false}>
+          {kind !== 'personal' && (
+            <motion.div key="biz" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }} className="overflow-hidden">
+              <Field
+                label={kind === 'business' ? (lang === 'ar' ? 'اسم المتجر أو الشركة' : 'Shop or company name') : lang === 'ar' ? 'اسم محل الصرافة' : 'Exchange shop name'}
+                value={f.businessName}
+                onChange={set('businessName')}
+                required
+                maxLength={80}
+                error={fe.businessName}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <Field label={t.auth.email} type="email" value={f.email} onChange={set('email')} autoComplete="email" dir="ltr" required error={fe.email} />
         <Field label={t.auth.username} value={f.username} onChange={set('username')} autoComplete="username" dir="ltr" required hint={t.auth.usernameHint} error={fe.username} />
         <Field label={`${t.auth.phone} (${t.common.optional})`} type="tel" value={f.phone} onChange={set('phone')} autoComplete="tel" dir="ltr" error={fe.phone} />
