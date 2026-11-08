@@ -250,39 +250,39 @@ export function Register() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 * i, duration: 0.3 }}
                   whileTap={{ scale: 0.96 }}
-                  className={`relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl px-2 pb-2 pt-5 text-center ring-1 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${on ? 'text-white ring-transparent' : 'bg-surface ring-line hover:ring-ink/25'}`}
+                  className={`relative flex h-[84px] flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl px-2 text-center ring-1 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${on ? 'text-white ring-transparent' : 'bg-surface ring-line hover:ring-ink/25'}`}
                 >
                   {on && (
                     <motion.span
                       layoutId="kind-pick"
                       transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                      className="absolute inset-0 rounded-2xl bg-night shadow-[0_10px_30px_-12px_rgb(var(--vault)/0.6)] ring-1 ring-gold/60 dark:bg-white/[0.12]"
+                      className="absolute inset-0 rounded-xl bg-night shadow-[0_8px_22px_-12px_rgb(var(--vault)/0.6)] ring-1 ring-gold/60 dark:bg-white/[0.12]"
                       aria-hidden
                     />
                   )}
-                  <span className={`absolute end-2 top-2 grid h-5 w-5 place-items-center rounded-full ring-1 transition-colors ${on ? 'bg-gold text-night ring-gold' : 'ring-line'}`} aria-hidden>
+                  <span className={`absolute end-1.5 top-1.5 grid h-4 w-4 place-items-center rounded-full ring-1 transition-colors ${on ? 'bg-gold text-night ring-gold' : 'ring-line'}`} aria-hidden>
                     <AnimatePresence>
                       {on && (
                         <motion.span key="tick" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: 'spring', stiffness: 500, damping: 22 }}>
-                          <Check className="h-3 w-3" strokeWidth={3} />
+                          <Check className="h-2.5 w-2.5" strokeWidth={3.5} />
                         </motion.span>
                       )}
                     </AnimatePresence>
                   </span>
                   <motion.span
-                    animate={{ scale: on ? 1.08 : 1, rotate: on ? -4 : 0 }}
+                    animate={{ scale: on ? 1.05 : 1, rotate: on ? -4 : 0 }}
                     transition={{ type: 'spring', stiffness: 380, damping: 20 }}
-                    className={`relative grid h-11 w-11 place-items-center rounded-xl ${on ? 'bg-gold text-night' : K.tone}`}
+                    className={`relative grid h-8 w-8 place-items-center rounded-lg ${on ? 'bg-gold text-night' : K.tone}`}
                   >
-                    <K.icon className="h-5 w-5" />
+                    <K.icon className="h-4 w-4" />
                   </motion.span>
-                  <span className="relative text-sm font-semibold leading-tight">{lang === 'ar' ? K.ar : K.en}</span>
+                  <span className="relative text-[13px] font-semibold leading-tight">{lang === 'ar' ? K.ar : K.en}</span>
                 </motion.button>
               );
             })}
           </div>
           <AnimatePresence mode="wait" initial={false}>
-            <motion.p key={kind} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.2 }} className="mt-2 text-center text-xs text-muted">
+            <motion.p key={kind} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.2 }} className="mt-1.5 text-center text-xs text-muted">
               {lang === 'ar' ? KINDS[kind].arLead : KINDS[kind].enLead}
             </motion.p>
           </AnimatePresence>
