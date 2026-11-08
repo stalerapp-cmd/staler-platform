@@ -235,7 +235,7 @@ export function Register() {
       >
         <fieldset>
           <legend className="mb-2.5 text-sm font-medium text-ink/80">{lang === 'ar' ? 'نوع الحساب' : 'Account type'}</legend>
-          <div role="radiogroup" aria-label={lang === 'ar' ? 'نوع الحساب' : 'Account type'} className="space-y-2">
+          <div role="radiogroup" aria-label={lang === 'ar' ? 'نوع الحساب' : 'Account type'} className="grid grid-cols-3 gap-2">
             {(Object.keys(KINDS) as Kind[]).map((k, i) => {
               const K = KINDS[k];
               const on = kind === k;
@@ -249,8 +249,8 @@ export function Register() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 * i, duration: 0.3 }}
-                  whileTap={{ scale: 0.985 }}
-                  className={`relative flex w-full items-center gap-3.5 overflow-hidden rounded-2xl px-3.5 py-3 text-start ring-1 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${on ? 'text-white ring-transparent' : 'bg-surface ring-line hover:ring-ink/25'}`}
+                  whileTap={{ scale: 0.96 }}
+                  className={`relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl px-2 pb-2 pt-5 text-center ring-1 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${on ? 'text-white ring-transparent' : 'bg-surface ring-line hover:ring-ink/25'}`}
                 >
                   {on && (
                     <motion.span
@@ -260,30 +260,32 @@ export function Register() {
                       aria-hidden
                     />
                   )}
-                  <motion.span
-                    animate={{ scale: on ? 1.06 : 1, rotate: on ? -4 : 0 }}
-                    transition={{ type: 'spring', stiffness: 380, damping: 20 }}
-                    className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl ${on ? 'bg-gold text-night' : K.tone}`}
-                  >
-                    <K.icon className="h-5 w-5" />
-                  </motion.span>
-                  <span className="relative min-w-0 flex-1">
-                    <span className="block font-semibold leading-tight">{lang === 'ar' ? K.ar : K.en}</span>
-                    <span className={`mt-0.5 block text-xs leading-snug ${on ? 'text-white/70' : 'text-muted'}`}>{lang === 'ar' ? K.arLead : K.enLead}</span>
-                  </span>
-                  <span className={`relative grid h-6 w-6 shrink-0 place-items-center rounded-full ring-1 transition-colors ${on ? 'bg-gold text-night ring-gold' : 'ring-line'}`} aria-hidden>
+                  <span className={`absolute end-2 top-2 grid h-5 w-5 place-items-center rounded-full ring-1 transition-colors ${on ? 'bg-gold text-night ring-gold' : 'ring-line'}`} aria-hidden>
                     <AnimatePresence>
                       {on && (
                         <motion.span key="tick" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: 'spring', stiffness: 500, damping: 22 }}>
-                          <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                          <Check className="h-3 w-3" strokeWidth={3} />
                         </motion.span>
                       )}
                     </AnimatePresence>
                   </span>
+                  <motion.span
+                    animate={{ scale: on ? 1.08 : 1, rotate: on ? -4 : 0 }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 20 }}
+                    className={`relative grid h-11 w-11 place-items-center rounded-xl ${on ? 'bg-gold text-night' : K.tone}`}
+                  >
+                    <K.icon className="h-5 w-5" />
+                  </motion.span>
+                  <span className="relative text-sm font-semibold leading-tight">{lang === 'ar' ? K.ar : K.en}</span>
                 </motion.button>
               );
             })}
           </div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.p key={kind} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.2 }} className="mt-2 text-center text-xs text-muted">
+              {lang === 'ar' ? KINDS[kind].arLead : KINDS[kind].enLead}
+            </motion.p>
+          </AnimatePresence>
         </fieldset>
         <Field label={t.auth.fullName} value={f.fullName} onChange={set('fullName')} autoComplete="name" required error={fe.fullName} />
         <AnimatePresence initial={false}>
