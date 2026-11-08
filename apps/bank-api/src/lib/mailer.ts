@@ -230,12 +230,16 @@ export function existingAccountMail(to: string, code: string, lang: Lang = 'en')
       : 'Someone (probably you) tried to open a new account with this e-mail, but it already has one. Just sign in — or if you forgot your password, use this code on the “Forgot password” page.';
   const url = `${site()}/forgot?email=${encodeURIComponent(to)}&step=code`;
   const label = lang === 'ar' ? 'اختار كلمة مرور جديدة' : 'Choose a new password';
-  const body = para(intro) + codeBox(code) + `<p style="margin:0;font-size:12px;color:#7a7a80;text-align:center">${esc(L.expires[lang])}</p>` + button(label, url);
+  const notYou =
+    lang === 'ar'
+      ? 'إذا مش إنت: ما حدا دخل حسابك، ولا انفتح حساب ثاني بإيميلك. تجاهل هالرسالة ولا تعطي الرمز لحدا. وللأمان، فعّل التحقق بخطوتين من الإعدادات، وإذا كلمة المرور سهلة أو مستعملة بمكان ثاني، غيّرها.'
+      : 'If this wasn’t you: no one got into your account and no second account was opened with your e-mail. Ignore this and never share the code. To be safe, turn on two-step verification in Settings, and change your password if it’s weak or used elsewhere.';
+  const body = para(intro) + codeBox(code) + `<p style="margin:0;font-size:12px;color:#7a7a80;text-align:center">${esc(L.expires[lang])}</p>` + button(label, url) + para(notYou);
   return {
     to,
     subject: lang === 'ar' ? `${code} — رمز الدخول لحسابك بـ ${BRAND.name}` : `${code} — your ${BRAND.name} account code`,
     html: layout(lang, title, body),
-    text: `${title}\n\n${intro}\n\n${code}\n\n${url}\n— ${BRAND.name}`,
+    text: `${title}\n\n${intro}\n\n${code}\n\n${url}\n\n${notYou}\n— ${BRAND.name}`,
   };
 }
 

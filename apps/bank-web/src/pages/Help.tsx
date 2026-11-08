@@ -173,12 +173,13 @@ const TOPICS: Topic[] = [
     id: 'a-support',
     who: 'admin',
     icon: LifeBuoy,
-    title: ['Answering support', 'الرد على الدعم'],
+    title: ['Messages & support', 'الرسائل والدعم'],
     to: '/app/admin/support',
     steps: [
       ['New requests wait in the Queue. Take one (or just reply) and it’s yours — only you answer it. Release it back if you can’t.', 'الطلبات الجديدة بتستنى بالطابور. استلم واحد (أو رد عليه) وبيصير إلك — بس إنت بترد. ورجّعه للطابور إذا ما بتقدر.'],
       ['Close it when done; the customer is asked to rate you.', 'سكّره لما تخلص؛ والزبون بينطلب منه يقيّمك.'],
       ['“Handed to you” lists chats the super admin gave you, with the reason. Take it, or ask to move it and say why.', '«انحوّلتلك» بتبين المحادثات اللي حوّلها إلك السوبر أدمن مع السبب. استلمها، أو اطلب تحويلها واحكي ليش.'],
+      ['“Message a customer” (or “Message” on their card in Customers): pick anyone, what it’s about, and write. It reaches them as a message from TalerBank in their support chat with a notification; a closed chat reopens and becomes yours. For an announcement to many people use “Send notification”.', '«رسالة لزبون» (أو «راسله» من بطاقته بالزباين): اختار أي حدا، واختار بخصوص شو، واكتب. بتوصله رسالة من TalerBank بمحادثة الدعم تبعته مع إشعار، والمحادثة المسكّرة بتنفتح وبتصير إلك. ولإعلان لكثير ناس استخدم «إرسال إشعار».'],
     ],
   },
   {

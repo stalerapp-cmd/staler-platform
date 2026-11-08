@@ -224,7 +224,7 @@ export function Register() {
               customerType: kind,
               ...(kind !== 'personal' ? { businessName: f.businessName.trim() } : {}),
             });
-            nav('/verify', { state: { email: f.email.trim(), sms: method === 'sms' ? f.phone.trim() : undefined } });
+            nav('/verify', { state: { email: f.email.trim(), sms: method === 'sms' ? f.phone.trim() : undefined, signup: true } });
           } catch (e2) {
             if (e2 instanceof ApiError && Array.isArray(e2.details)) setFe(Object.fromEntries((e2.details as any[]).map((d) => [d.path, d.message])));
             setError(err(e2));
@@ -304,11 +304,11 @@ export function Register() {
 }
 
 export function Verify() {
-  const { t, err } = useI18n();
+  const { t, lang, err } = useI18n();
   const toast = useToast();
   const nav = useNavigate();
   const { finishVerification } = useAuth();
-  const loc = useLocation() as { state?: { email?: string; sms?: string } };
+  const loc = useLocation() as { state?: { email?: string; sms?: string; signup?: boolean } };
   const [email, setEmail] = useState(loc.state?.email ?? '');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -320,6 +320,19 @@ export function Verify() {
       <p className="mt-2 text-muted">
         {loc.state?.sms ? t.auth.verifyLeadSms : t.auth.verifyLead} <span className="num font-medium text-ink" dir="ltr">{loc.state?.sms ?? email}</span>
       </p>
+      {loc.state?.signup && (
+        // Same words for everyone, so the page never reveals whether an e-mail already has an account.
+        <div className="mt-4 rounded-2xl bg-sunk/70 p-3.5 text-sm leading-relaxed text-ink/80">
+          {lang === 'ar' ? 'إذا هالإيميل عليه حساب من قبل، ما بنفتح حساب ثاني — بعتنالك إيميل فيه كيف تدخل أو تغيّر كلمة المرور. ' : 'If this e-mail already has an account, we won’t open another — we e-mailed you how to sign in or reset your password. '}
+          <Link to="/login" className="font-semibold text-ink underline underline-offset-2">
+            {lang === 'ar' ? 'سجّل دخول' : 'Sign in'}
+          </Link>
+          {' · '}
+          <Link to={`/forgot?email=${encodeURIComponent(email)}`} className="font-semibold text-ink underline underline-offset-2">
+            {lang === 'ar' ? 'نسيت كلمة المرور' : 'Forgot password'}
+          </Link>
+        </div>
+      )}
       <form
         className="mt-8 space-y-5"
         onSubmit={async (e) => {

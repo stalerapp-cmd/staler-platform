@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Hand, LifeBuoy, PhoneCall, SendHorizontal, Star } from 'lucide-react';
+import { ArrowLeft, Hand, LifeBuoy, MessageCirclePlus, PhoneCall, SendHorizontal, Star } from 'lucide-react';
 import { CallRequestsSheet } from '../components/CallRequests';
+import { StartMessage } from '../components/StartMessage';
 import { createPortal } from 'react-dom';
 import { get, post } from '../lib/api';
 import { useI18n } from '../lib/i18n';
@@ -272,6 +273,7 @@ export function AdminSupport() {
   const [view, setView] = useState<'queue' | 'mine' | 'all'>('queue');
   const [admin, setAdmin] = useState<string>('');
   const [status, setStatus] = useState<'' | 'open' | 'closed'>('');
+  const [starting, setStarting] = useState(false);
   const [d, setD] = useState<{ threads: any[]; counts: any; isSuper: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const team = useData<{ admins: any[] }>(d?.isSuper ? '/api/admin/support-team' : null, [d?.isSuper]);
@@ -296,7 +298,16 @@ export function AdminSupport() {
   ];
   return (
     <div>
-      <PageHeader title={w.inbox} lead={ar ? 'الطلب الجديد بيستنى بالطابور لحد ما حدا يستلمه — وبعدها بس هو بيرد. السوبر أدمن بيشوف كل اشي وبيحوّل.' : 'A new request waits in the queue until someone takes it — then only they answer. The super admin sees everything and hands chats on.'} />
+      <PageHeader
+        title={w.inbox}
+        lead={ar ? 'الطلب الجديد بيستنى بالطابور لحد ما حدا يستلمه — وبعدها بس هو بيرد. السوبر أدمن بيشوف كل اشي وبيحوّل. وبتقدر تبعت رسالة لأي زبون.' : 'A new request waits in the queue until someone takes it — then only they answer. The super admin sees everything and hands chats on. You can also write to any customer.'}
+        actions={
+          <Button icon={<MessageCirclePlus className="h-4 w-4" />} onClick={() => setStarting(true)}>
+            {ar ? 'رسالة لزبون' : 'Message a customer'}
+          </Button>
+        }
+      />
+      <StartMessage open={starting} onClose={() => setStarting(false)} />
       <HandoffInbox />
       <div className={cx('mb-3 grid gap-1 rounded-2xl bg-surface p-1 ring-1 ring-line', tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
         {tabs.map(([k, l, n]) => (

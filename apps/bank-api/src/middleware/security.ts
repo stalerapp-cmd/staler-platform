@@ -5,6 +5,15 @@ import crypto from 'node:crypto';
 import { corsOrigins, env, isProd } from '../config/env.js';
 
 const GOOGLE = env.GOOGLE_CLIENT_ID ? ['https://accounts.google.com'] : [];
+/** Our own Supabase Storage (photos are read back to edit them, e.g. "Adjust" on a profile photo). */
+const STORAGE = (() => {
+  try {
+    const u = process.env.SUPABASE_URL;
+    return u ? [new URL(u).origin] : ['https://*.supabase.co'];
+  } catch {
+    return ['https://*.supabase.co'];
+  }
+})();
 
 /** Strict security headers. The SPA is built without inline scripts, so CSP can be tight. */
 export const securityHeaders = helmet({
@@ -20,7 +29,7 @@ export const securityHeaders = helmet({
       // Product photos and avatars live in Supabase Storage.
       // + OpenStreetMap tiles for order tracking maps.
       imgSrc: ["'self'", 'data:', 'blob:', 'https://*.supabase.co', 'https://tile.openstreetmap.org', 'https://*.tile.openstreetmap.org', 'https://server.arcgisonline.com'],
-      connectSrc: ["'self'", ...GOOGLE],
+      connectSrc: ["'self'", ...STORAGE, ...GOOGLE],
       mediaSrc: ["'self'", 'blob:', 'https://*.supabase.co'],
       workerSrc: ["'self'", 'blob:'],
       objectSrc: ["'none'"],

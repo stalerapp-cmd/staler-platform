@@ -82,7 +82,7 @@ const writeLS = (k: string, v: string) => {
 };
 
 function useNav() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { user } = useAuth();
   const { can } = usePerm();
   const quick: NavItem[] = [
@@ -120,7 +120,7 @@ function useNav() {
         { to: '/app/admin', label: t.nav.admin, icon: LayoutDashboard, end: true },
         ...([
           { to: '/app/admin/customers', label: t.nav.customers, icon: Users, perm: 'customers.view' },
-          { to: '/app/admin/support', label: t.navg.support, icon: LifeBuoy, perm: 'support' },
+          { to: '/app/admin/support', label: lang === 'ar' ? 'الرسائل والدعم' : 'Messages & support', icon: MessagesSquare, perm: 'support' },
           { to: '/app/admin/calls', label: t.nav.calls, icon: PhoneCall, perm: 'support' },
           { to: '/app/admin/ledger', label: t.nav.ledger, icon: Landmark, perm: 'ledger.view' },
           { to: '/app/admin/exchange', label: t.nav.exchange, icon: Vault, perm: 'exchange.view' },

@@ -176,6 +176,44 @@ supportRouter.get(
   }),
 );
 
+/**
+ * Staff start a conversation with any customer (an official message from the bank),
+ * with a topic. A closed chat reopens with them; a chat someone else is handling stays theirs.
+ */
+supportRouter.post(
+  '/admin/support/:userId/start',
+  ...staff,
+  validate({ params: z.object({ userId: uuid }).strict(), body: z.object({ body: z.string().trim().min(1, 'Message is empty').max(2000, 'Message is too long'), topic: z.enum(TOPICS) }).strict() }),
+  ah(async (req, res) => {
+    const me = String(req.auth!.userId);
+    const u = await one<any>(`SELECT id, role, status FROM ${S}.users WHERE id = $1`, [req.params.userId]);
+    if (!u || u.role !== 'user') throw notFound('Customer not found');
+    const t = await one<any>(
+      `INSERT INTO ${S}.support_threads (user_id, status, assigned_to, claimed_at, topic) VALUES ($1, 'open', $2, now(), $3)
+       ON CONFLICT (user_id) DO UPDATE SET
+         assigned_to = CASE WHEN ${S}.support_threads.status = 'closed' OR ${S}.support_threads.assigned_to IS NULL THEN $2 ELSE ${S}.support_threads.assigned_to END,
+         claimed_at = CASE WHEN ${S}.support_threads.status = 'closed' OR ${S}.support_threads.assigned_to IS NULL THEN now() ELSE ${S}.support_threads.claimed_at END,
+         topic = CASE WHEN ${S}.support_threads.status = 'closed' THEN $3 ELSE COALESCE(${S}.support_threads.topic, $3) END,
+         first_reply_at = CASE WHEN ${S}.support_threads.status = 'closed' THEN NULL ELSE ${S}.support_threads.first_reply_at END,
+         status = 'open', closed_at = NULL, closed_by = NULL, rating_pending = false
+       RETURNING assigned_to`,
+      [u.id, me, req.body.topic],
+    );
+    if (String(t.assigned_to) !== me) throw forbidden('Another team member is handling this chat', 'NOT_YOURS');
+    const m = await one<any>(
+      `INSERT INTO ${S}.support_messages (user_id, from_staff, staff_id, body) VALUES ($1, true, $2, $3) RETURNING id, body, from_staff, created_at`,
+      [u.id, me, req.body.body],
+    );
+    await pool.query(`UPDATE ${S}.support_threads SET first_reply_at = COALESCE(first_reply_at, now()), updated_at = now() WHERE user_id = $1`, [u.id]);
+    await notify(undefined, u.id, 'support_reply', 'A message from TalerBank', req.body.body.slice(0, 140), {
+      link: '/app/support',
+      ar: { title: 'رسالة من TalerBank', body: req.body.body.slice(0, 140) },
+    });
+    await audit({ userId: me, action: 'support.started', entityType: 'user', entityId: u.id, details: { topic: req.body.topic } }, req);
+    res.status(201).json({ success: true, data: { message: m } });
+  }),
+);
+
 /** Reply. A waiting conversation becomes yours with your first reply. */
 supportRouter.post(
   '/admin/support/:userId',

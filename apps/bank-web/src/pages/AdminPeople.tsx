@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Banknote, BellRing, ChevronLeft, Crown, KeyRound, LogOut, Megaphone, ShieldCheck, ShieldOff, Snowflake, Trash2, UserCog, UserPlus } from 'lucide-react';
+import { Banknote, BellRing, ChevronLeft, Crown, KeyRound, LogOut, Megaphone, MessageCirclePlus, ShieldCheck, ShieldOff, Snowflake, Trash2, UserCog, UserPlus } from 'lucide-react';
 import { ApiError, del, patch, post } from '../lib/api';
+import { StartMessage } from '../components/StartMessage';
 import { useI18n } from '../lib/i18n';
 import { KINDS, kindOf, type Kind } from '../lib/kinds';
 import { useData } from '../lib/hooks';
@@ -116,6 +117,7 @@ export function AdminCustomer() {
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [msgOpen, setMsgOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [msg, setMsg] = useState({ title: '', body: '' });
   const [teller, setTeller] = useState<any>(null);
   const [dir, setDir] = useState<'in' | 'out'>('in');
@@ -306,6 +308,11 @@ export function AdminCustomer() {
                     {t.people.notify}
                   </ActionButton>
                 )}
+                {can('support') && u.role === 'user' && (
+                  <ActionButton icon={<MessageCirclePlus className="h-5 w-5" />} onClick={() => setChatOpen(true)}>
+                    {lang === 'ar' ? 'راسله' : 'Message'}
+                  </ActionButton>
+                )}
                 {can('customers.delete') && (
                   <ActionButton
                     icon={<Trash2 className="h-5 w-5" />}
@@ -411,6 +418,7 @@ export function AdminCustomer() {
           </Button>
         </form>
       </Sheet>
+      <StartMessage open={chatOpen} onClose={() => setChatOpen(false)} who={chatOpen ? { id: u.id, full_name: u.full_name, email: u.email, username: u.username } : null} />
       <Sheet open={msgOpen} onClose={() => setMsgOpen(false)} title={t.people.notify}>
         <form
           className="space-y-4"

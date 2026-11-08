@@ -880,3 +880,24 @@ describe('messages between customers', () => {
     expect((await request(app).post('/api/messages/conversations').set(auth(adm)).send({ userId: eve.userId })).status).toBe(403);
   });
 });
+
+describe('staff write to any customer', () => {
+  it('starts (or reopens) the support chat with a topic and notifies them', async () => {
+    const c = await registerCustomer(app, 'Written To');
+    const adm = (await request(app).post('/api/auth/login').send({ login: 'admin@talerbank.local', password: process.env.BANK_ADMIN_PASSWORD })).body.data.accessToken;
+    expect((await request(app).post(`/api/admin/support/${c.userId}/start`).set(auth(c.token)).send({ body: 'hi', topic: 'account' })).status).toBe(403);
+    const s = await request(app).post(`/api/admin/support/${c.userId}/start`).set(auth(adm)).send({ body: 'Please confirm your new phone number', topic: 'security' });
+    expect(s.status, JSON.stringify(s.body)).toBe(201);
+    const mine = (await request(app).get('/api/support').set(auth(c.token))).body.data;
+    expect(mine.messages.at(-1).body).toBe('Please confirm your new phone number');
+    expect(mine.thread.topic).toBe('security');
+    const n = (await request(app).get('/api/notifications').set(auth(c.token))).body.data.notifications[0];
+    expect(n.metadata.link).toBe('/app/support');
+    // closed, then written to again: reopens
+    expect((await request(app).post(`/api/admin/support/${c.userId}/close`).set(auth(adm))).status).toBe(200);
+    expect((await request(app).post(`/api/admin/support/${c.userId}/start`).set(auth(adm)).send({ body: 'One more thing', topic: 'transfers' })).status).toBe(201);
+    const again = (await request(app).get('/api/support').set(auth(c.token))).body.data.thread;
+    expect(again.status).toBe('open');
+    expect(again.topic).toBe('transfers');
+  });
+});
