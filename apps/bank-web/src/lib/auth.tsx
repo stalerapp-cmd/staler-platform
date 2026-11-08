@@ -50,6 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const bio = useRef(false);
   const hiddenAt = useRef<number | null>(null);
   const lastActivity = useRef(Date.now());
+  // Who the idle timer is counting for: a fresh sign-in starts the clock again.
+  const idleFor = useRef<string | null>(null);
 
   useEffect(() => {
     return session.onChange((u) => setUser(u)); // unsubscribe on unmount
@@ -83,8 +85,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Sign out after inactivity — a wallet left open on a shared device is a risk.
+  const userId = user?.id ?? null;
   useEffect(() => {
-    if (!user) return;
+    if (!userId) {
+      idleFor.current = null;
+      return;
+    }
+    // Just signed in (or switched account): time spent on the sign-in page before isn't inactivity.
+    if (idleFor.current !== userId) {
+      idleFor.current = userId;
+      lastActivity.current = Date.now();
+    }
     // Away longer than the limit (laptop shut, phone in a pocket): the first touch on return must not
     // count as activity — it ends the session instead.
     const expire = () => {
@@ -115,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onShow);
       window.clearInterval(timer);
     };
-  }, [user, logout]);
+  }, [userId, logout]);
 
   const value = useMemo<AuthState>(
     () => ({
