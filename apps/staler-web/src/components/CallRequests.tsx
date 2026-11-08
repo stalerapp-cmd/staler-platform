@@ -93,7 +93,9 @@ export function CallRequestsSheet({ open, onClose }: { open: boolean; onClose: (
           <div key={r.id} className="rounded-3xl bg-bg/70 p-4 ring-1 ring-line">
             <div className="flex items-start justify-between gap-2">
               <p className="line-clamp-2 text-sm">{r.description}</p>
-              <Badge tone={ST[r.status]![1]}>{ST[r.status]![0]}</Badge>
+              <span className="shrink-0 whitespace-nowrap">
+                <Badge tone={ST[r.status]![1]}>{ST[r.status]![0]}</Badge>
+              </span>
             </div>
             <p className="mt-1 text-[11px] text-muted">
               {r.initiated_by === 'admin' ? (ar ? 'الدعم طلب المكالمة' : 'Support asked for this call') : relative(r.created_at, lang)}

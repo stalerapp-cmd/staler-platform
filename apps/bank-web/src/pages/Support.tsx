@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Hand, LifeBuoy, SendHorizontal, Star } from 'lucide-react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Hand, LifeBuoy, PhoneCall, SendHorizontal, Star } from 'lucide-react';
+import { CallRequestsSheet } from '../components/CallRequests';
 import { createPortal } from 'react-dom';
 import { get, post } from '../lib/api';
 import { useI18n } from '../lib/i18n';
@@ -9,6 +10,7 @@ import { useAuth } from '../lib/auth';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
 import { relative } from '../lib/format';
+import { TOPICS, topicName } from '../lib/supportTopics';
 import { Avatar, Badge, Button, EmptyState, ErrorNote, PageHeader, Sheet, Skeleton, cx } from '../components/ui';
 
 const W = {
@@ -135,19 +137,7 @@ function ChatFrame({ title, subtitle, actions, banner, readOnly, avatar, backTo,
   return wide ? ui : createPortal(ui, document.body);
 }
 
-/** What a conversation is about — picked by the customer, shown to the team. */
-export const TOPICS: { k: string; ar: string; en: string }[] = [
-  { k: 'account', ar: 'الحساب والدخول', en: 'Account & sign-in' },
-  { k: 'transfers', ar: 'الحوالات', en: 'Transfers' },
-  { k: 'wallet', ar: 'المحفظة والربط', en: 'Wallet & linking' },
-  { k: 'scheduled', ar: 'الدفعات المجدولة', en: 'Scheduled payments' },
-  { k: 'security', ar: 'الأمان', en: 'Security' },
-  { k: 'other', ar: 'غير ذلك', en: 'Something else' },
-];
-export const topicName = (k: string | null | undefined, ar: boolean) => {
-  const x = TOPICS.find((t) => t.k === k);
-  return x ? (ar ? x.ar : x.en) : null;
-};
+export { TOPICS, topicName } from '../lib/supportTopics';
 
 /** Customer side: one conversation with the bank. */
 export function SupportChat() {
@@ -156,6 +146,14 @@ export function SupportChat() {
   const ar = lang === 'ar';
   const [d, setD] = useState<{ messages: any[]; thread: any } | null>(null);
   const [topic, setTopic] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const calls = params.get('calls') === '1';
+  const setCalls = (v: boolean) => {
+    const p = new URLSearchParams(params);
+    if (v) p.set('calls', '1');
+    else p.delete('calls');
+    setParams(p, { replace: true });
+  };
   const load = async () => {
     try {
       setD(await get<{ messages: any[]; thread: any }>('/api/support'));
@@ -183,6 +181,11 @@ export function SupportChat() {
           </span>
         }
         backTo="/app"
+        actions={
+          <button type="button" onClick={() => setCalls(true)} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-olive/12 px-3 text-sm font-semibold text-olive hover:bg-olive/20" aria-label={ar ? 'مكالمة مع الدعم' : 'Call support'}>
+            <PhoneCall className="h-4 w-4" /> <span className="hidden sm:inline">{ar ? 'مكالمة' : 'Call'}</span>
+          </button>
+        }
         hello={w.hello}
         messages={d?.messages ?? null}
         mine={(m) => !m.from_staff}
@@ -212,6 +215,7 @@ export function SupportChat() {
           }
         }}
       />
+      <CallRequestsSheet open={calls} onClose={() => setCalls(false)} />
     </div>
   );
 }

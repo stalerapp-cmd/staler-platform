@@ -19,6 +19,8 @@ const Transfer = lazyRetry(() => import('./pages/Transfer'));
 const Transactions = lazyRetry(() => import('./pages/Transactions'));
 const Requests = lazyRetry(() => import('./pages/Requests'));
 const Scheduled = lazyRetry(() => import('./pages/Scheduled'));
+const Beneficiaries = lazyRetry(() => import('./pages/Beneficiaries'));
+const AdminCalls = lazyRetry(() => import('./pages/AdminCalls').then((m) => ({ default: m.AdminCalls })));
 const AdminScheduled = lazyRetry(() => import('./pages/AdminScheduled'));
 const AdminTeam = lazyRetry(() => import('./pages/AdminTeam'));
 const AdminLeaves = lazyRetry(() => import('./pages/AdminLeaves').then((m) => ({ default: m.AdminLeaves })));
@@ -93,6 +95,8 @@ export default function App() {
           <Route path="transactions" element={page(<Transactions />)} />
           <Route path="requests" element={page(<Requests />)} />
           <Route path="scheduled" element={page(<Scheduled />)} />
+          <Route path="beneficiaries" element={page(<Beneficiaries />)} />
+          <Route path="admin/calls" element={admin(<AdminCalls />)} />
           <Route path="help" element={page(<Help />)} />
           <Route path="pay/:id" element={page(<Pay />)} />
           <Route path="scan" element={page(<Scan />)} />

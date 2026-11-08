@@ -766,3 +766,65 @@ describe('scheduled payments and blocks', () => {
     expect((await request(app).get('/api/admin/scheduled').set(auth(a.token))).status).toBe(403);
   });
 });
+
+describe('saved beneficiaries', () => {
+  it('saves, lists with last use, renames, stars, refuses self and blocked, removes', async () => {
+    const a = await registerCustomer(app, 'Ben Owner');
+    const b = await registerCustomer(app, 'Ben Payee');
+    expect((await request(app).post('/api/beneficiaries').set(auth(a.token)).send({ to: a.iban })).status).toBe(400);
+    const s = await request(app).post('/api/beneficiaries').set(auth(a.token)).send({ to: b.iban, nickname: 'Brother' });
+    expect(s.status).toBe(201);
+    // saving again just keeps one
+    expect((await request(app).post('/api/beneficiaries').set(auth(a.token)).send({ to: b.iban })).status).toBe(201);
+    expect((await request(app).post('/api/transfers').set(auth(a.token)).send({ fromAccountId: a.accountId, to: b.iban, amount: '1' })).status).toBe(201);
+    let list = (await request(app).get('/api/beneficiaries').set(auth(a.token))).body.data.beneficiaries;
+    expect(list).toHaveLength(1);
+    expect(list[0].nickname).toBe('Brother');
+    expect(list[0].times).toBe(1);
+    expect(list[0].lastUsed).toBeTruthy();
+    expect(list[0].holder).not.toBe('Ben Payee');
+    expect((await request(app).patch(`/api/beneficiaries/${s.body.data.id}`).set(auth(a.token)).send({ nickname: null, favourite: true })).status).toBe(200);
+    list = (await request(app).get('/api/beneficiaries').set(auth(a.token))).body.data.beneficiaries;
+    expect(list[0].nickname).toBeNull();
+    expect(list[0].favourite).toBe(true);
+    // someone else's id is not found
+    expect((await request(app).delete(`/api/beneficiaries/${s.body.data.id}`).set(auth(b.token))).status).toBe(404);
+    // a block marks it unavailable and stops saving
+    expect((await request(app).post('/api/blocks').set(auth(b.token)).send({ to: a.iban })).status).toBe(201);
+    expect((await request(app).get('/api/beneficiaries').set(auth(a.token))).body.data.beneficiaries[0].unavailable).toBe(true);
+    expect((await request(app).post('/api/beneficiaries').set(auth(a.token)).send({ to: b.iban })).status).toBe(403);
+    expect((await request(app).delete(`/api/beneficiaries/${s.body.data.id}`).set(auth(a.token))).status).toBe(200);
+    expect((await request(app).get('/api/beneficiaries')).status).toBe(401);
+  });
+});
+
+describe('support calls', () => {
+  it('request → accept → book → ring → answer → relay → hang up', async () => {
+    const c = await registerCustomer(app, 'Call Customer');
+    const adm = (await request(app).post('/api/auth/login').send({ login: 'admin@talerbank.local', password: process.env.BANK_ADMIN_PASSWORD })).body.data.accessToken;
+    expect((await request(app).get('/api/calls/ice').set(auth(c.token))).body.data.iceServers.length).toBeGreaterThan(0);
+    const r = await request(app).post('/api/calls/requests').set(auth(c.token)).send({ description: 'My transfer did not arrive yet', topic: 'transfers' });
+    expect(r.status).toBe(201);
+    expect((await request(app).get('/api/calls/requests?scope=queue').set(auth(c.token))).status).toBe(403);
+    const q = await request(app).get('/api/calls/requests?scope=queue').set(auth(adm));
+    expect(q.body.data.requests.some((x: any) => x.id === r.body.data.id)).toBe(true);
+    expect((await request(app).post(`/api/calls/requests/${r.body.data.id}/answer`).set(auth(adm)).send({ accept: true })).status).toBe(200);
+    const hours = (await request(app).get('/api/calls/hours').set(auth(c.token))).body.data;
+    expect(hours.hours.slot).toBe(30);
+    if (hours.slots.length) expect((await request(app).post(`/api/calls/requests/${r.body.data.id}/slot`).set(auth(c.token)).send({ at: hours.slots[0] })).status).toBe(200);
+    // the customer can't call until the button is shown
+    expect((await request(app).post('/api/calls/sessions').set(auth(c.token)).send({ requestId: r.body.data.id })).status).toBe(403);
+    const s = await request(app).post('/api/calls/sessions').set(auth(adm)).send({ requestId: r.body.data.id });
+    expect(s.status).toBe(201);
+    const inc = await request(app).get('/api/calls/incoming').set(auth(c.token));
+    expect(inc.body.data.call.id).toBe(s.body.data.id);
+    expect((await request(app).patch(`/api/calls/sessions/${s.body.data.id}`).set(auth(c.token)).send({ status: 'active' })).status).toBe(200);
+    expect((await request(app).post(`/api/calls/sessions/${s.body.data.id}/signal`).set(auth(adm)).send({ kind: 'offer', payload: { sdp: 'x' } })).status).toBe(200);
+    const sig = await request(app).get(`/api/calls/sessions/${s.body.data.id}/signals`).set(auth(c.token));
+    expect(sig.body.data.signals[0].kind).toBe('offer');
+    expect((await request(app).patch(`/api/calls/sessions/${s.body.data.id}`).set(auth(c.token)).send({ status: 'ended' })).status).toBe(200);
+    expect((await request(app).patch(`/api/calls/requests/${r.body.data.id}`).set(auth(adm)).send({ status: 'done' })).status).toBe(200);
+    // hours: only support staff change them
+    expect((await request(app).put('/api/calls/hours').set(auth(c.token)).send({ days: [1], from: '09:00', to: '12:00', slot: 30 })).status).toBe(403);
+  });
+});

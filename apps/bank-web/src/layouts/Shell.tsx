@@ -1,10 +1,13 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ScrollCue } from '../components/ScrollCue';
+import { CallOverlay } from '../components/CallOverlay';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Repeat,
+  Contact,
+  PhoneCall,
   Trophy,
   Plane,
   CircleHelp,
@@ -94,6 +97,7 @@ function useNav() {
         { to: '/app', label: t.nav.overview, icon: Home, end: true },
         { to: '/app/transactions', label: t.nav.transactions, icon: BookText },
         { to: '/app/scheduled', label: t.nav.scheduled, icon: Repeat },
+        { to: '/app/beneficiaries', label: t.nav.beneficiaries, icon: Contact },
       ],
     },
     {
@@ -115,6 +119,7 @@ function useNav() {
         ...([
           { to: '/app/admin/customers', label: t.nav.customers, icon: Users, perm: 'customers.view' },
           { to: '/app/admin/support', label: t.navg.support, icon: LifeBuoy, perm: 'support' },
+          { to: '/app/admin/calls', label: t.nav.calls, icon: PhoneCall, perm: 'support' },
           { to: '/app/admin/ledger', label: t.nav.ledger, icon: Landmark, perm: 'ledger.view' },
           { to: '/app/admin/exchange', label: t.nav.exchange, icon: Vault, perm: 'exchange.view' },
           { to: '/app/admin/notify', label: t.nav.notify, icon: Megaphone, perm: 'notify' },
@@ -561,6 +566,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
         </aside>
       </div>
       <SupportSheet open={support} onClose={() => setSupport(false)} />
+      <CallOverlay />
     </div>
   );
 }

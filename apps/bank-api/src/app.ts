@@ -23,6 +23,8 @@ import { linkCustomerRouter, linkExchangeRouter } from './modules/link.js';
 import { wireRouter } from './modules/wire.js';
 import { supportRouter } from './modules/support.js';
 import { adminRouter } from './modules/admin.js';
+import { beneficiariesRouter } from './modules/beneficiaries.js';
+import { callsRouter } from './modules/calls.js';
 
 let maintenanceCache = { at: 0, on: false };
 async function maintenanceOn(): Promise<boolean> {
@@ -105,6 +107,8 @@ export function createApp(): Express {
   app.use('/api/admin/leaves', noStore, leavesRouter);
   app.use('/api', noStore, linkCustomerRouter);
   app.use('/api', noStore, scheduledRouter);
+  app.use('/api', noStore, beneficiariesRouter);
+  app.use('/api/calls', noStore, callsRouter);
   app.use('/api', noStore, bankingRouter);
   app.use('/taler-integration', noStore, integrationRouter);
   app.use('/taler-wire-gateway', noStore, wireRouter);

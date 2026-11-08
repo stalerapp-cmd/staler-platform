@@ -4,6 +4,9 @@
  * TalerBank — keep both copies identical.
  */
 const AR: Record<string, string> = {
+  'Up to 200 saved beneficiaries': 'لحد 200 مستفيد محفوظ',
+  'Beneficiary not found': 'المستفيد مش موجود',
+  'This is your own account': 'هاد حسابك انت',
   'This call request is closed': 'طلب المكالمة مسكّر',
   'This time isn’t free — pick another': 'هالوقت مش فاضي — اختار وقت ثاني',
   'Nobody from the team has taken this request yet': 'لسا ما حدا من الفريق استلم الطلب',

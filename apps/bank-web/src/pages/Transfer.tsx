@@ -9,6 +9,7 @@ import { useAccounts, useConfig } from '../lib/accounts';
 import { AMOUNT_RE, money } from '../lib/format';
 import { fmtIban } from '../components/Bank';
 import { useSecureAction } from '../components/SecureAction';
+import { BeneficiaryPicker, SaveBeneficiary } from '../components/Beneficiaries';
 import { AmountInput, Button, ErrorNote, Field, PageHeader, Select, SuccessMark } from '../components/ui';
 
 export default function Transfer() {
@@ -74,6 +75,7 @@ export default function Transfer() {
                 {t.home.available}: <span className="num font-medium text-ink">{money(fromAcc.balance, lang)}</span>
               </p>
             )}
+            <BeneficiaryPicker value={to} onPick={setTo} />
             <Field label={t.transfer.to} placeholder={t.transfer.toPh} value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" required autoComplete="off" />
             <AmountInput label={t.common.amount} value={amount} onChange={setAmount} />
             <Field label={`${t.transfer.subject} (${t.common.optional})`} value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={140} />
@@ -146,6 +148,7 @@ export default function Transfer() {
             <p className="num mt-3 text-xs text-muted">
               {t.tx.reference}: {result?.reference}
             </p>
+            <SaveBeneficiary to={to} holder={who?.holder} />
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               <Link to="/app">
                 <Button block variant="secondary">

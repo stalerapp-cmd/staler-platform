@@ -9,6 +9,8 @@ import {
   KeyRound,
   Landmark,
   LifeBuoy,
+  Contact,
+  PhoneCall,
   Megaphone,
   Plane,
   QrCode,
@@ -57,6 +59,18 @@ const TOPICS: Topic[] = [
     steps: [
       ['Type an IBAN, an account number or @username. We show the holder’s name before you confirm.', 'اكتب IBAN، رقم حساب أو @اسم المستخدم. منبيّنلك اسم صاحب الحساب قبل ما تأكد.'],
       ['Big transfers ask for your 2-step code if you turned it on.', 'الحوالات الكبيرة بتطلب رمز التحقق إذا مفعّله.'],
+    ],
+  },
+  {
+    id: 'beneficiaries',
+    who: 'all',
+    icon: Contact,
+    title: ['Saved beneficiaries', 'المستفيدين المحفوظين'],
+    to: '/app/beneficiaries',
+    steps: [
+      ['After a transfer, save the person with a name you know them by — or add them from “Beneficiaries”.', 'بعد أي حوالة احفظ الشخص باسم بتعرفه فيه — أو ضيفه من صفحة «المستفيدين».'],
+      ['They show at the top of the transfer and scheduled-payment forms; one tap fills the account. Star the ones you use most.', 'بيطلعوا فوق بفورم الحوالة والدفعة المجدولة، وبكبسة بيتعبّى الحساب. حط نجمة عاللي بتستخدمهم أكثر.'],
+      ['You still see the holder’s name and confirm before anything is sent. Removing someone keeps your past transfers.', 'برضو بتشوف اسم صاحب الحساب وبتأكد قبل ما ينبعت إشي. ولما تشيل حدا الحوالات القديمة بتضل.'],
     ],
   },
   {
@@ -117,6 +131,18 @@ const TOPICS: Topic[] = [
       ['When it’s closed, rate the help. Write again any time to start a new conversation.', 'لما تتسكّر قيّم المساعدة. واكتب وقت ما بدك لتبلّش محادثة جديدة.'],
     ],
   },
+  {
+    id: 'calls',
+    who: 'all',
+    icon: PhoneCall,
+    title: ['A call with support', 'مكالمة مع الدعم'],
+    to: '/app/support?calls=1',
+    steps: [
+      ['In support, press “Call”, pick the topic and describe the problem. The team accepts or answers by message.', 'بالدعم اكبس «مكالمة»، اختار الموضوع واحكي شو المشكلة. الفريق بيقبل أو بيرد عليك بالرسائل.'],
+      ['Once accepted, pick a free time within the team’s hours. At that time they call you in the app — voice or video — or show you a “Call” button.', 'لما ينقبل، اختار وقت فاضي ضمن ساعات الفريق. بالموعد بيتصلوا فيك من التطبيق — صوت أو فيديو — أو بيظهرلك زر «اتصل».'],
+      ['Sorted already? Cancel the call. Missed it? Book another time.', 'انحلّت؟ الغِ المكالمة. فاتتك؟ احجز وقت ثاني.'],
+    ],
+  },
   // ---------------------------------------------------------------- staff
   {
     id: 'a-customers',
@@ -139,6 +165,18 @@ const TOPICS: Topic[] = [
       ['New requests wait in the Queue. Take one (or just reply) and it’s yours — only you answer it. Release it back if you can’t.', 'الطلبات الجديدة بتستنى بالطابور. استلم واحد (أو رد عليه) وبيصير إلك — بس إنت بترد. ورجّعه للطابور إذا ما بتقدر.'],
       ['Close it when done; the customer is asked to rate you.', 'سكّره لما تخلص؛ والزبون بينطلب منه يقيّمك.'],
       ['“Handed to you” lists chats the super admin gave you, with the reason. Take it, or ask to move it and say why.', '«انحوّلتلك» بتبين المحادثات اللي حوّلها إلك السوبر أدمن مع السبب. استلمها، أو اطلب تحويلها واحكي ليش.'],
+    ],
+  },
+  {
+    id: 'a-calls',
+    who: 'admin',
+    icon: PhoneCall,
+    title: ['Support calls', 'مكالمات الدعم'],
+    to: '/app/admin/calls',
+    steps: [
+      ['“New requests”: accept or decline. Whoever accepts owns the call; the customer then books a time.', '«طلبات جديدة»: اقبل أو ارفض. اللي بيقبل بتصير المكالمة إله، والزبون بيحجز وقت.'],
+      ['“Booked”: call by voice or video, or let the customer call you with a button you can hide again. Mark it done after.', '«مواعيد»: اتصل صوت أو فيديو، أو خلي الزبون يتصل فيك بزر بتقدر تخفيه. وبعدها علّمها «خلصت».'],
+      ['“Ask for a call” sends a request to a customer; “Hours” sets the days, times and slot length. Staff on leave don’t get new requests.', '«اطلب مكالمة» بيبعت طلب لزبون؛ و«ساعات التوفر» بتحدد الأيام والساعات وطول الموعد. اللي بإجازة ما بيوصلهم طلبات جديدة.'],
     ],
   },
   {

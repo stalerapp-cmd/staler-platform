@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import {
-  ArrowRightLeft, BookText, Crown, FileClock, Home, KeyRound, Landmark, LayoutDashboard, QrCode, ScanLine, Settings2, ShieldCheck, Users, Vault, Wallet,
+  ArrowRightLeft, BookText, CircleHelp, Contact, LifeBuoy, PhoneCall, Plane, Repeat, Trophy, Crown, FileClock, Home, KeyRound, Landmark, LayoutDashboard, QrCode, ScanLine, Settings2, ShieldCheck, Users, Vault, Wallet,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -15,6 +15,13 @@ const LOOKS: [RegExp, NoteTone, LucideIcon][] = [
   [/^\/app\/wallet|^\/app\/withdraw/, 'ruby', Wallet],
   [/^\/app\/apps/, 'sky', KeyRound],
   [/^\/app\/settings/, 'sky', Settings2],
+  [/^\/app\/beneficiaries/, 'sage', Contact],
+  [/^\/app\/scheduled|^\/app\/admin\/scheduled/, 'brass', Repeat],
+  [/^\/app\/help/, 'sky', CircleHelp],
+  [/^\/app\/admin\/calls/, 'sage', PhoneCall],
+  [/^\/app\/admin\/support/, 'sage', LifeBuoy],
+  [/^\/app\/admin\/team/, 'brass', Trophy],
+  [/^\/app\/admin\/leaves/, 'sky', Plane],
   [/^\/app\/admin\/customers/, 'vault', Users],
   [/^\/app\/admin\/ledger/, 'brass', Landmark],
   [/^\/app\/admin\/exchange/, 'sage', Vault],

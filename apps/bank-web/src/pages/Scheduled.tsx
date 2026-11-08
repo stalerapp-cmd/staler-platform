@@ -11,6 +11,7 @@ import { fmtIban } from '../components/Bank';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Confirm';
 import { useSecureAction } from '../components/SecureAction';
+import { BeneficiaryPicker } from '../components/Beneficiaries';
 import { AmountInput, Avatar, Badge, Button, EmptyState, ErrorNote, PageHeader, Select, Sheet, Skeleton, Toggle, cx } from '../components/ui';
 
 const EVERY: Record<string, [string, string]> = { once: ['مرة وحدة', 'once'], week: ['كل أسبوع', 'every week'], '2weeks': ['كل أسبوعين', 'every 2 weeks'], month: ['كل شهر', 'every month'], days: ['كل {n} يوم', 'every {n} days'] };
@@ -455,6 +456,7 @@ function OrderSheet({ value, onClose, secure, onDone }: { value: any; onClose: (
         {!f.id && (
           <>
             {accounts.length > 1 && <Select block label={ar ? 'من حساب' : 'From account'} value={f.from} onChange={(v: string) => set({ from: v })} options={accounts.map((a) => ({ value: a.id, label: `${a.nickname ?? a.account_number} · ${money(a.balance, lang)}` }))} />}
+            <BeneficiaryPicker value={f.to} onPick={(v) => set({ to: v })} />
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-ink/80">{ar ? 'لمين؟' : 'To whom?'}</span>
               <input value={f.to} onChange={(e) => set({ to: e.target.value })} placeholder={ar ? 'IBAN، رقم الحساب أو @اسم المستخدم' : 'IBAN, account number or @username'} className="field" dir="ltr" />

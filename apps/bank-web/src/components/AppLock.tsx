@@ -40,7 +40,7 @@ export function AppLock() {
   }, [locked, user]);
   if (!locked || !user) return null;
   return (
-    <div className="safe-top safe-bottom fixed inset-0 z-[70] flex flex-col items-center justify-center gap-8 bg-bg px-6 text-center">
+    <div className="safe-top safe-bottom fixed inset-0 z-[3000] flex flex-col items-center justify-center gap-8 bg-bg px-6 text-center">
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
