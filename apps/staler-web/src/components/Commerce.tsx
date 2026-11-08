@@ -346,6 +346,15 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
       .catch(() => setPoints([]));
   }, [open, physicalStores]);
   const pointStores = Array.from(new Set(points.map((x) => String(x.merchant_id))));
+  // What each store charges for delivery (free, one price, or by area the customer picks).
+  const [shipping, setShipping] = useState<{ merchantId: string; storeName: string; mode: 'free' | 'flat' | 'zones'; fee: string; zones: { id: string; name: string; fee: string }[] }[]>([]);
+  const [zoneFor, setZoneFor] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!open || !physicalStores) return setShipping([]);
+    get<{ stores: any[] }>(`/api/store/delivery?stores=${physicalStores}`)
+      .then((d) => setShipping(d.stores))
+      .catch(() => setShipping([]));
+  }, [open, physicalStores]);
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [note, setNote] = useState('');
@@ -375,6 +384,19 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
   const full = fullRaw - offCents;
   const now = nowRaw - (fullRaw ? Math.floor((offCents * nowRaw) / fullRaw) : 0);
   const perkLines = (quote?.stores ?? []).filter((x) => Number(x.discount) > 0);
+  // Delivery per store, in cents (null = the customer still has to pick an area).
+  const shipLines = physical && how === 'delivery'
+    ? shipping.map((s) => {
+        const z = s.mode === 'zones' ? s.zones.find((x) => x.id === zoneFor[s.merchantId]) : null;
+        const c = s.mode === 'flat' ? Math.round(Number(s.fee) * 100) : s.mode === 'zones' ? (z ? Math.round(Number(z.fee) * 100) : null) : 0;
+        return { ...s, cents: c, zone: z };
+      })
+    : [];
+  const zoneStores = shipLines.filter((s) => s.mode === 'zones');
+  const shipMissing = shipLines.some((s) => s.cents === null);
+  const shipCents = shipLines.reduce((n, s) => n + (s.cents ?? 0), 0);
+  const itemsNow = now;
+  const payNow = now + shipCents;
   const giftLines = (quote?.stores ?? []).flatMap((x) => x.gifts);
 
   const locate = () => {
@@ -394,11 +416,12 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
     if (!user) return nav('/login', { state: { from: loc.pathname + loc.search } });
     if (physical && how === 'delivery' && address.trim().length < 5) return setError(t.shop.addressPh);
     if (physical && how === 'pickup' && pointStores.some((m) => !chosen[m])) return setError(t.pick.required);
+    if (shipMissing) return setError(lang === 'ar' ? 'اختار منطقة التوصيل' : 'Choose your delivery area');
     const count = lines.reduce((n, l) => n + l.qty, 0);
     const ok = await confirm({
       title: t.ask.buyTitle,
-      body: fill(t.ask.buyBody, { total: money(now / 100, lang), count }),
-      confirmLabel: fill(t.ask.buyOk, { total: money(now / 100, lang) }),
+      body: `${fill(t.ask.buyBody, { total: money(payNow / 100, lang), count })}${shipCents > 0 ? (lang === 'ar' ? ` (منها توصيل ${money(shipCents / 100, lang)})` : ` (incl. ${money(shipCents / 100, lang)} delivery)`) : ''}`,
+      confirmLabel: fill(t.ask.buyOk, { total: money(payNow / 100, lang) }),
     });
     if (!ok) return;
     setBusy(true);
@@ -411,6 +434,7 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
             items: lines.map((l) => ({ productId: l.product.id, quantity: l.qty })),
             ...(physical ? { fulfillment: how } : {}),
             ...(physical && how === 'delivery' ? { address: address.trim() } : {}),
+            ...(physical && how === 'delivery' && zoneStores.length ? { deliveryZones: Object.fromEntries(zoneStores.map((z) => [z.merchantId, zoneFor[z.merchantId]!])) } : {}),
             ...(physical && how === 'pickup' && pointStores.length ? { pickupPoints: Object.fromEntries(pointStores.map((m) => [m, chosen[m]!])) } : {}),
             ...(physical && phone.trim() ? { phone: phone.trim() } : {}),
             ...(physical && geo ? geo : {}),
@@ -457,6 +481,29 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
             ))}
           </div>
         )}
+        {shipLines.length > 0 && (
+          <dl className="mb-2 space-y-1 border-b border-line pb-2 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-muted">{lang === 'ar' ? 'المنتجات' : 'Items'}</dt>
+              <dd className="num">{money(itemsNow / 100, lang)}</dd>
+            </div>
+            {shipLines.map((s) => (
+              <div key={s.merchantId} className="flex items-center justify-between gap-3">
+                <dt className="flex min-w-0 items-center gap-1.5 text-muted">
+                  <Truck className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">
+                    {lang === 'ar' ? 'التوصيل' : 'Delivery'}
+                    {shipLines.length > 1 ? ` · ${s.storeName}` : ''}
+                    {s.zone ? ` · ${s.zone.name}` : ''}
+                  </span>
+                </dt>
+                <dd className={cx('num shrink-0', s.cents === 0 && 'text-olive', s.cents === null && 'text-stitch')}>
+                  {s.cents === null ? (lang === 'ar' ? 'اختار المنطقة' : 'Pick your area') : s.cents === 0 ? (lang === 'ar' ? 'مجاني' : 'Free') : money(s.cents / 100, lang)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
         <div className="flex items-end justify-between gap-3">
           <div>
             {now !== full && (
@@ -464,10 +511,10 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
                 {t.shop.totalLater} <span className="num">{money((full - now) / 100, lang)}</span>
               </p>
             )}
-            <p className="text-sm text-muted">{now !== full ? t.shop.payNow : t.common.total}</p>
+            <p className="text-sm text-muted">{now !== full ? t.shop.payNow : shipLines.length ? (lang === 'ar' ? 'المجموع مع التوصيل' : 'Total with delivery') : t.common.total}</p>
           </div>
-          <motion.p key={now} initial={{ scale: 1.15 }} animate={{ scale: 1 }} className="num font-display text-2xl">
-            {money(now / 100, lang)}
+          <motion.p key={payNow} initial={{ scale: 1.15 }} animate={{ scale: 1 }} className="num font-display text-2xl">
+            {money(payNow / 100, lang)}
           </motion.p>
         </div>
         <ErrorNote>{error}</ErrorNote>
@@ -598,6 +645,34 @@ export function CartSheet({ open, onClose, ordersHref = '/app/orders' }: { open:
                   </div>
                 </div>
               )}
+              {how === 'delivery' && zoneStores.length > 0 && (
+                <div className="space-y-3">
+                  {zoneStores.map((s) => (
+                    <div key={s.merchantId}>
+                      <p className="mb-1.5 text-sm font-medium">
+                        {lang === 'ar' ? 'منطقة التوصيل' : 'Delivery area'}
+                        {zoneStores.length > 1 && <span className="text-muted"> · {s.storeName}</span>}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {s.zones.map((z) => {
+                          const on = zoneFor[s.merchantId] === z.id;
+                          return (
+                            <button
+                              key={z.id}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => setZoneFor((c) => ({ ...c, [s.merchantId]: z.id }))}
+                              className={cx('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm ring-1 transition', on ? 'bg-stitch text-white ring-stitch' : 'bg-surface ring-line hover:ring-ink/30')}
+                            >
+                              {z.name} <span className={cx('num text-xs', on ? 'text-white/85' : 'text-muted')}>{Number(z.fee) > 0 ? money(z.fee, lang) : lang === 'ar' ? 'مجاني' : 'Free'}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {how === 'delivery' && (
                 <>
                   <TextArea label={t.shop.address} placeholder={t.shop.addressPh} value={address} onChange={(e) => setAddress(e.target.value)} rows={2} maxLength={300} />
@@ -627,9 +702,16 @@ export function OrderPerks({ o, forStore = false }: { o: any; forStore?: boolean
   const { lang } = useI18n();
   const gifts: string[] = Array.isArray(o.gifts) ? o.gifts : [];
   const off = Number(o.discount_amount ?? 0);
-  if (!gifts.length && !(off > 0)) return null;
+  const ship = Number(o.delivery_fee ?? 0);
+  if (!gifts.length && !(off > 0) && !(ship > 0) && !o.delivery_zone) return null;
   return (
     <div className="flex flex-wrap gap-2">
+      {(ship > 0 || o.delivery_zone) && (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-sky/10 px-3 py-1.5 text-xs font-medium text-sky">
+          <Truck className="h-3.5 w-3.5" /> {lang === 'ar' ? 'توصيل' : 'Delivery'}
+          {o.delivery_zone ? ` · ${o.delivery_zone}` : ''} {ship > 0 ? money(ship, lang) : lang === 'ar' ? 'مجاني' : 'free'}
+        </span>
+      )}
       {off > 0 && (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-olive/10 px-3 py-1.5 text-xs font-medium text-olive">
           <BadgePercent className="h-3.5 w-3.5" /> {o.discount_note ?? ''} −{money(off, lang)}

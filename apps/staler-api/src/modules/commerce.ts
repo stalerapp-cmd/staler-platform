@@ -396,6 +396,9 @@ storeRouter.get(
       delivery_note: x.delivery_note,
       offers_pickup: x.offers_pickup,
       offers_delivery: x.offers_delivery,
+      delivery_mode: x.delivery_mode ?? 'free',
+      delivery_fee: x.delivery_fee ?? '0.00',
+      delivery_zones: (Array.isArray(x.delivery_zones) ? x.delivery_zones : []).map((z: any) => ({ id: z.id, name: z.name, fee: z.fee })),
       phone: x.show_phone ? x.phone : null,
       instagram: x.instagram ?? null,
       tiktok: x.tiktok ?? null,
@@ -453,6 +456,8 @@ const checkoutBody = z
     note: z.string().trim().max(300).optional(),
     /** Chosen pickup point per store (only for stores that list pickup points). */
     pickupPoints: z.record(idParam, idParam).optional(),
+    /** Chosen delivery area per store (only for stores that price delivery by area). */
+    deliveryZones: z.record(idParam, z.string().max(12)).optional(),
   })
   .strict();
 
@@ -477,13 +482,13 @@ storeRouter.post(
         const r = await c.query<any>(
           `SELECT p.id, p.merchant_id, p.name, p.price, p.stock, p.is_digital, p.digital_file_url, p.deposit_percent, p.deposit_refundable, p.wholesale_price, p.wholesale_min_qty,
                   COALESCE(p.status,'active') AS status, m.user_id AS merchant_user_id, COALESCE(m.status,'active') AS merchant_status,
-                  m.offers_pickup, m.offers_delivery, COALESCE(m.parent_id, m.id) AS main_id
+                  m.offers_pickup, m.offers_delivery, m.delivery_mode, m.delivery_fee, m.delivery_zones, COALESCE(m.parent_id, m.id) AS main_id
              FROM ${S}.products p JOIN ${S}.merchants m ON m.id = p.merchant_id
             WHERE p.id = ANY($1) ORDER BY p.id FOR UPDATE OF p`,
           [Array.from(qty.keys())],
         );
         if (r.rowCount !== qty.size) throw notFound('One of the products no longer exists', 'PRODUCT_NOT_FOUND');
-        type G = { full: bigint; now: bigint; lines: any[]; digitalOnly: boolean; depositRefundable: boolean; merchantUser: string; mainId: string; off: bigint; note: string | null; gifts: string[]; wholesale: boolean };
+        type G = { full: bigint; now: bigint; lines: any[]; digitalOnly: boolean; depositRefundable: boolean; merchantUser: string; mainId: string; off: bigint; note: string | null; gifts: string[]; wholesale: boolean; fee: bigint; zone: string | null; store: any };
         const groups = new Map<string, G>();
         // Approved wholesale buyers pay the wholesale price from its minimum quantity.
         const trade = await wholesaleFor(c, userId, [...new Set(r.rows.map((x: any) => String(x.main_id)))]);
@@ -500,7 +505,7 @@ storeRouter.post(
           if (!p.is_digital && Number(p.stock) < q) throw conflict('OUT_OF_STOCK', `Only ${p.stock} left of ${p.name}`);
           if (!p.is_digital && b.fulfillment === 'pickup' && p.offers_pickup === false) throw badRequest('NO_PICKUP', 'This store does not offer pickup');
           if (!p.is_digital && b.fulfillment === 'delivery' && p.offers_delivery === false) throw badRequest('NO_DELIVERY', 'This store does not deliver');
-          const g: G = groups.get(String(p.merchant_id)) ?? { full: 0n, now: 0n, lines: [], digitalOnly: true, depositRefundable: true, merchantUser: p.merchant_user_id, mainId: String(p.main_id), off: 0n, note: null, gifts: [], wholesale: false };
+          const g: G = groups.get(String(p.merchant_id)) ?? { full: 0n, now: 0n, lines: [], digitalOnly: true, depositRefundable: true, merchantUser: p.merchant_user_id, mainId: String(p.main_id), off: 0n, note: null, gifts: [], wholesale: false, fee: 0n, zone: null, store: p };
           if (p.wholesale) g.wholesale = true;
           const line = toCents(p.price) * BigInt(q);
           const dep = !p.is_digital && Number(p.deposit_percent) > 0 ? (line * BigInt(p.deposit_percent) + 99n) / 100n : line;
@@ -528,6 +533,16 @@ storeRouter.post(
         }
         const hasPhysical = Array.from(groups.values()).some((g) => !g.digitalOnly);
         if (hasPhysical && b.fulfillment === 'delivery' && !b.address) throw badRequest('ADDRESS_REQUIRED', 'Add a delivery address');
+        // Delivery is paid in full now (with the order, held until it arrives), after any discount.
+        if (b.fulfillment === 'delivery')
+          for (const [merchantId, g] of groups) {
+            if (g.digitalOnly) continue;
+            const d = deliveryFeeOf(g.store, b.deliveryZones?.[merchantId]);
+            g.fee = d.fee;
+            g.zone = d.zone;
+            g.full += d.fee;
+            g.now += d.fee;
+          }
         const total = fromCents(Array.from(groups.values()).reduce((s, g) => s + g.now, 0n));
         assertMaxTransfer(total);
         const w = await walletOfUser(userId, c, true);
@@ -584,6 +599,7 @@ storeRouter.post(
           const pt = pickup.get(merchantId);
           if (pt) await c.query(`UPDATE ${S}.orders SET pickup_point_id = $2, pickup_info = $3 WHERE id = $1`, [order.id, pt.id, JSON.stringify(pt)]);
           if (g.wholesale) await c.query(`UPDATE ${S}.orders SET is_wholesale = true WHERE id = $1`, [order.id]);
+          if (g.fee > 0n || g.zone) await c.query(`UPDATE ${S}.orders SET delivery_fee = $2, delivery_zone = $3 WHERE id = $1`, [order.id, fromCents(g.fee), g.zone]);
           if (g.off > 0n || g.gifts.length)
             await c.query(`UPDATE ${S}.orders SET discount_amount = $2, discount_note = $3, gifts = $4 WHERE id = $1`, [order.id, fromCents(g.off), g.note, JSON.stringify(g.gifts)]);
           for (const l of g.lines) {
@@ -625,7 +641,7 @@ async function ordersWithItems(where: string, params: unknown[], opts: { buyer?:
   const r = await pool.query(
     `SELECT o.id, o.user_id, o.merchant_id, o.total_amount, o.amount_paid, o.balance_due, o.balance_paid_via, o.deposit_refundable, o.status,
             o.payment_status, o.escrow_status, o.created_at, o.paid_at, o.accepted_at, o.shipped_at, o.delivered_at, o.completed_at,
-            o.fulfillment, o.delivery_address, o.delivery_phone, o.delivery_lat, o.delivery_lng, o.buyer_note, o.dispute_status, o.dispute_reason,
+            o.fulfillment, o.delivery_fee, o.delivery_zone, o.delivery_address, o.delivery_phone, o.delivery_lat, o.delivery_lng, o.buyer_note, o.dispute_status, o.dispute_reason,
             o.cancel_reason, o.pickup_info, o.discount_amount, o.discount_note, o.gifts, o.is_wholesale, ${opts.buyer ? 'o.handover_code,' : ''}
             m.store_name, m.branch_name, m.slug AS store_slug, m.logo_url AS store_logo, m.lat AS store_lat, m.lng AS store_lng, m.address AS store_address,
             m.user_id AS merchant_user_id, u.full_name AS buyer_name,
@@ -856,6 +872,13 @@ export async function myMerchant(req: Request | string, c?: pg.PoolClient) {
   return m;
 }
 
+/** A delivery price: 0 or more, at most 2 decimals. */
+const feeSchema = z
+  .union([z.string(), z.number()])
+  .transform((v) => (typeof v === 'number' ? v.toFixed(2) : v.trim()))
+  .refine((v) => /^(?:0|[1-9]\d{0,6})(?:\.\d{1,2})?$/.test(v), 'Enter a delivery price like 15 or 12.50')
+  .transform((v) => fromCents(toCents(v)));
+
 const optUrl = z
   .string()
   .max(500)
@@ -888,6 +911,12 @@ const storeBody = z
     deliveryNote: z.string().trim().max(200).optional().nullable(),
     offersPickup: z.boolean().optional(),
     offersDelivery: z.boolean().optional(),
+    deliveryMode: z.enum(['free', 'flat', 'zones']).optional(),
+    deliveryFee: feeSchema.optional(),
+    deliveryZones: z
+      .array(z.object({ id: z.string().regex(/^[a-z0-9]{4,12}$/).optional(), name: z.string().trim().min(2, 'Write the area name').max(60), fee: feeSchema }).strict())
+      .max(40, 'Up to 40 delivery areas')
+      .optional(),
     parentId: idParam.optional(),
     branchName: z.string().trim().min(2).max(60).optional(),
     instagram: social,
@@ -895,6 +924,30 @@ const storeBody = z
     facebook: social,
   })
   .strict();
+
+/** Give each delivery area a short id (kept when it already has one), names unique. */
+function cleanZones(zones: { id?: string; name: string; fee: string }[]) {
+  const seen = new Set<string>();
+  return zones.map((z) => {
+    const key = z.name.toLowerCase();
+    if (seen.has(key)) throw badRequest('DUPLICATE_ZONE', 'Two delivery areas have the same name');
+    seen.add(key);
+    return { id: z.id ?? crypto.randomBytes(4).toString('hex'), name: z.name, fee: z.fee };
+  });
+}
+
+/** What delivery costs from this store: free, one price, or the chosen area's price. */
+export function deliveryFeeOf(m: { delivery_mode?: string; delivery_fee?: string | number; delivery_zones?: any }, zoneId?: string | null): { fee: bigint; zone: string | null } {
+  const mode = m.delivery_mode ?? 'free';
+  if (mode === 'flat') return { fee: toCents(String(m.delivery_fee ?? '0')), zone: null };
+  if (mode === 'zones') {
+    const zones: any[] = Array.isArray(m.delivery_zones) ? m.delivery_zones : [];
+    const z = zones.find((x) => String(x.id) === String(zoneId ?? ''));
+    if (!z) throw badRequest('ZONE_REQUIRED', 'Choose your delivery area');
+    return { fee: toCents(String(z.fee)), zone: String(z.name) };
+  }
+  return { fee: 0n, zone: null };
+}
 
 const slugify = (name: string) =>
   `${
@@ -906,7 +959,7 @@ const slugify = (name: string) =>
   }-${crypto.randomBytes(3).toString('hex')}`;
 
 const STORE_COLS = `id, slug, store_name, branch_name, parent_id, description, logo_url, cover_url, category, city, address, lat, lng, phone, show_phone,
-  accent, delivery_note, offers_pickup, offers_delivery, status, created_at, instagram, tiktok, facebook`;
+  accent, delivery_note, offers_pickup, offers_delivery, delivery_mode, delivery_fee, delivery_zones, status, created_at, instagram, tiktok, facebook`;
 
 merchantRouter.get(
   '/stores',
@@ -963,6 +1016,15 @@ merchantRouter.post(
     if (req.body.categoryRequest) req.body.category = 'other';
     if (req.body.category && !(await categoryExists(req.body.category))) throw badRequest('BAD_CATEGORY', 'Unknown category');
     const m: any = await createStore(req.auth!.userId, req.body);
+    if (req.body.deliveryMode || req.body.deliveryFee || req.body.deliveryZones) {
+      const zones = cleanZones(req.body.deliveryZones ?? []);
+      if (req.body.deliveryMode === 'zones' && !zones.length) throw badRequest('ZONES_EMPTY', 'Add at least one delivery area with its price');
+      const u = await one<any>(
+        `UPDATE ${S}.merchants SET delivery_mode = COALESCE($2, delivery_mode), delivery_fee = COALESCE($3, delivery_fee), delivery_zones = $4 WHERE id = $1 RETURNING delivery_mode, delivery_fee, delivery_zones`,
+        [m.id, req.body.deliveryMode ?? null, req.body.deliveryFee ?? null, JSON.stringify(zones)],
+      );
+      Object.assign(m, u);
+    }
     if (req.body.categoryRequest) m.pendingCategory = await suggestCategory(req.auth!.userId, m.id, req.body.categoryRequest);
     const { instagram, tiktok, facebook } = req.body;
     if (instagram || tiktok || facebook) {
@@ -990,6 +1052,9 @@ const COLMAP: Record<string, string> = {
   deliveryNote: 'delivery_note',
   offersPickup: 'offers_pickup',
   offersDelivery: 'offers_delivery',
+  deliveryMode: 'delivery_mode',
+  deliveryFee: 'delivery_fee',
+  deliveryZones: 'delivery_zones',
   branchName: 'branch_name',
   instagram: 'instagram',
   tiktok: 'tiktok',
@@ -1009,9 +1074,11 @@ merchantRouter.patch(
     }
     const sets: string[] = [];
     const vals: unknown[] = [req.params.id, req.auth!.userId];
+    if (req.body.deliveryZones) req.body.deliveryZones = cleanZones(req.body.deliveryZones);
+    if (req.body.deliveryMode === 'zones' && req.body.deliveryZones && !req.body.deliveryZones.length) throw badRequest('ZONES_EMPTY', 'Add at least one delivery area with its price');
     for (const [k, v] of Object.entries(req.body)) {
       if (!COLMAP[k] || v === undefined) continue;
-      vals.push(v);
+      vals.push(k === 'deliveryZones' ? JSON.stringify(v) : v);
       sets.push(`${COLMAP[k]} = $${vals.length}`);
     }
     if (!sets.length) return res.json({ success: true });
@@ -1569,6 +1636,38 @@ storeRouter.get(
       [ids],
     );
     res.json({ success: true, data: { points: r.rows } });
+  }),
+);
+
+/** Public: how each of the given stores charges for delivery (the cart shows it before paying). */
+storeRouter.get(
+  '/delivery',
+  validate({ query: z.object({ stores: z.string().trim().max(2000) }).strict() }),
+  ah(async (req, res) => {
+    const ids = String(req.query.stores)
+      .split(',')
+      .map((x) => x.trim())
+      .filter((x) => idParam.safeParse(x).success)
+      .slice(0, 30);
+    if (!ids.length) return res.json({ success: true, data: { stores: [] } });
+    const r = await pool.query(
+      `SELECT id, store_name, branch_name, offers_delivery, delivery_mode, delivery_fee, delivery_zones, delivery_note FROM ${S}.merchants WHERE id = ANY($1)`,
+      [ids],
+    );
+    res.json({
+      success: true,
+      data: {
+        stores: r.rows.map((m) => ({
+          merchantId: m.id,
+          storeName: m.branch_name ? `${m.store_name} — ${m.branch_name}` : m.store_name,
+          offersDelivery: m.offers_delivery,
+          mode: m.delivery_mode,
+          fee: m.delivery_fee,
+          note: m.delivery_note,
+          zones: (Array.isArray(m.delivery_zones) ? m.delivery_zones : []).map((z: any) => ({ id: z.id, name: z.name, fee: z.fee })),
+        })),
+      },
+    });
   }),
 );
 

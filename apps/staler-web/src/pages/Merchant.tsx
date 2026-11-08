@@ -47,6 +47,7 @@ import { StoreCover, StoreLogo } from './Stores';
 import { useCategories } from '../lib/categories';
 import { TownField } from '../components/TownField';
 import { OrderPerks } from '../components/Commerce';
+import { DeliveryPricing, deliveryBody, deliveryProblem, type DeliveryMode, type Zone } from '../components/DeliveryPricing';
 import { ImageCropper } from '../components/ImageCropper';
 
 interface MStore {
@@ -69,6 +70,9 @@ interface MStore {
   delivery_note: string | null;
   offers_pickup: boolean;
   offers_delivery: boolean;
+  delivery_mode?: DeliveryMode;
+  delivery_fee?: string;
+  delivery_zones?: Zone[];
   instagram?: string | null;
   tiktok?: string | null;
   facebook?: string | null;
@@ -153,6 +157,7 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
             deliveryNote: store.delivery_note ?? '',
             offersPickup: store.offers_pickup,
             offersDelivery: store.offers_delivery,
+            delivery: { mode: store.delivery_mode ?? 'free', fee: Number(store.delivery_fee ?? 0) > 0 ? String(Number(store.delivery_fee)) : '', zones: (store.delivery_zones ?? []).map((z) => ({ id: z.id, name: z.name, fee: String(Number(z.fee)) })) },
             logoUrl: store.logo_url,
             coverUrl: store.cover_url,
             lat: store.lat,
@@ -176,6 +181,7 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
             deliveryNote: '',
             offersPickup: true,
             offersDelivery: true,
+            delivery: { mode: parent?.delivery_mode ?? 'free', fee: Number(parent?.delivery_fee ?? 0) > 0 ? String(Number(parent?.delivery_fee)) : '', zones: (parent?.delivery_zones ?? []).map((z) => ({ name: z.name, fee: String(Number(z.fee)) })) },
             logoUrl: parent?.logo_url ?? null,
             coverUrl: parent?.cover_url ?? null,
             lat: null,
@@ -201,6 +207,8 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
   };
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    const dp = f.offersDelivery ? deliveryProblem(f.delivery, lang === 'ar') : null;
+    if (dp) return setError(dp);
     setBusy('save');
     setError(null);
     const body: any = {
@@ -215,6 +223,7 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
       deliveryNote: f.deliveryNote.trim() || null,
       offersPickup: f.offersPickup,
       offersDelivery: f.offersDelivery,
+      ...(f.offersDelivery ? deliveryBody(f.delivery) : {}),
       logoUrl: f.logoUrl,
       coverUrl: f.coverUrl,
       lat: f.lat,
@@ -337,6 +346,7 @@ function StoreEditor({ open, onClose, store, parent, onSaved }: { open: boolean;
           <Toggle checked={f.offersDelivery} onChange={(v) => setF({ ...f, offersDelivery: v })} label={t.mstore.deliveryOn} />
           <Toggle checked={f.offersPickup} onChange={(v) => setF({ ...f, offersPickup: v })} label={t.mstore.pickupOn} />
         </div>
+        {f.offersDelivery && <DeliveryPricing value={f.delivery} onChange={(delivery) => setF({ ...f, delivery })} />}
         <div>
           <p className="mb-2 text-sm font-medium text-ink/80">{t.social.title}</p>
           <div className="grid gap-3 sm:grid-cols-3">

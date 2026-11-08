@@ -9,7 +9,7 @@ import { ArrowUpDown, BadgePercent, BellOff, BellRing, Bike, Check, ClipboardLis
 import { assetUrl, get, PUBLIC_ORIGIN, put } from '../lib/api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../lib/auth';
-import { useI18n } from '../lib/i18n';
+import { useI18n, type Lang } from '../lib/i18n';
 import { CartSheet, ProductCard, ProductSheet, useCart, type Product } from '../components/Commerce';
 import { ShareSheet } from '../components/Share';
 import { MapView } from '../components/MapView';
@@ -71,6 +71,23 @@ function AdCard({ ad, onOpen, i }: { ad: Ad; onOpen: () => void; i: number }) {
 
 /** Round frosted buttons on the storefront. */
 const GLASS = 'grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white ring-1 ring-white/30 backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/25 active:scale-95';
+
+/** The store's delivery price for the hero chip: a label ("by area"/"free") and an amount in Latin digits. */
+function deliveryPrice(s: any, lang: Lang): { label: string | null; amount: string | null } {
+  const ar = lang === 'ar';
+  const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
+  const mode = s.delivery_mode ?? 'free';
+  const free = { label: ar ? 'مجاني' : 'free', amount: null };
+  if (mode === 'flat') return Number(s.delivery_fee) > 0 ? { label: null, amount: `${n(Number(s.delivery_fee))} PS` } : free;
+  if (mode === 'zones') {
+    const fees = (s.delivery_zones ?? []).map((z: any) => Number(z.fee));
+    if (!fees.length) return { label: null, amount: null };
+    const lo = Math.min(...fees);
+    const hi = Math.max(...fees);
+    return { label: lo === hi ? null : ar ? 'حسب المنطقة' : 'by area', amount: lo === hi ? `${n(lo)} PS` : `${n(lo)}–${n(hi)} PS` };
+  }
+  return free;
+}
 
 export default function StorePage() {
   const { slug } = useParams();
@@ -202,6 +219,20 @@ export default function StorePage() {
                 {s.offers_delivery && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/25 backdrop-blur-md">
                     <Bike className="h-3.5 w-3.5" /> {t.shop.delivery}
+                    {(() => {
+                      const d = deliveryPrice(s, lang);
+                      return d.label || d.amount ? (
+                        <span className="font-normal opacity-90">
+                          · {d.label}
+                          {d.label && d.amount ? ' ' : ''}
+                          {d.amount && (
+                            <bdi dir="ltr" className="num">
+                              {d.amount}
+                            </bdi>
+                          )}
+                        </span>
+                      ) : null;
+                    })()}
                   </span>
                 )}
                 {s.offers_pickup && (

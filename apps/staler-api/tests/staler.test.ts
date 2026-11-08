@@ -437,6 +437,47 @@ describe('marketplace', () => {
     expect(await walletBalance(app, buyer)).toBe('100.00');
   });
 
+  it('delivery prices: one price or by area, added to the total, shown on the order, changeable', async () => {
+    const m = await walletUser(app, 'Delivery Seller', 'merchant');
+    // by area needs at least one area
+    expect((await request(app).post('/api/merchant/stores').set(auth(m.token)).send({ storeName: 'Zaatar House', category: 'food', deliveryMode: 'zones', deliveryZones: [] })).status).toBe(400);
+    const st = await request(app)
+      .post('/api/merchant/stores')
+      .set(auth(m.token))
+      .send({ storeName: 'Zaatar House', category: 'food', deliveryMode: 'zones', deliveryZones: [{ name: 'Nablus', fee: '10' }, { name: 'Ramallah', fee: 20 }] });
+    expect(st.status, JSON.stringify(st.body)).toBe(201);
+    const sid = st.body.data.store.id;
+    expect(st.body.data.store.delivery_zones).toHaveLength(2);
+    expect((await request(app).patch(`/api/merchant/stores/${sid}`).set(auth(m.token)).send({ deliveryZones: [{ name: 'Jenin', fee: '5' }, { name: 'jenin', fee: '6' }] })).status).toBe(400);
+    const p = await request(app).post('/api/merchant/products').set(auth(m.token)).set('x-store-id', sid).send({ name: 'Zaatar 1kg', price: '10', stock: 10 });
+    expect(p.status).toBe(201);
+    const info = (await request(app).get(`/api/store/delivery?stores=${sid}`)).body.data.stores[0];
+    expect(info.mode).toBe('zones');
+    const ram = info.zones.find((z: any) => z.name === 'Ramallah');
+    const buyer = await walletUser(app, 'Zaatar Buyer');
+    await request(app).post('/api/wallet/transfer').set(auth(funder.token)).send({ to: buyer.walletId, amount: '75' });
+    const item = { productId: p.body.data.product.id, quantity: 2 };
+    // the area must be chosen
+    const none = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [item], address: 'Main St, Ramallah' });
+    expect(none.status).toBe(400);
+    expect(none.body.error.code).toBe('ZONE_REQUIRED');
+    const co = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [item], address: 'Main St, Ramallah', deliveryZones: { [sid]: ram.id } });
+    expect(co.status, JSON.stringify(co.body)).toBe(201);
+    expect(co.body.data.total).toBe('40.00');
+    const o = (await request(app).get(`/api/store/orders/${co.body.data.orders[0].id}`).set(auth(buyer.token))).body.data.order;
+    expect(o.delivery_fee).toBe('20.00');
+    expect(o.delivery_zone).toBe('Ramallah');
+    expect(o.total_amount).toBe('40.00');
+    // pickup costs no delivery
+    const pk = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [{ ...item, quantity: 1 }], fulfillment: 'pickup' });
+    expect(pk.body.data.total).toBe('10.00');
+    // switch to one price
+    expect((await request(app).patch(`/api/merchant/stores/${sid}`).set(auth(m.token)).send({ deliveryMode: 'flat', deliveryFee: '12.5' })).status).toBe(200);
+    const flat = await request(app).post('/api/store/checkout').set(auth(buyer.token)).send({ items: [{ ...item, quantity: 1 }], address: 'Main St, Ramallah' });
+    expect(flat.body.data.total).toBe('22.50');
+    expect((await request(app).get(`/api/store/s/${st.body.data.store.slug}`)).body.data.store.delivery_fee).toBe('12.50');
+  });
+
   it('a web session left unused too long cannot be revived (laptop shut, tab restored)', async () => {
     const u = await walletUser(app, 'Sleepy Laptop');
     const ok = await request(app).post('/api/auth/refresh').set('Cookie', u.cookie).set('x-requested-with', 'fetch');

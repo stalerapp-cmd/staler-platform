@@ -4,6 +4,12 @@
  * TalerBank — keep both copies identical.
  */
 const AR: Record<string, string> = {
+  'Write the area name': 'اكتب اسم المنطقة',
+  'Up to 40 delivery areas': 'لحد 40 منطقة توصيل',
+  'Enter a delivery price like 15 or 12.50': 'اكتب سعر توصيل زي 15 أو 12.50',
+  'Two delivery areas have the same name': 'في منطقتين توصيل بنفس الاسم',
+  'Choose your delivery area': 'اختار منطقة التوصيل',
+  'Add at least one delivery area with its price': 'ضيف منطقة توصيل وحدة على الأقل مع سعرها',
   'Up to 200 saved beneficiaries': 'لحد 200 مستفيد محفوظ',
   'Beneficiary not found': 'المستفيد مش موجود',
   'This is your own account': 'هاد حسابك انت',
