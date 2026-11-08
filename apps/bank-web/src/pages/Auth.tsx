@@ -250,7 +250,7 @@ export function Register() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 * i, duration: 0.3 }}
                   whileTap={{ scale: 0.96 }}
-                  className={`relative flex h-[84px] flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl px-2 text-center ring-1 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${on ? 'text-white ring-transparent' : 'bg-surface ring-line hover:ring-ink/25'}`}
+                  className={`relative flex min-h-[104px] flex-col items-center justify-start overflow-hidden rounded-xl px-2 pb-3 pt-5 text-center ring-1 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${on ? 'text-white ring-transparent' : 'bg-surface ring-line hover:ring-ink/25'}`}
                 >
                   {on && (
                     <motion.span
@@ -270,22 +270,31 @@ export function Register() {
                     </AnimatePresence>
                   </span>
                   <motion.span
-                    animate={{ scale: on ? 1.05 : 1, rotate: on ? -4 : 0 }}
-                    transition={{ type: 'spring', stiffness: 380, damping: 20 }}
-                    className={`relative grid h-8 w-8 place-items-center rounded-lg ${on ? 'bg-gold text-night' : K.tone}`}
+                    animate={on ? { rotate: [0, -10, 8, 0], scale: [1, 1.15, 1] } : { rotate: 0, scale: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className={`relative mb-1.5 grid h-9 w-9 place-items-center rounded-lg ${on ? 'bg-gold text-night' : K.tone}`}
                   >
                     <K.icon className="h-4 w-4" />
                   </motion.span>
                   <span className="relative text-[13px] font-semibold leading-tight">{lang === 'ar' ? K.ar : K.en}</span>
+                  <AnimatePresence initial={false}>
+                    {on && (
+                      <motion.span
+                        key="lead"
+                        initial={{ height: 0, opacity: 0, y: -4 }}
+                        animate={{ height: 'auto', opacity: 1, y: 0 }}
+                        exit={{ height: 0, opacity: 0, y: -4 }}
+                        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                        className="relative block overflow-hidden"
+                      >
+                        <span className="block pt-1 text-[11px] leading-snug text-white/70">{lang === 'ar' ? K.arLead : K.enLead}</span>
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </motion.button>
               );
             })}
           </div>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.p key={kind} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.2 }} className="mt-1.5 text-center text-xs text-muted">
-              {lang === 'ar' ? KINDS[kind].arLead : KINDS[kind].enLead}
-            </motion.p>
-          </AnimatePresence>
         </fieldset>
         <Field label={t.auth.fullName} value={f.fullName} onChange={set('fullName')} autoComplete="name" required error={fe.fullName} />
         <AnimatePresence initial={false}>
