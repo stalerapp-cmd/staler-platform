@@ -250,7 +250,7 @@ export function Register() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05 * i, duration: 0.3 }}
                   whileTap={{ scale: 0.96 }}
-                  className={`relative flex min-h-[104px] flex-col items-center justify-start overflow-hidden rounded-xl px-2 pb-3 pt-5 text-center ring-1 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${on ? 'text-white ring-transparent' : 'bg-surface ring-line hover:ring-ink/25'}`}
+                  className={`relative flex h-[104px] flex-col items-center justify-center overflow-hidden rounded-xl px-1.5 pt-2 text-center ring-1 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${on ? 'text-white ring-transparent' : 'bg-surface ring-line hover:ring-ink/25'}`}
                 >
                   {on && (
                     <motion.span
@@ -287,7 +287,9 @@ export function Register() {
                         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                         className="relative block overflow-hidden"
                       >
-                        <span className="block pt-1 text-[11px] leading-snug text-white/70">{lang === 'ar' ? K.arLead : K.enLead}</span>
+                        <span className="block whitespace-nowrap pt-1 text-[11px] text-white/65" title={lang === 'ar' ? K.arLead : K.enLead}>
+                          {lang === 'ar' ? K.arShort : K.enShort}
+                        </span>
                       </motion.span>
                     )}
                   </AnimatePresence>
