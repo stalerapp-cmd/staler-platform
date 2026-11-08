@@ -828,3 +828,55 @@ describe('support calls', () => {
     expect((await request(app).put('/api/calls/hours').set(auth(c.token)).send({ days: [1], from: '09:00', to: '12:00', slot: 30 })).status).toBe(403);
   });
 });
+
+describe('messages between customers', () => {
+  it('find by exact id, chat (encrypted), reply/react/edit/delete, seen, notification, block, staff kept out', async () => {
+    const a = await registerCustomer(app, 'Chat Alice');
+    const b = await registerCustomer(app, 'Chat Bob');
+    // no search by name, only exact identifiers
+    expect((await request(app).get('/api/messages/search?q=Chat Bob').set(auth(a.token))).body.data.users).toHaveLength(0);
+    const f = (await request(app).get(`/api/messages/search?q=@${b.username}`).set(auth(a.token))).body.data.users;
+    expect(f[0].id).toBe(b.userId);
+    expect((await request(app).get(`/api/messages/search?q=${b.email}`).set(auth(a.token))).body.data.users[0].id).toBe(b.userId);
+    expect((await request(app).post('/api/messages/conversations').set(auth(a.token)).send({ userId: a.userId })).status).toBe(400);
+    const c = await request(app).post('/api/messages/conversations').set(auth(a.token)).send({ userId: b.userId });
+    expect(c.status).toBe(201);
+    const id = c.body.data.conversationId;
+    // the same chat is reused from either side
+    expect((await request(app).post('/api/messages/conversations').set(auth(b.token)).send({ userId: a.userId })).body.data.conversationId).toBe(id);
+    const m1 = await request(app).post(`/api/messages/conversations/${id}/messages`).set(auth(a.token)).send({ content: 'Hi Bob, rent for June?' });
+    expect(m1.status).toBe(201);
+    // stored encrypted, not as plain text
+    const raw = await pool.query(`SELECT content FROM talerbank.messages WHERE id = $1`, [m1.body.data.message.id]);
+    expect(raw.rows[0].content.startsWith('gcm1:')).toBe(true);
+    expect((await request(app).get('/api/messages/unread').set(auth(b.token))).body.data.unread).toBe(1);
+    const n = (await request(app).get('/api/notifications').set(auth(b.token))).body.data.notifications.find((x: any) => x.type === 'message');
+    expect(n.metadata.link).toBe(`/app/messages/${id}`);
+    const read = await request(app).get(`/api/messages/conversations/${id}/messages`).set(auth(b.token));
+    expect(read.body.data.messages[0].content).toBe('Hi Bob, rent for June?');
+    expect((await request(app).get('/api/messages/unread').set(auth(b.token))).body.data.unread).toBe(0);
+    const r = await request(app).post(`/api/messages/conversations/${id}/messages`).set(auth(b.token)).send({ content: 'Sending now', replyTo: m1.body.data.message.id });
+    expect((await request(app).post(`/api/messages/messages/${m1.body.data.message.id}/react`).set(auth(b.token)).send({ emoji: '👍' })).body.data.reactions['👍']).toHaveLength(1);
+    expect((await request(app).patch(`/api/messages/messages/${r.body.data.message.id}`).set(auth(a.token)).send({ content: 'x' })).status).toBe(404);
+    expect((await request(app).patch(`/api/messages/messages/${r.body.data.message.id}`).set(auth(b.token)).send({ content: 'Sending it now' })).status).toBe(200);
+    const view = await request(app).get(`/api/messages/conversations/${id}/messages`).set(auth(a.token));
+    expect(view.body.data.messages[1].reply.content).toBe('Hi Bob, rent for June?');
+    expect(view.body.data.messages[1].is_edited).toBe(true);
+    expect(view.body.data.seenAt).toBeTruthy();
+    expect((await request(app).delete(`/api/messages/messages/${m1.body.data.message.id}`).set(auth(a.token))).status).toBe(200);
+    expect((await request(app).get(`/api/messages/conversations/${id}/messages`).set(auth(b.token))).body.data.messages[0].is_deleted).toBe(true);
+    // outsiders can't read
+    const eve = await registerCustomer(app, 'Chat Eve');
+    expect((await request(app).get(`/api/messages/conversations/${id}/messages`).set(auth(eve.token))).status).toBe(404);
+    // save the person from the chat as a beneficiary
+    expect((await request(app).post('/api/beneficiaries').set(auth(a.token)).send({ userId: b.userId })).status).toBe(201);
+    // a block from the chat stops messages both ways and hides them from search
+    expect((await request(app).post('/api/blocks').set(auth(b.token)).send({ userId: a.userId })).status).toBe(201);
+    expect((await request(app).post(`/api/messages/conversations/${id}/messages`).set(auth(a.token)).send({ content: 'hello?' })).status).toBe(403);
+    expect((await request(app).get(`/api/messages/search?q=@${b.username}`).set(auth(a.token))).body.data.users).toHaveLength(0);
+    expect((await request(app).get('/api/messages/conversations').set(auth(a.token))).body.data.conversations[0].blocked).toBe(true);
+    // staff don't chat here (they answer in support)
+    const adm = (await request(app).post('/api/auth/login').send({ login: 'admin@talerbank.local', password: process.env.BANK_ADMIN_PASSWORD })).body.data.accessToken;
+    expect((await request(app).post('/api/messages/conversations').set(auth(adm)).send({ userId: eve.userId })).status).toBe(403);
+  });
+});

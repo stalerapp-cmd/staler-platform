@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CalendarClock, Pencil, Plus, Search, Send, Star, Trash2, UserRound, Users } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { CalendarClock, MessageCircle, Pencil, Plus, Search, Send, Star, Trash2, UserRound, Users } from 'lucide-react';
 import { del, get, patch, post } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { invalidateData } from '../lib/hooks';
@@ -19,6 +19,7 @@ export default function Beneficiaries() {
   const data = useBeneficiaries();
   const confirm = useConfirm();
   const toast = useToast();
+  const nav = useNavigate();
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<Beneficiary | null>(null);
@@ -112,6 +113,20 @@ export default function Beneficiaries() {
                         <Link to={`/app/transfer?to=${encodeURIComponent(b.iban.replace(/\s/g, ''))}`} className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-surface">
                           <Send className="h-4 w-4" /> {ar ? 'حوّل' : 'Send'}
                         </Link>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const r = await post<{ conversationId: string }>('/api/messages/conversations', { userId: b.userId });
+                              nav(`/app/messages/${r.conversationId}`);
+                            } catch (e) {
+                              toast(err(e), 'error');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-surface px-3 py-2 text-sm font-semibold text-ink ring-1 ring-line"
+                        >
+                          <MessageCircle className="h-4 w-4" /> {ar ? 'راسل' : 'Message'}
+                        </button>
                         <Link to="/app/scheduled" className="inline-flex items-center gap-1.5 rounded-xl bg-surface px-3 py-2 text-sm font-semibold text-ink ring-1 ring-line">
                           <CalendarClock className="h-4 w-4" /> {ar ? 'جدول' : 'Schedule'}
                         </Link>

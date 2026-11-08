@@ -4,6 +4,11 @@
  * TalerBank — keep both copies identical.
  */
 const AR: Record<string, string> = {
+  'Messages are between customers — staff answer in support': 'الرسائل بين الزباين — الموظفين بيردوا بالدعم',
+  'Message is empty': 'الرسالة فاضية',
+  'Message is too long': 'الرسالة طويلة كثير',
+  'This person can’t receive messages now': 'هالشخص ما بيقدر يستقبل رسائل هلّأ',
+  'Who should be blocked?': 'مين بدك تبلّك؟',
   'Write the area name': 'اكتب اسم المنطقة',
   'Up to 40 delivery areas': 'لحد 40 منطقة توصيل',
   'Enter a delivery price like 15 or 12.50': 'اكتب سعر توصيل زي 15 أو 12.50',

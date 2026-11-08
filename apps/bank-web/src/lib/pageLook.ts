@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import {
-  ArrowRightLeft, BookText, CircleHelp, Contact, LifeBuoy, PhoneCall, Plane, Repeat, Trophy, Crown, FileClock, Home, KeyRound, Landmark, LayoutDashboard, QrCode, ScanLine, Settings2, ShieldCheck, Users, Vault, Wallet,
+  ArrowRightLeft, BookText, CircleHelp, Contact, MessagesSquare, LifeBuoy, PhoneCall, Plane, Repeat, Trophy, Crown, FileClock, Home, KeyRound, Landmark, LayoutDashboard, QrCode, ScanLine, Settings2, ShieldCheck, Users, Vault, Wallet,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -16,6 +16,7 @@ const LOOKS: [RegExp, NoteTone, LucideIcon][] = [
   [/^\/app\/apps/, 'sky', KeyRound],
   [/^\/app\/settings/, 'sky', Settings2],
   [/^\/app\/beneficiaries/, 'sage', Contact],
+  [/^\/app\/messages/, 'vault', MessagesSquare],
   [/^\/app\/scheduled|^\/app\/admin\/scheduled/, 'brass', Repeat],
   [/^\/app\/help/, 'sky', CircleHelp],
   [/^\/app\/admin\/calls/, 'sage', PhoneCall],

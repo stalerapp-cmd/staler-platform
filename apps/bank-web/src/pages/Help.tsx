@@ -10,6 +10,7 @@ import {
   Landmark,
   LifeBuoy,
   Contact,
+  MessagesSquare,
   PhoneCall,
   Megaphone,
   Plane,
@@ -129,6 +130,19 @@ const TOPICS: Topic[] = [
     steps: [
       ['Pick what it’s about and write. One team member takes it and stays with you; you see who.', 'اختار موضوعك واكتب. حدا من الفريق بيستلمه وبيضل معك، وبتشوف مين.'],
       ['When it’s closed, rate the help. Write again any time to start a new conversation.', 'لما تتسكّر قيّم المساعدة. واكتب وقت ما بدك لتبلّش محادثة جديدة.'],
+    ],
+  },
+  {
+    id: 'messages',
+    who: 'all',
+    icon: MessagesSquare,
+    title: ['Messages', 'الرسائل'],
+    to: '/app/messages',
+    steps: [
+      ['Chat with other TalerBank customers. Start from a beneficiary, or type someone’s exact @username, e-mail, IBAN or account number — there’s no search by name, for privacy.', 'احكي مع زباين TalerBank التانيين. ابدأ من المستفيدين، أو اكتب @اسم المستخدم أو الإيميل أو IBAN أو رقم الحساب كامل — ما في بحث بالاسم حفاظًا عالخصوصية.'],
+      ['Reply, react, copy, edit within 15 minutes or delete for both. Messages are encrypted when stored. Two ticks mean they read it.', 'رد، تفاعل بإيموجي، انسخ، عدّل خلال 15 دقيقة أو احذف عند الطرفين. الرسائل مشفّرة وهي مخزّنة. علامتين يعني قرأها.'],
+      ['From the chat: “Send money” opens a transfer to them, save them as a beneficiary, or block them — a block stops messages, transfers and scheduled payments both ways.', 'من المحادثة: «حوّل» بيفتحلك حوالة إله، أو احفظه بالمستفيدين، أو بلّكه — البلوك بيوقف الرسائل والحوالات والدفعات المجدولة بالاتجاهين.'],
+      ['Support is pinned at the top of your messages: pick a topic, one team member takes it and stays with you, and you can rate the help.', 'الدعم مثبّت فوق رسائلك: اختار الموضوع، حدا من الفريق بيستلم وبيضل معك، وبتقدر تقيّم المساعدة.'],
     ],
   },
   {

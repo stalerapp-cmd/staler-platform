@@ -20,6 +20,7 @@ const Transactions = lazyRetry(() => import('./pages/Transactions'));
 const Requests = lazyRetry(() => import('./pages/Requests'));
 const Scheduled = lazyRetry(() => import('./pages/Scheduled'));
 const Beneficiaries = lazyRetry(() => import('./pages/Beneficiaries'));
+const Messages = lazyRetry(() => import('./pages/Messages'));
 const AdminCalls = lazyRetry(() => import('./pages/AdminCalls').then((m) => ({ default: m.AdminCalls })));
 const AdminScheduled = lazyRetry(() => import('./pages/AdminScheduled'));
 const AdminTeam = lazyRetry(() => import('./pages/AdminTeam'));
@@ -96,6 +97,8 @@ export default function App() {
           <Route path="requests" element={page(<Requests />)} />
           <Route path="scheduled" element={page(<Scheduled />)} />
           <Route path="beneficiaries" element={page(<Beneficiaries />)} />
+          <Route path="messages" element={page(<Messages />)} />
+          <Route path="messages/:id" element={page(<Messages />)} />
           <Route path="admin/calls" element={admin(<AdminCalls />)} />
           <Route path="help" element={page(<Help />)} />
           <Route path="pay/:id" element={page(<Pay />)} />

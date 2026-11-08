@@ -367,10 +367,13 @@ scheduledRouter.get(
 
 scheduledRouter.post(
   '/blocks',
-  validate({ body: z.object({ to: z.string().trim().min(3).max(64) }).strict() }),
+  validate({ body: z.object({ to: z.string().trim().min(3).max(64).optional(), userId: uuid.optional() }).strict().refine((b) => b.to || b.userId, 'Who should be blocked?') }),
   ah(async (req, res) => {
     const me = String(req.auth!.userId);
-    const r = await resolveRecipient(req.body.to);
+    const r = req.body.userId
+      ? await one<any>(`SELECT id AS user_id, full_name FROM ${S}.users WHERE id = $1 AND role = 'user'`, [req.body.userId])
+      : await resolveRecipient(req.body.to);
+    if (!r) throw notFound('User not found');
     if (String(r.user_id) === me) throw badRequest('SELF', 'That’s you');
     await tx(async (c) => {
       await c.query(`INSERT INTO ${S}.user_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [me, r.user_id]);

@@ -25,6 +25,7 @@ import { supportRouter } from './modules/support.js';
 import { adminRouter } from './modules/admin.js';
 import { beneficiariesRouter } from './modules/beneficiaries.js';
 import { callsRouter } from './modules/calls.js';
+import { messagesRouter } from './modules/messages.js';
 
 let maintenanceCache = { at: 0, on: false };
 async function maintenanceOn(): Promise<boolean> {
@@ -109,6 +110,7 @@ export function createApp(): Express {
   app.use('/api', noStore, scheduledRouter);
   app.use('/api', noStore, beneficiariesRouter);
   app.use('/api/calls', noStore, callsRouter);
+  app.use('/api/messages', noStore, messagesRouter);
   app.use('/api', noStore, bankingRouter);
   app.use('/taler-integration', noStore, integrationRouter);
   app.use('/taler-wire-gateway', noStore, wireRouter);

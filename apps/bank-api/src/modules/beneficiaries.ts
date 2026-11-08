@@ -22,7 +22,7 @@ beneficiariesRouter.get(
   ah(async (req, res) => {
     const me = req.auth!.userId;
     const r = await pool.query(
-      `SELECT b.id, b.nickname, b.favourite, b.created_at, a.iban, a.account_number, u.full_name, u.username, u.customer_type, u.business_name,
+      `SELECT b.id, b.nickname, b.favourite, b.created_at, u.id AS user_id, a.iban, a.account_number, u.full_name, u.username, u.customer_type, u.business_name,
               (u.status <> 'active' OR a.is_locked) AS unavailable, ${blockedSql('b.owner_id', 'u.id')} AS blocked,
               (SELECT max(t.created_at) FROM ${S}.transactions t JOIN ${S}.bank_accounts f ON f.id = t.from_account_id
                 WHERE f.user_id = b.owner_id AND t.to_account_id = b.account_id AND t.status = 'completed') AS last_used,
@@ -38,6 +38,7 @@ beneficiariesRouter.get(
       data: {
         beneficiaries: r.rows.map((x) => ({
           id: x.id,
+          userId: x.user_id,
           nickname: x.nickname,
           favourite: x.favourite,
           holder: maskName(x.full_name),
@@ -57,10 +58,23 @@ beneficiariesRouter.get(
 
 beneficiariesRouter.post(
   '/beneficiaries',
-  validate({ body: z.object({ to: z.string().trim().min(3).max(64), nickname: nick, favourite: z.boolean().optional() }).strict() }),
+  validate({
+    body: z
+      .object({ to: z.string().trim().min(3).max(64).optional(), userId: uuid.optional(), nickname: nick, favourite: z.boolean().optional() })
+      .strict()
+      .refine((b) => b.to || b.userId, 'Who should be saved?'),
+  }),
   ah(async (req, res) => {
     const me = req.auth!.userId;
-    const r = await resolveRecipient(req.body.to);
+    // From a chat: the person's main account.
+    const r = req.body.userId
+      ? await one<any>(
+          `SELECT a.id, a.user_id, u.full_name FROM ${S}.users u JOIN ${S}.bank_accounts a ON a.user_id = u.id
+            WHERE u.id = $1 AND u.role = 'user' AND u.status = 'active' ORDER BY a.is_primary DESC, a.created_at ASC LIMIT 1`,
+          [req.body.userId],
+        )
+      : await resolveRecipient(req.body.to!);
+    if (!r) throw notFound('User not found');
     if (String(r.user_id) === String(me)) throw badRequest('OWN_ACCOUNT', 'This is your own account');
     await assertNotBlocked(me, String(r.user_id));
     const n = await one<{ n: number }>(`SELECT count(*)::int AS n FROM ${S}.beneficiaries WHERE owner_id = $1`, [me]);

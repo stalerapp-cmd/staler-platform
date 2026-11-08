@@ -8,6 +8,7 @@ import { Avatar, Button, ErrorNote, cx } from './ui';
 
 export interface Beneficiary {
   id: string;
+  userId: string;
   nickname: string | null;
   favourite: boolean;
   holder: string;

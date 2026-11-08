@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
+  MessagesSquare,
   Repeat,
   Contact,
   PhoneCall,
@@ -98,6 +99,7 @@ function useNav() {
         { to: '/app/transactions', label: t.nav.transactions, icon: BookText },
         { to: '/app/scheduled', label: t.nav.scheduled, icon: Repeat },
         { to: '/app/beneficiaries', label: t.nav.beneficiaries, icon: Contact },
+        ...(user?.role === 'user' ? [{ to: '/app/messages', label: t.nav.messages, icon: MessagesSquare }] : []),
       ],
     },
     {
@@ -275,6 +277,30 @@ function SupportSheet({ open, onClose }: { open: boolean; onClose: () => void })
         ))}
       </div>
     </Sheet>
+  );
+}
+
+/** Header shortcut to messages, with the unread count (people + support). */
+function MessagesButton() {
+  const { t } = useI18n();
+  const [n, setN] = useState(0);
+  const load = async () => {
+    try {
+      const [a, b] = await Promise.all([get<{ unread: number }>('/api/messages/unread'), get<{ unread: number }>('/api/support/unread')]);
+      setN(a.unread + b.unread);
+    } catch {
+      /* offline */
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  usePolling(load, 20_000);
+  return (
+    <NavLink to="/app/messages" className="hbtn relative text-ink/80 hover:bg-sunk" aria-label={t.nav.messages} title={t.nav.messages}>
+      <MessagesSquare className="h-[19px] w-[19px]" />
+      {n > 0 && <span className="num absolute -end-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-stitch px-1 text-[10px] font-semibold text-white">{n > 9 ? '9+' : n}</span>}
+    </NavLink>
   );
 }
 
@@ -473,6 +499,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
                 <button onClick={() => setSupport(true)} className="hbtn text-olive hover:bg-olive/10" aria-label={t.navg.support} title={t.navg.support}>
                   <LifeBuoy className="h-[19px] w-[19px]" />
                 </button>
+                {user?.role === 'user' && <MessagesButton />}
                 <Notifications />
                 <button onClick={signOut} className="hbtn hidden text-muted hover:bg-stitch/10 hover:text-stitch sm:grid" aria-label={t.common.signOut} title={t.common.signOut}>
                   <LogOut className="h-[19px] w-[19px] flip-rtl" />
