@@ -726,6 +726,36 @@ describe('customer types', () => {
     expect(big.body.error?.code ?? big.body.code).toBe('DAILY_LIMIT');
     await request(app).put('/api/admin/settings').set(sup).send({ limit_agent: null });
   });
+
+  it('limits page: per-type limit, then a customer gets their own higher or lower limit, then back to type', async () => {
+    const sup = auth((await request(app).post('/api/auth/login').send({ login: 'admin@talerbank.local', password: process.env.BANK_ADMIN_PASSWORD })).body.data.accessToken);
+    const a = await registerCustomer(app, 'Limit Sender');
+    const b = await registerCustomer(app, 'Limit Receiver');
+    const send = (amount: string) => request(app).post('/api/transfers').set(auth(a.token)).send({ fromAccountId: a.accountId, to: b.iban, amount });
+    expect((await request(app).get('/api/admin/limits').set(auth(a.token))).status).toBe(403);
+    expect((await request(app).put('/api/admin/limits/types').set(sup).send({ type: 'personal', limit: 'abc' })).status).toBe(400);
+    expect((await request(app).put('/api/admin/limits/types').set(sup).send({ type: 'personal', limit: '3' })).status).toBe(200);
+    expect((await send('4')).body.error?.code).toBe('DAILY_LIMIT');
+    // higher, just for this customer
+    expect((await request(app).put(`/api/admin/users/${a.userId}/limit`).set(sup).send({ limit: '10', note: 'trusted' })).status).toBe(200);
+    expect((await send('4')).status).toBe(201);
+    const row = (await request(app).get(`/api/admin/limits?q=${encodeURIComponent('Limit Sender')}&only=custom`).set(sup)).body.data.customers.find((r: any) => r.id === a.userId);
+    expect(Number(row.custom_limit)).toBe(10);
+    expect(Number(row.effective)).toBe(10);
+    expect(Number(row.used_today)).toBe(4);
+    expect(row.note).toBe('trusted');
+    // lower than the type
+    expect((await request(app).put(`/api/admin/users/${a.userId}/limit`).set(sup).send({ limit: '5' })).status).toBe(200);
+    expect((await send('2')).body.error?.code).toBe('DAILY_LIMIT');
+    // back to the type limit (3, already used 4)
+    expect((await request(app).put(`/api/admin/users/${a.userId}/limit`).set(sup).send({ limit: null })).status).toBe(200);
+    const back = (await request(app).get(`/api/admin/limits?q=${encodeURIComponent('Limit Sender')}`).set(sup)).body.data;
+    expect(back.customers.find((r: any) => r.id === a.userId).custom_limit).toBeNull();
+    expect(Number(back.types.personal)).toBe(3);
+    const n = (await request(app).get('/api/notifications').set(auth(a.token))).body.data.notifications;
+    expect(n.some((x: any) => x.type === 'limit_changed')).toBe(true);
+    expect((await request(app).put('/api/admin/limits/types').set(sup).send({ type: 'personal', limit: null })).status).toBe(200);
+  });
 });
 
 describe('scheduled payments and blocks', () => {

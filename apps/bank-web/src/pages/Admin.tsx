@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Megaphone, Search, Users } from 'lucide-react';
+import { ChevronLeft, Gauge, Megaphone, Search, Users } from 'lucide-react';
 import { get, post, put } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { KINDS, kindOf, type Kind } from '../lib/kinds';
@@ -11,7 +11,7 @@ import { useConfirm } from '../components/Confirm';
 import { usePerm } from '../lib/perm';
 import { AreaChart } from '../components/Chart';
 import { useToast } from '../components/Toast';
-import { AmountInput, Avatar, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Segmented, Select, Sheet, Skeleton, Toggle, cx } from '../components/ui';
+import { Avatar, Badge, Button, EmptyState, ErrorNote, Field, PageHeader, Segmented, Select, Sheet, Skeleton, Toggle, cx } from '../components/ui';
 
 function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: 'gold' | 'olive' | 'stitch' }) {
   return (
@@ -22,7 +22,21 @@ function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: 
   );
 }
 
-function Loading() {
+/** Placeholders while loading; if loading failed, say so and offer to try again (never spin forever). */
+function Loading({ error, retry }: { error?: unknown; retry?: () => void }) {
+  const { lang, err } = useI18n();
+  if (error)
+    return (
+      <div className="card mx-auto max-w-md p-6 text-center">
+        <p className="font-semibold">{lang === 'ar' ? 'ما قدرنا نحمّل هالصفحة' : 'This page didn’t load'}</p>
+        <p className="mt-1 text-sm text-muted">{err(error)}</p>
+        {retry && (
+          <Button className="mt-4" variant="secondary" onClick={retry}>
+            {lang === 'ar' ? 'جرّب كمان مرة' : 'Try again'}
+          </Button>
+        )}
+      </div>
+    );
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
@@ -67,9 +81,9 @@ function usePaged<T>(path: string, key: string, params: Record<string, string>) 
 
 export function AdminOverview() {
   const { t, lang } = useI18n();
-  const { data: d } = useData<any>('/api/admin/overview');
+  const { data: d, error, reload } = useData<any>('/api/admin/overview');
   const { can } = usePerm();
-  if (!d) return <Loading />;
+  if (!d) return <Loading error={error} retry={() => void reload()} />;
   return (
     <div>
       <PageHeader title={t.admin.overview} />
@@ -267,8 +281,8 @@ export function AdminLedger() {
 
 export function AdminExchange() {
   const { t, lang } = useI18n();
-  const { data } = useData<any>('/api/admin/exchange');
-  if (!data) return <Loading />;
+  const { data, error, reload } = useData<any>('/api/admin/exchange');
+  if (!data) return <Loading error={error} retry={() => void reload()} />;
   return (
     <div>
       <PageHeader title={t.nav.exchange} />
@@ -369,7 +383,7 @@ export function AdminSettings() {
   const { t, err, lang } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
-  const { data, reload } = useData<{ settings: Record<string, any>; defaultLimit?: string }>('/api/admin/settings');
+  const { data, reload, error } = useData<{ settings: Record<string, any>; defaultLimit?: string }>('/api/admin/settings');
   const [s, setS] = useState<Record<string, any> | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -383,7 +397,7 @@ export function AdminSettings() {
         limit_agent: data.settings.limit_agent ?? '',
       });
   }, [data]);
-  if (!s) return <Loading />;
+  if (!s) return <Loading error={error} retry={() => void reload()} />;
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader title={t.nav.system} />
@@ -394,8 +408,7 @@ export function AdminSettings() {
           if (!(await confirm({ title: t.ask.saveTitle, body: t.ask.saveBody, confirmLabel: t.common.save }))) return;
           setBusy(true);
           try {
-            const lim = (v: string) => (String(v).trim() ? String(v).trim() : null);
-            await put('/api/admin/settings', { ...s, bank_name: String(s.bank_name).trim(), limit_personal: lim(s.limit_personal), limit_business: lim(s.limit_business), limit_agent: lim(s.limit_agent) });
+            await put('/api/admin/settings', { allow_registrations: s.allow_registrations, maintenance_mode: s.maintenance_mode, bank_name: String(s.bank_name).trim() });
             toast(t.common.saved);
             void reload();
           } catch (e2) {
@@ -408,13 +421,16 @@ export function AdminSettings() {
         <Field label={t.admin.bankName} value={s.bank_name} onChange={(e) => setS({ ...s, bank_name: e.target.value })} minLength={2} maxLength={60} required />
         <Toggle checked={s.allow_registrations} onChange={(v) => setS({ ...s, allow_registrations: v })} label={t.admin.registrations} />
         <Toggle checked={s.maintenance_mode} onChange={(v) => setS({ ...s, maintenance_mode: v })} label={t.admin.maintenance} description={t.admin.maintenanceD} />
-        <fieldset className="space-y-3 rounded-2xl bg-sunk/50 p-4">
-          <legend className="px-1 text-sm font-semibold">{lang === 'ar' ? 'سقف التحويل اليومي حسب نوع الحساب' : 'Daily transfer limit per account type'}</legend>
-          <p className="text-xs text-muted">{lang === 'ar' ? `فاضي = السقف العام (${data?.defaultLimit ?? ''}).` : `Empty = the bank-wide limit (${data?.defaultLimit ?? ''}).`}</p>
-          {(Object.keys(KINDS) as Kind[]).map((k) => (
-            <AmountInput key={k} label={lang === 'ar' ? `حساب ${KINDS[k].ar}` : `${KINDS[k].en} account`} value={s[`limit_${k}`]} onChange={(v) => setS({ ...s, [`limit_${k}`]: v })} />
-          ))}
-        </fieldset>
+        <Link to="/app/admin/limits" className="flex items-center gap-3 rounded-2xl bg-sunk/60 p-3.5 transition hover:bg-sunk">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gold/15 text-gold">
+            <Gauge className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">{lang === 'ar' ? 'سقوف التحويل اليومية' : 'Daily transfer limits'}</span>
+            <span className="block text-xs text-muted">{lang === 'ar' ? 'حسب نوع الحساب، وسقف خاص لأي زبون' : 'By account type, and a custom limit for any customer'}</span>
+          </span>
+          <ChevronLeft className="h-4 w-4 text-muted ltr:rotate-180" />
+        </Link>
         <Button loading={busy}>{t.common.save}</Button>
       </form>
       <MailCheck />

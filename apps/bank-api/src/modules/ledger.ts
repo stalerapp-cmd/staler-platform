@@ -134,13 +134,17 @@ export async function assertDailyLimit(c: pg.PoolClient, userId: string, amount:
   }
 }
 
-/** Each kind of customer can have its own daily limit (set by staff); otherwise the bank-wide one. */
+/**
+ * Daily outgoing limit: one set for this customer by staff wins; otherwise their account
+ * type's (set by staff); otherwise the bank-wide one.
+ */
 export async function dailyLimitFor(userId: string, c?: pg.PoolClient): Promise<string> {
-  const r = await one<{ v: unknown }>(
-    `SELECT s.value AS v FROM ${S}.users u LEFT JOIN ${S}.settings s ON s.key = 'limit_' || u.customer_type WHERE u.id = $1`,
+  const r = await one<{ v: unknown; own: string | null }>(
+    `SELECT s.value AS v, u.daily_limit::text AS own FROM ${S}.users u LEFT JOIN ${S}.settings s ON s.key = 'limit_' || u.customer_type WHERE u.id = $1`,
     [userId],
     c,
   );
+  if (r?.own != null) return r.own;
   const v = r?.v;
   return v != null && /^\d+(\.\d{1,2})?$/.test(String(v)) ? String(v) : env.DAILY_TRANSFER_LIMIT;
 }

@@ -22,6 +22,7 @@ import {
   UserRound,
   Users,
   Wallet,
+  Gauge,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
@@ -179,7 +180,18 @@ const TOPICS: Topic[] = [
     to: '/app/admin/customers',
     steps: [
       ['Filter customers by personal, business or cash agent; open one to change their type and business name — they are told.', 'فلتر الزباين حسب شخصي، تجاري أو صرّاف؛ وافتح أي زبون لتغيّر نوع حسابه واسم نشاطه — وبيوصله إشعار.'],
-      ['System settings: a daily transfer limit for each type (empty uses the bank-wide limit).', 'إعدادات النظام: سقف تحويل يومي لكل نوع (فاضي = السقف العام).'],
+    ],
+  },
+  {
+    id: 'a-limits',
+    who: 'admin',
+    icon: Gauge,
+    title: ['Daily transfer limits', 'سقوف التحويل اليومية'],
+    to: '/app/admin/limits',
+    steps: [
+      ['Each account type has a daily limit — tap the pencil to change it; empty uses the bank-wide limit.', 'لكل نوع حساب سقف يومي — اكبس القلم لتغيّره؛ فاضي = السقف العام.'],
+      ['Under “All accounts” search anyone, see how much they sent today, and give them their own limit — higher or lower than their type.', 'تحت «كل الحسابات» دوّر على أي حدا، شوف قديش حوّل اليوم، واعطيه سقف خاص — أعلى أو أقل من نوعه.'],
+      ['The customer is notified of the new limit; the reason stays with staff. “Back to type” removes it.', 'الزبون بيوصله إشعار بسقفه الجديد، والسبب بيضل للفريق. «رجّعه حسب النوع» بيشيله.'],
     ],
   },
   {

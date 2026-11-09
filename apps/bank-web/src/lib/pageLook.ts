@@ -1,8 +1,7 @@
 import { useLocation } from 'react-router-dom';
 import {
   ArrowRightLeft, BookText, CircleHelp, Contact, MessagesSquare, LifeBuoy, PhoneCall, Plane, Repeat, Trophy, Crown, FileClock, Home, KeyRound, Landmark, LayoutDashboard, QrCode, ScanLine, Settings2, ShieldCheck, Users, Vault, Wallet,
-  type LucideIcon,
-} from 'lucide-react';
+  type LucideIcon, Gauge } from 'lucide-react';
 
 export type NoteTone = 'vault' | 'brass' | 'ruby' | 'sage' | 'sky';
 
@@ -27,6 +26,7 @@ const LOOKS: [RegExp, NoteTone, LucideIcon][] = [
   [/^\/app\/admin\/ledger/, 'brass', Landmark],
   [/^\/app\/admin\/exchange/, 'sage', Vault],
   [/^\/app\/admin\/audit/, 'vault', FileClock],
+  [/^\/app\/admin\/limits/, 'brass', Gauge],
   [/^\/app\/admin\/settings/, 'sky', ShieldCheck],
   [/^\/app\/admin\/admins/, 'brass', Crown],
   [/^\/app\/admin/, 'vault', LayoutDashboard],

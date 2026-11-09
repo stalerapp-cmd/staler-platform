@@ -4,6 +4,7 @@
  * TalerBank — keep both copies identical.
  */
 const AR: Record<string, string> = {
+  'Enter a limit like 5000 or 7500.50': 'اكتب سقف زي 5000 أو 7500.50',
   'Bad push address': 'عنوان الإشعارات مش صالح',
   'Messages are between customers — staff answer in support': 'الرسائل بين الزباين — الموظفين بيردوا بالدعم',
   'Message is empty': 'الرسالة فاضية',
