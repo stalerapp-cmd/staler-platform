@@ -61,6 +61,7 @@ import { InviteButtons } from '../components/PrivacySettings';
 import { RichText, plainText } from '../components/Mentions';
 import { CallOverlay } from '../components/CallOverlay';
 import { AlertCenter } from '../components/AlertCenter';
+import { AlertNudge } from '../components/AlertSettings';
 import { useToast } from '../components/Toast';
 import { Logo, StitchBand } from '../components/Tatreez';
 import { StitchCorner } from '../components/HeaderStitch';
@@ -435,6 +436,7 @@ function Notifications() {
         )}
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title={t.nav.notifications}>
+        <AlertNudge />
         {!data?.notifications.length ? (
           <p className="py-8 text-center text-muted">{t.common.empty}</p>
         ) : (

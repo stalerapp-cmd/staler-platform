@@ -98,3 +98,60 @@ export function AlertSettings() {
     </div>
   );
 }
+
+/** In the notifications list: a short nudge to turn pop-ups on, until they are on (or can't be). */
+export function AlertNudge() {
+  const { lang, err } = useI18n();
+  const ar = lang === 'ar';
+  const toast = useToast();
+  const [p, setP] = useState(prefs());
+  const [busy, setBusy] = useState(false);
+  const s = support();
+  useEffect(() => {
+    const on = () => setP(prefs());
+    window.addEventListener('app:alert-prefs', on);
+    return () => window.removeEventListener('app:alert-prefs', on);
+  }, []);
+  if (p.push || s === 'unsupported') return null;
+  return (
+    <div className="mb-3 flex items-center gap-3 rounded-2xl bg-sunk/70 p-3">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface text-ink ring-1 ring-line">
+        <BellRing className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1 text-sm leading-snug">
+        <span className="block font-semibold">{ar ? 'بدك تطلعلك فورًا؟' : 'Want them to pop up right away?'}</span>
+        <span className="block text-xs text-muted">
+          {s === 'ios-install'
+            ? ar
+              ? 'عالآيفون: ضيف الموقع عالشاشة الرئيسية أول.'
+              : 'On iPhone: add the site to your Home Screen first.'
+            : ar
+              ? 'حتى لو كنت بتاب ثانية أو التطبيق بالخلفية.'
+              : 'Even in another tab or with the app in the background.'}
+        </span>
+      </span>
+      {s !== 'ios-install' && (
+        <Button
+          size="sm"
+          loading={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const r = await enablePush(lang);
+              if (r === 'ok') toast(ar ? 'تمام! رح تطلعلك الإشعارات على هالجهاز' : 'Done — notifications will pop up on this device');
+              else if (r === 'denied') toast(ar ? 'الإشعارات ممنوعة من إعدادات المتصفح. اسمحلها من هناك (القفل جنب العنوان).' : 'Notifications are blocked in the browser settings. Allow them there (the lock by the address).', 'error');
+              else if (r === 'off') toast(ar ? 'الإشعارات مش مفعّلة على السيرفر هلّأ' : 'Notifications aren’t set up on the server yet', 'error');
+            } catch (e) {
+              toast(err(e), 'error');
+            } finally {
+              setP(prefs());
+              setBusy(false);
+            }
+          }}
+        >
+          {ar ? 'فعّل' : 'Turn on'}
+        </Button>
+      )}
+    </div>
+  );
+}

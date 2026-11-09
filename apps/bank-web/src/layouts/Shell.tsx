@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ScrollCue } from '../components/ScrollCue';
 import { CallOverlay } from '../components/CallOverlay';
 import { AlertCenter } from '../components/AlertCenter';
+import { AlertNudge } from '../components/AlertSettings';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -343,6 +344,7 @@ function Notifications() {
         )}
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title={t.nav.notifications}>
+        <AlertNudge />
         {!data?.notifications.length ? (
           <p className="py-8 text-center text-muted">{t.common.empty}</p>
         ) : (
