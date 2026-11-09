@@ -8,9 +8,26 @@ import { logger } from './lib/logger.js';
 import { checkMailSetup } from './lib/mailer.js';
 import { pool, S, warmPool } from './lib/db.js';
 
+/**
+ * During a deploy the old copy still holds its connections; if the shared pooler is
+ * momentarily full, wait and try again instead of failing the deploy.
+ */
+async function withRetry<T>(what: string, fn: () => Promise<T>): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const busy = /EMAXCONNSESSION|max clients reached|too many clients|ECONNREFUSED|ETIMEDOUT|timeout exceeded when trying to connect/i.test(String(err?.message ?? err));
+      if (!busy || i >= 12) throw err;
+      logger.warn({ what, attempt: i }, 'database busy at startup, retrying');
+      await new Promise((r) => setTimeout(r, Math.min(15_000, 2_000 * i)));
+    }
+  }
+}
+
 async function main() {
-  if (env.RUN_MIGRATIONS) await migrate();
-  await bootstrap();
+  if (env.RUN_MIGRATIONS) await withRetry('migrate', migrate);
+  await withRetry('bootstrap', bootstrap);
   await warmPool();
   void checkMailSetup();
   // Keep pooled connections alive between visits.

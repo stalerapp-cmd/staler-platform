@@ -21,8 +21,11 @@ export const pool = new pg.Pool({
   ssl: sslConfig(),
   max: env.DB_POOL_MAX,
   // The database is far from the app server: opening a TLS connection costs
-  // several round trips (~1 s), so connections are kept open and reused.
-  idleTimeoutMillis: 0,
+  // several round trips (~1 s), so connections are reused — but one left idle for
+  // two minutes is closed. Both apps share the pooler's 15 session connections, and
+  // during a deploy old and new copies run side by side; holding idle ones forever
+  // filled it up ("max clients reached"). warmPool keeps a couple open between visits.
+  idleTimeoutMillis: 120_000,
   keepAlive: true,
   keepAliveInitialDelayMillis: 10_000,
   connectionTimeoutMillis: 10_000,

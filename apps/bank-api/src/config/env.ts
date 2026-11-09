@@ -27,7 +27,8 @@ const schema = z.object({
   DB_SCHEMA: z.string().regex(/^[a-z_][a-z0-9_]*$/).default('talerbank'),
   DB_SSL: z.enum(['disable', 'require', 'verify']).default('require'),
   DB_CA_CERT: z.string().optional(),
-  DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
+  // Both apps share one pooler (15 session connections): 6 each leaves room for a deploy.
+  DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(6),
   RUN_MIGRATIONS: bool.prefault('true'),
 
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
