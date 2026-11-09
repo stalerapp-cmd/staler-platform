@@ -192,6 +192,7 @@ const TOPICS: Topic[] = [
       ['Each account type has a daily limit — tap the pencil to change it; empty uses the bank-wide limit.', 'لكل نوع حساب سقف يومي — اكبس القلم لتغيّره؛ فاضي = السقف العام.'],
       ['Under “All accounts” search anyone, see how much they sent today, and give them their own limit — higher or lower than their type.', 'تحت «كل الحسابات» دوّر على أي حدا، شوف قديش حوّل اليوم، واعطيه سقف خاص — أعلى أو أقل من نوعه.'],
       ['The customer is notified of the new limit; the reason stays with staff. “Back to type” removes it.', 'الزبون بيوصله إشعار بسقفه الجديد، والسبب بيضل للفريق. «رجّعه حسب النوع» بيشيله.'],
+      ['Only admins the super admin gave “Set daily transfer limits” see this page.', 'بس الأدمنز اللي أعطاهم السوبر أدمن صلاحية «تحديد سقوف التحويل اليومية» بيشوفوا هالصفحة.'],
     ],
   },
   {
