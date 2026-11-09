@@ -55,6 +55,7 @@ import {
   Users,
   Wallet,
   XCircle,
+  Gauge,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -386,6 +387,7 @@ const TOPICS: Topic[] = [
     steps: [
       { icon: Search, title: ['Audit log', 'سجل التدقيق'], body: ['Every sensitive action is recorded. Search as you type by person, action or detail.', 'كل عملية حساسة بتنسجل. دوّر وانت بتكتب بالشخص أو العملية أو التفاصيل.'], to: '/app/admin/audit' },
       { icon: ShieldCheck, title: ['System settings', 'إعدادات النظام'], body: ['Open or close new sign-ups, switch maintenance mode, and set the banner everyone sees.', 'افتح أو سكّر التسجيل، شغّل وضع الصيانة، وحط الإعلان اللي بيشوفه الكل.'], to: '/app/admin/settings' },
+      { icon: Gauge, title: ['Daily transfer limits', 'سقوف التحويل اليومية'], body: ['Set a daily limit for personal, merchant and cash-agent accounts (empty = the app-wide limit). Under “All accounts” search anyone, see what they paid today, and give them their own limit — higher or lower. They are notified; the reason stays with staff. Only admins given “Set daily transfer limits” see this page.', 'حط سقف يومي للحسابات الشخصية والتجار ووكلاء الصرف (فاضي = السقف العام). تحت «كل الحسابات» دوّر على أي حدا، شوف قديش دفع اليوم، واعطيه سقف خاص — أعلى أو أقل. بيوصله إشعار، والسبب بيضل للفريق. بس الأدمنز اللي معهم صلاحية «تحديد سقوف التحويل اليومية» بيشوفوا هالصفحة.'], to: '/app/admin/limits' },
     ],
   },
 ];

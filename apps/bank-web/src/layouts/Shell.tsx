@@ -129,7 +129,7 @@ function useNav() {
           { to: '/app/admin/notify', label: t.nav.notify, icon: Megaphone, perm: 'notify' },
           { to: '/app/admin/scheduled', label: t.nav.adminScheduled, icon: Repeat, perm: 'customers.view' },
           { to: '/app/admin/audit', label: t.nav.audit, icon: FileClock, perm: 'audit.view' },
-          { to: '/app/admin/limits', label: lang === 'ar' ? 'سقوف التحويل' : 'Transfer limits', icon: Gauge, perm: 'settings.manage' },
+          { to: '/app/admin/limits', label: lang === 'ar' ? 'سقوف التحويل' : 'Transfer limits', icon: Gauge, perm: 'limits.manage' },
           { to: '/app/admin/settings', label: t.nav.system, icon: ShieldCheck, perm: 'settings.manage' },
           { to: '/app/admin/admins', label: t.people.admins, icon: Crown, perm: 'admins.manage' },
           { to: '/app/admin/team', label: t.nav.team, icon: Trophy, perm: 'admins.manage' },

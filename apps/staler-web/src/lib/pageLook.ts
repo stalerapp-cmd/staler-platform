@@ -1,7 +1,7 @@
 import { useLocation } from 'react-router-dom';
 import {
   Activity, Banknote, Contact, Cog, Crown, FileClock, GitBranch, HandCoins, HelpCircle, Home, Landmark, LayoutDashboard, MapPin, Megaphone,
-  MessageCircle, Package, QrCode, Scale, ScanLine, Send, ShieldCheck, ShoppingBag, Store, Ticket, UserPlus, Users, ClipboardList, type LucideIcon,
+  MessageCircle, Package, QrCode, Scale, ScanLine, Send, ShieldCheck, ShoppingBag, Store, Ticket, UserPlus, Users, ClipboardList, Gauge, type LucideIcon,
 } from 'lucide-react';
 import type { ClothTone } from '../components/ui';
 
@@ -37,6 +37,7 @@ const LOOKS: [RegExp, ClothTone, LucideIcon][] = [
   [/^\/app\/admin\/pending/, 'olive', UserPlus],
   [/^\/app\/admin\/bank/, 'sky', Landmark],
   [/^\/app\/admin\/audit/, 'night', FileClock],
+  [/^\/app\/admin\/limits/, 'gold', Gauge],
   [/^\/app\/admin\/settings/, 'sky', ShieldCheck],
   [/^\/app\/admin\/admins/, 'gold', Crown],
   [/^\/app\/admin/, 'night', LayoutDashboard],

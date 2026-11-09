@@ -173,6 +173,38 @@ describe('wallet transfers', () => {
     expect(lookup.body.data.name).toBe('Receiver P.');
   });
 
+  it('limits: per-type limit, then one person gets their own higher or lower limit, then back to type', async () => {
+    const sup = auth(await login(app, 'super@staler.test', 'Sup3r!Admin#Pass'));
+    const a = await walletUser(app, 'Limit Sender');
+    const b = await walletUser(app, 'Limit Receiver');
+    await request(app).post('/api/wallet/transfer').set(auth(rich.token)).send({ to: a.walletId, amount: '20' });
+    const send = (amount: string) => request(app).post('/api/wallet/transfer').set(auth(a.token)).send({ to: b.walletId, amount });
+    expect((await request(app).get('/api/admin/limits').set(auth(a.token))).status).toBe(403);
+    expect((await request(app).get('/api/admin/permissions').set(sup)).body.data.permissions).toContain('limits.manage');
+    expect((await request(app).put('/api/admin/limits/types').set(sup).send({ type: 'user', limit: 'abc' })).status).toBe(400);
+    expect((await request(app).put('/api/admin/limits/types').set(sup).send({ type: 'user', limit: '3' })).status).toBe(200);
+    expect((await send('4')).body.error?.code).toBe('DAILY_LIMIT');
+    const me = (await request(app).get(`/api/admin/limits?q=${encodeURIComponent(a.email)}`).set(sup)).body.data;
+    const id = me.people[0].id;
+    expect(Number(me.types.user)).toBe(3);
+    expect((await request(app).put(`/api/admin/users/${id}/limit`).set(sup).send({ limit: '10', note: 'trusted' })).status).toBe(200);
+    expect((await send('4')).status).toBe(201);
+    const row = (await request(app).get(`/api/admin/limits?q=${encodeURIComponent(a.email)}&only=custom`).set(sup)).body.data.people[0];
+    expect(Number(row.custom_limit)).toBe(10);
+    expect(Number(row.effective)).toBe(10);
+    expect(Number(row.used_today)).toBe(4);
+    expect(row.note).toBe('trusted');
+    expect((await request(app).put(`/api/admin/users/${id}/limit`).set(sup).send({ limit: '5' })).status).toBe(200);
+    expect((await send('2')).body.error?.code).toBe('DAILY_LIMIT');
+    expect((await request(app).put(`/api/admin/users/${id}/limit`).set(sup).send({ limit: null })).status).toBe(200);
+    const back = (await request(app).get(`/api/admin/limits?q=${encodeURIComponent(a.email)}`).set(sup)).body.data.people[0];
+    expect(back.custom_limit).toBeNull();
+    expect(Number(back.effective)).toBe(3);
+    const n = (await request(app).get('/api/notifications').set(auth(a.token))).body.data.notifications;
+    expect(n.some((x: any) => x.type === 'limit_changed')).toBe(true);
+    expect((await request(app).put('/api/admin/limits/types').set(sup).send({ type: 'user', limit: null })).status).toBe(200);
+  });
+
   it('refuses self-transfers, bad amounts and unknown recipients', async () => {
     expect((await request(app).post('/api/wallet/transfer').set(auth(rich.token)).send({ to: rich.walletId, amount: '1' })).status).toBe(400);
     for (const amount of ['0', '-1', '1.001', 'abc', '1e2', null]) {

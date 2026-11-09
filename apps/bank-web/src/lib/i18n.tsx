@@ -154,7 +154,7 @@ const en = {
       'customers.view': 'See customers and their accounts', 'customers.devices': 'See customers’ devices and where they signed in from', 'customers.edit': 'Edit names, e-mails, usernames and phones', 'customers.password': 'Set or reset passwords',
       'customers.status': 'Suspend and reactivate customers', 'customers.delete': 'Close customer accounts', 'customers.security': 'Sign customers out, reset 2FA',
       'accounts.freeze': 'Freeze accounts', teller: 'Teller desk (cash in and out)', 'ledger.view': 'See every transaction', notify: 'Send notifications and announcements',
-      'exchange.view': 'See the exchange and reserves', 'audit.view': 'Read the audit log', 'settings.manage': 'Change bank settings', support: 'Answer support chats',
+      'exchange.view': 'See the exchange and reserves', 'audit.view': 'Read the audit log', 'settings.manage': 'Change bank settings', 'limits.manage': 'Set daily transfer limits (by type and per customer)', support: 'Answer support chats',
     } as Record<string, string>,
   },
   errors: {
@@ -313,7 +313,7 @@ const ar: Dict = {
       'customers.view': 'عرض العملاء وحساباتهم', 'customers.devices': 'عرض أجهزة العملاء ومن وين دخلوا', 'customers.edit': 'تعديل الأسماء والإيميلات وأسماء المستخدمين والأرقام', 'customers.password': 'تعيين وإعادة تعيين كلمات المرور',
       'customers.status': 'إيقاف العملاء وإعادة تفعيلهم', 'customers.delete': 'إغلاق حسابات العملاء', 'customers.security': 'تسجيل خروج العملاء وإلغاء التحقق بخطوتين',
       'accounts.freeze': 'تجميد الحسابات', teller: 'شبّاك الصرّاف (إيداع وسحب نقدي)', 'ledger.view': 'عرض كل الحركات', notify: 'إرسال إشعارات وإعلانات',
-      'exchange.view': 'عرض الصرّاف والاحتياطي', 'audit.view': 'قراءة سجل التدقيق', 'settings.manage': 'تغيير إعدادات البنك', support: 'الرد على محادثات الدعم',
+      'exchange.view': 'عرض الصرّاف والاحتياطي', 'audit.view': 'قراءة سجل التدقيق', 'settings.manage': 'تغيير إعدادات البنك', 'limits.manage': 'تحديد سقوف التحويل اليومية (حسب النوع ولكل زبون)', support: 'الرد على محادثات الدعم',
     },
   },
   errors: {

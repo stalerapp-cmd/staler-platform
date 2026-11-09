@@ -45,6 +45,7 @@ const AdminLeaves = lazyRetry(() => import('./pages/AdminLeaves').then((m) => ({
 const AdminGroups = lazyRetry(() => import('./pages/AdminGroups').then((m) => ({ default: m.AdminGroups })));
 const AdminCalls = lazyRetry(() => import('./pages/AdminCalls').then((m) => ({ default: m.AdminCalls })));
 const AdminNotify = lazyRetry(() => import('./pages/AdminNotify').then((m) => ({ default: m.AdminNotify })));
+const AdminLimits = lazyRetry(() => import('./pages/AdminLimits'));
 const AdminSettings = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminSettings })));
 const AdminDisputes = lazyRetry(() => import('./pages/Admin').then((m) => ({ default: m.AdminDisputes })));
 const StoresPage = lazyRetry(() => import('./pages/Stores'));
@@ -158,6 +159,7 @@ export default function App() {
           <Route path="admin/team" element={<Private roles={['admin']}>{page(<AdminTeam />)}</Private>} />
           <Route path="admin/reports" element={<Private roles={['admin']}>{page(<AdminReports />)}</Private>} />
           <Route path="admin/notify" element={<Private roles={['admin']}>{page(<AdminNotify />)}</Private>} />
+          <Route path="admin/limits" element={<Private roles={['admin']}>{page(<AdminLimits />)}</Private>} />
           <Route path="admin/settings" element={<Private roles={['admin']}>{page(<AdminSettings />)}</Private>} />
           <Route path="admin/admins" element={<Private roles={['admin']}>{page(<AdminAdmins />)}</Private>} />
           <Route path="admin/disputes" element={<Private roles={['admin']}>{page(<AdminDisputes />)}</Private>} />

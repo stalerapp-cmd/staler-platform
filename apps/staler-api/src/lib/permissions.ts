@@ -26,6 +26,7 @@ export const PERMISSIONS = [
   'bank.ops',
   'audit.view',
   'settings.manage',
+  'limits.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number] | 'admins.manage';
 

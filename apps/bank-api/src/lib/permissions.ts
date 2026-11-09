@@ -17,6 +17,7 @@ export const PERMISSIONS = [
   'exchange.view',
   'audit.view',
   'settings.manage',
+  'limits.manage',
   'support',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number] | 'admins.manage';

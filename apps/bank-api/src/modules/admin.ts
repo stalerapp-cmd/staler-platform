@@ -755,7 +755,7 @@ const TYPES = ['personal', 'business', 'agent'] as const;
 /** Limits by account type, and every customer's limit (own or by type) with what they used today. */
 adminRouter.get(
   '/limits',
-  requirePerm('settings.manage'),
+  requirePerm('limits.manage'),
   validate({
     query: pageQuery.extend({ q: z.string().trim().max(64).optional(), type: z.enum(TYPES).optional(), only: z.enum(['custom']).optional() }).strict(),
   }),
@@ -812,7 +812,7 @@ adminRouter.get(
 /** Change the limit of an account type (empty = the bank-wide limit). */
 adminRouter.put(
   '/limits/types',
-  requirePerm('settings.manage'),
+  requirePerm('limits.manage'),
   validate({ body: z.object({ type: z.enum(TYPES), limit: LIMIT.nullable() }).strict() }),
   ah(async (req, res) => {
     const key = `limit_${req.body.type}`;
@@ -830,7 +830,7 @@ adminRouter.put(
 /** Give one customer their own daily limit (higher or lower than their type's), or remove it. They're told. */
 adminRouter.put(
   '/users/:id/limit',
-  requirePerm('settings.manage'),
+  requirePerm('limits.manage'),
   validate({ params: z.object({ id: uuid }).strict(), body: z.object({ limit: LIMIT.nullable(), note: z.string().trim().max(200).nullable().optional() }).strict() }),
   ah(async (req, res) => {
     const u = await one<any>(`SELECT id, role, daily_limit::text AS old FROM ${S}.users WHERE id = $1`, [req.params.id]);

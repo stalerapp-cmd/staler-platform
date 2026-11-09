@@ -15,7 +15,7 @@ import { bank } from '../lib/bankClient.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { PERMISSIONS, assertCanManage, can, isSuper, requirePerm } from '../lib/permissions.js';
 import { noticeMail } from '../lib/mailer.js';
-import { notify, notifyBi, writeLine } from './walletCore.js';
+import { LIMIT_TYPES, dailyLimitFor, notify, notifyBi, writeLine } from './walletCore.js';
 import { agentProfileBody, deliverAgentPost, refundVoucher, saveAgentProfile } from './exchange.js';
 import { inPlaces, mentionLink, placeKeys, plainText } from '../lib/audience.js';
 import { requireSecondFactor } from './mfa.js';
@@ -1368,5 +1368,105 @@ adminRouter.post(
       );
     await audit({ userId: req.auth!.userId, action: 'admin.category_rejected', entityType: 'category', entityId: c.slug, details: { reason: req.body.reason } }, req);
     res.json({ success: true });
+  }),
+);
+
+// ------------------------------------------------------------------ daily transfer limits
+const LIMIT = z.string().trim().regex(/^\d{1,9}(\.\d{1,2})?$/, 'Enter a limit like 5000 or 7500.50');
+
+/** Limits by account type, and every person's limit (own or by type) with what they used today. */
+adminRouter.get(
+  '/limits',
+  requirePerm('limits.manage'),
+  validate({
+    query: pageQuery.extend({ q: z.string().trim().max(64).optional(), type: z.enum(LIMIT_TYPES).optional(), only: z.enum(['custom']).optional() }).strict(),
+  }),
+  ah(async (req, res) => {
+    const q = req.query as any;
+    const t = await one<any>(`SELECT limit_user::text AS user, limit_merchant::text AS merchant, limit_exchange::text AS exchange FROM ${S}.system_settings WHERE id = 1`);
+    const types = { user: t?.user ?? null, merchant: t?.merchant ?? null, exchange: t?.exchange ?? null } as Record<string, string | null>;
+    const counts = await one<any>(
+      `SELECT count(*) FILTER (WHERE role = 'user')::int AS user, count(*) FILTER (WHERE role = 'merchant')::int AS merchant,
+              count(*) FILTER (WHERE role = 'exchange')::int AS exchange, count(*) FILTER (WHERE daily_limit IS NOT NULL)::int AS custom
+         FROM ${S}.users WHERE role IN ('user','merchant','exchange') AND status <> 'deleted'`,
+    );
+    const params: unknown[] = [];
+    const where = [`u.role IN ('user','merchant','exchange')`, `u.status <> 'deleted'`];
+    if (q.q) {
+      params.push(like(q.q));
+      const n = params.length;
+      where.push(`(u.full_name ILIKE $${n} OR u.email ILIKE $${n} OR u.phone_number ILIKE $${n} OR EXISTS (SELECT 1 FROM ${S}.merchants m WHERE m.user_id = u.id AND m.store_name ILIKE $${n}))`);
+    }
+    if (q.type) {
+      params.push(q.type);
+      where.push(`u.role = $${params.length}`);
+    }
+    if (q.only === 'custom') where.push(`u.daily_limit IS NOT NULL`);
+    params.push(q.limit, q.offset);
+    const r = await pool.query(
+      `SELECT u.id, u.full_name, u.email, u.role, u.profile_image, u.status,
+              (SELECT m.store_name FROM ${S}.merchants m WHERE m.user_id = u.id ORDER BY m.created_at LIMIT 1) AS store_name,
+              u.daily_limit::text AS custom_limit, u.daily_limit_note AS note, u.daily_limit_at AS set_at, b.full_name AS set_by,
+              (SELECT COALESCE(-SUM(t.amount), 0)::text FROM ${S}.transactions t JOIN ${S}.wallets w ON w.wallet_id = t.wallet_id
+                WHERE w.user_id = u.id AND t.amount < 0 AND t.status IN ('completed','pending')
+                  AND t.transaction_type IN ('transfer_out','deposit','purchase','payment','cash_out')
+                  AND t.created_at >= date_trunc('day', now())) AS used_today,
+              COUNT(*) OVER() AS total
+         FROM ${S}.users u LEFT JOIN ${S}.users b ON b.id = u.daily_limit_by
+        WHERE ${where.join(' AND ')}
+        ORDER BY (u.daily_limit IS NOT NULL) DESC, u.daily_limit_at DESC NULLS LAST, u.created_at DESC
+        LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
+    res.json({
+      success: true,
+      data: {
+        global: env.DAILY_TRANSFER_LIMIT,
+        types,
+        counts,
+        people: r.rows.map(({ total, ...u }) => ({ ...u, effective: u.custom_limit ?? types[u.role] ?? env.DAILY_TRANSFER_LIMIT })),
+        total: Number(r.rows[0]?.total ?? 0),
+      },
+    });
+  }),
+);
+
+/** Change the limit of an account type (empty = the app-wide limit). */
+adminRouter.put(
+  '/limits/types',
+  requirePerm('limits.manage'),
+  validate({ body: z.object({ type: z.enum(LIMIT_TYPES), limit: LIMIT.nullable() }).strict() }),
+  ah(async (req, res) => {
+    await pool.query(
+      `INSERT INTO ${S}.system_settings (id, site_name, currency, theme) VALUES (1, 'S-Taler', $1, 'emerald') ON CONFLICT (id) DO NOTHING`,
+      [env.CURRENCY],
+    );
+    await pool.query(`UPDATE ${S}.system_settings SET limit_${req.body.type as (typeof LIMIT_TYPES)[number]} = $1, updated_at = now() WHERE id = 1`, [req.body.limit]);
+    await audit({ userId: req.auth!.userId, action: 'admin.limit_type', details: req.body }, req);
+    res.json({ success: true });
+  }),
+);
+
+/** Give one person their own daily limit (higher or lower than their type's), or remove it. They're told. */
+adminRouter.put(
+  '/users/:id/limit',
+  requirePerm('limits.manage'),
+  validate({ params: z.object({ id: z.string().uuid() }).strict(), body: z.object({ limit: LIMIT.nullable(), note: z.string().trim().max(200).nullable().optional() }).strict() }),
+  ah(async (req, res) => {
+    const u = await one<any>(`SELECT id, role, status, daily_limit::text AS old FROM ${S}.users WHERE id = $1`, [req.params.id]);
+    if (!u || !['user', 'merchant', 'exchange'].includes(u.role) || u.status === 'deleted') throw notFound('Account not found');
+    const limit: string | null = req.body.limit;
+    await pool.query(`UPDATE ${S}.users SET daily_limit = $2, daily_limit_note = $3, daily_limit_by = $4, daily_limit_at = now() WHERE id = $1`, [
+      u.id,
+      limit,
+      limit === null ? null : (req.body.note ?? null),
+      req.auth!.userId,
+    ]);
+    await audit({ userId: req.auth!.userId, action: 'admin.limit_user', entityType: 'user', entityId: u.id, details: { from: u.old, to: limit, note: req.body.note ?? null } }, req);
+    const now = limit ?? (await dailyLimitFor(u.id));
+    await notifyBi(undefined, u.id, 'limit_changed', ['Your daily transfer limit changed', `It is now ${now} ${env.CURRENCY} a day.`], ['تغيّر سقف تحويلك اليومي', `صار ${now} ${env.CURRENCY} باليوم.`], {
+      link: '/app/settings',
+    });
+    res.json({ success: true, data: { effective: now } });
   }),
 );

@@ -383,6 +383,7 @@ export function AdminSettings() {
   const { t, err, lang } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
+  const { can } = usePerm();
   const { data, reload, error } = useData<{ settings: Record<string, any>; defaultLimit?: string }>('/api/admin/settings');
   const [s, setS] = useState<Record<string, any> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -421,6 +422,7 @@ export function AdminSettings() {
         <Field label={t.admin.bankName} value={s.bank_name} onChange={(e) => setS({ ...s, bank_name: e.target.value })} minLength={2} maxLength={60} required />
         <Toggle checked={s.allow_registrations} onChange={(v) => setS({ ...s, allow_registrations: v })} label={t.admin.registrations} />
         <Toggle checked={s.maintenance_mode} onChange={(v) => setS({ ...s, maintenance_mode: v })} label={t.admin.maintenance} description={t.admin.maintenanceD} />
+        {can('limits.manage') && (
         <Link to="/app/admin/limits" className="flex items-center gap-3 rounded-2xl bg-sunk/60 p-3.5 transition hover:bg-sunk">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gold/15 text-gold">
             <Gauge className="h-5 w-5" />
@@ -431,6 +433,7 @@ export function AdminSettings() {
           </span>
           <ChevronLeft className="h-4 w-4 text-muted ltr:rotate-180" />
         </Link>
+        )}
         <Button loading={busy}>{t.common.save}</Button>
       </form>
       <MailCheck />

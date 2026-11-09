@@ -195,9 +195,32 @@ export async function assertDailyLimit(c: pg.PoolClient, walletPublicId: string,
     [walletPublicId],
     c,
   );
-  if (toCents(r?.total ?? '0') + toCents(amount) > toCents(env.DAILY_TRANSFER_LIMIT)) {
-    throw new AppError(409, 'DAILY_LIMIT', `Daily limit of ${env.DAILY_TRANSFER_LIMIT} ${env.CURRENCY} reached`);
+  const limit = await dailyLimitOfWallet(walletPublicId, c);
+  if (toCents(r?.total ?? '0') + toCents(amount) > toCents(limit)) {
+    throw new AppError(409, 'DAILY_LIMIT', `Daily limit of ${limit} ${env.CURRENCY} reached`);
   }
+}
+
+export const LIMIT_TYPES = ['user', 'merchant', 'exchange'] as const;
+
+/**
+ * Daily outgoing limit: one set for this person by staff wins; otherwise their account
+ * type's (set by staff); otherwise the app-wide one.
+ */
+export async function dailyLimitFor(userId: string, c?: pg.PoolClient): Promise<string> {
+  const r = await one<{ own: string | null; t: string | null }>(
+    `SELECT u.daily_limit::text AS own,
+            (CASE u.role WHEN 'merchant' THEN s.limit_merchant WHEN 'exchange' THEN s.limit_exchange ELSE s.limit_user END)::text AS t
+       FROM ${S}.users u LEFT JOIN ${S}.system_settings s ON s.id = 1 WHERE u.id = $1`,
+    [userId],
+    c,
+  );
+  return r?.own ?? r?.t ?? env.DAILY_TRANSFER_LIMIT;
+}
+
+async function dailyLimitOfWallet(walletPublicId: string, c?: pg.PoolClient): Promise<string> {
+  const w = await one<{ user_id: string }>(`SELECT user_id FROM ${S}.wallets WHERE wallet_id = $1`, [walletPublicId], c);
+  return w ? dailyLimitFor(w.user_id, c) : env.DAILY_TRANSFER_LIMIT;
 }
 
 export function assertMaxTransfer(amount: string) {

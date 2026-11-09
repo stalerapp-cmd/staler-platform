@@ -11,13 +11,13 @@ const GROUPS: { id: string; icon: LucideIcon; tone: string; perms: string[] }[] 
   { id: 'danger', icon: ShieldAlert, tone: 'text-stitch bg-stitch/10', perms: ['users.delete', 'users.force_delete', 'wallets.freeze', 'people.oversee'] },
   { id: 'commerce', icon: Store, tone: 'text-[rgb(150_105_10)] bg-gold/15 dark:text-gold', perms: ['stores.manage', 'stores.delete', 'agents.manage', 'orders.disputes', 'reports.manage'] },
   { id: 'comms', icon: Megaphone, tone: 'text-olive bg-olive/12', perms: ['support', 'notify', 'pending.manage'] },
-  { id: 'system', icon: Landmark, tone: 'text-night bg-night/10 dark:text-white dark:bg-white/10', perms: ['bank.ops', 'audit.view', 'settings.manage'] },
+  { id: 'system', icon: Landmark, tone: 'text-night bg-night/10 dark:text-white dark:bg-white/10', perms: ['bank.ops', 'audit.view', 'settings.manage', 'limits.manage'] },
 ];
 
 const RISK: Record<string, Risk> = {
   'users.view': 'low', 'support': 'low', 'pending.manage': 'low', 'audit.view': 'low',
   'users.money': 'mid', 'users.devices': 'mid', 'users.edit': 'mid', 'users.role': 'mid', 'users.status': 'mid', 'stores.manage': 'mid', 'agents.manage': 'mid', 'orders.disputes': 'mid', 'reports.manage': 'mid', 'people.oversee': 'high', 'notify': 'mid',
-  'users.password': 'high', 'users.security': 'high', 'users.delete': 'high', 'users.force_delete': 'high', 'wallets.freeze': 'high', 'stores.delete': 'high', 'bank.ops': 'high', 'settings.manage': 'high',
+  'users.password': 'high', 'users.security': 'high', 'users.delete': 'high', 'users.force_delete': 'high', 'wallets.freeze': 'high', 'stores.delete': 'high', 'bank.ops': 'high', 'settings.manage': 'high', 'limits.manage': 'high',
 };
 
 /** A permission that only makes sense with another one. */
@@ -31,7 +31,7 @@ const PRESETS: { id: string; icon: LucideIcon; perms: string[] | 'all' }[] = [
   { id: 'readonly', icon: Eye, perms: ['users.view', 'audit.view'] },
   { id: 'support', icon: Headset, perms: ['users.view', 'users.devices', 'support', 'pending.manage', 'orders.disputes', 'reports.manage'] },
   { id: 'moderator', icon: Wrench, perms: ['users.view', 'users.edit', 'users.status', 'stores.manage', 'agents.manage', 'orders.disputes', 'reports.manage', 'notify'] },
-  { id: 'finance', icon: Banknote, perms: ['users.view', 'users.money', 'wallets.freeze', 'bank.ops', 'audit.view', 'people.oversee'] },
+  { id: 'finance', icon: Banknote, perms: ['users.view', 'users.money', 'wallets.freeze', 'bank.ops', 'audit.view', 'people.oversee', 'limits.manage'] },
   { id: 'all', icon: Sparkles, perms: 'all' },
 ];
 
