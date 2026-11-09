@@ -53,3 +53,11 @@ export function localize(n: Notice, lang: Lang): { title: string; body: string |
   if (!hit || (/\d/.test(body) && !amt && n.type !== 'app_linked')) return { title: n.title, body: n.body };
   return { title: hit[0], body: hit[1] };
 }
+
+/** Where tapping a notification should take you. */
+export function targetOf(n: Notice): string | null {
+  const m = n.metadata ?? {};
+  if (typeof m.link === 'string' && m.link.startsWith('/app')) return m.link;
+  if (typeof m.conversationId === 'string') return `/app/messages/${m.conversationId}`;
+  return null;
+}

@@ -7,6 +7,7 @@ import { createApp } from '../src/app.js';
 import { migrate } from '../src/db/migrate.js';
 import { bootstrap } from '../src/db/bootstrap.js';
 import { pool } from '../src/lib/db.js';
+import { dispatchPush } from '../src/modules/push.js';
 import { reconcilePending } from '../src/modules/bank.js';
 import { newReserveKeypair } from '../src/lib/reserve.js';
 import { STALER_PORT, WEBHOOK_SECRET } from './env.js';
@@ -1395,5 +1396,35 @@ describe('pickup points', () => {
     expect(ok.status).toBe(201);
     const mine = await request(app).get('/api/store/orders').set(auth(buyer.token));
     expect(mine.body.data.orders[0].pickup_info.name).toBe('Old City counter');
+  });
+});
+
+
+describe('device notifications', () => {
+  it('subscribes a device, marks new notifications as sent once, unsubscribes', async () => {
+    const u = await walletUser(app, 'Push Person');
+    const k = await request(app).get('/api/push/key');
+    expect(k.status).toBe(200);
+    expect('key' in k.body.data).toBe(true);
+    const endpoint = `https://push.example.com/send/${crypto.randomUUID()}`;
+    const body = { endpoint, keys: { p256dh: 'B'.repeat(87), auth: 'a'.repeat(22) }, language: 'ar' };
+    expect((await request(app).post('/api/push/subscribe').send(body)).status).toBe(401);
+    expect((await request(app).post('/api/push/subscribe').set(auth(u.token)).send({ ...body, endpoint: 'http://insecure.example.com/x' })).status).toBe(400);
+    expect((await request(app).post('/api/push/subscribe').set(auth(u.token)).send(body)).status).toBe(201);
+    // the same device again just updates it
+    expect((await request(app).post('/api/push/subscribe').set(auth(u.token)).send({ ...body, language: 'en' })).status).toBe(201);
+    const subs = await pool.query(`SELECT language FROM public.push_subscriptions WHERE endpoint = $1`, [endpoint]);
+    expect(subs.rows).toEqual([{ language: 'en' }]);
+    await pool.query(`INSERT INTO public.notifications (user_id, type, title, body, metadata) VALUES ($1, 'test', 'Hello', 'World', '{}')`, [u.userId]);
+    // drain the queue (older test notifications come first)
+    for (let i = 0; i < 100; i++) {
+      await dispatchPush();
+      const q = await pool.query(`SELECT count(*)::int AS n FROM public.notifications WHERE pushed_at IS NULL`);
+      if (q.rows[0].n === 0) break;
+    }
+    const left = await pool.query(`SELECT count(*)::int AS n FROM public.notifications WHERE user_id = $1 AND pushed_at IS NULL`, [u.userId]);
+    expect(left.rows[0].n).toBe(0);
+    expect((await request(app).post('/api/push/unsubscribe').send({ endpoint })).status).toBe(200);
+    expect((await pool.query(`SELECT 1 FROM public.push_subscriptions WHERE endpoint = $1`, [endpoint])).rowCount).toBe(0);
   });
 });

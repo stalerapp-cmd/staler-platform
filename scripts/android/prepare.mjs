@@ -44,6 +44,14 @@ if (!m.includes('android.permission.CAMERA')) {
     `$1\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />`,
   );
 }
+// Pop-up notifications (Android 13+ asks the person; only used if they turn them on in Settings).
+if (!m.includes('android.permission.POST_NOTIFICATIONS')) {
+  m = m.replace(
+    /(<uses-permission android:name="android.permission.INTERNET"\s*\/>)/,
+    `$1\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />`,
+  );
+}
+
 // Support calls (voice, optional video) from the wallet app.
 if (scheme === 'taler' && !m.includes('android.permission.RECORD_AUDIO')) {
   m = m.replace(

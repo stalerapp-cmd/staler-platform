@@ -5,6 +5,7 @@ import { applySession, del, patch, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
 import { BioToggle } from '../components/AppLock';
+import { AlertSettings } from '../components/AlertSettings';
 import { useI18n } from '../lib/i18n';
 import { kindOf } from '../lib/kinds';
 import { useTheme } from '../lib/theme';
@@ -151,6 +152,9 @@ export default function Settings() {
           </div>
         </Section>
       )}
+      <Section title={lang === 'ar' ? 'الإشعارات على هالجهاز' : 'Notifications on this device'}>
+        <AlertSettings />
+      </Section>
       <Section title={t.settings.password}>
         {pwStep === 'form' ? (
           <form

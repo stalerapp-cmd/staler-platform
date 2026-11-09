@@ -1,4 +1,5 @@
 import { bioEnabled } from './biometric';
+import { detach } from './alerts';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { applySession, clearSession, post, get, refreshSession, session } from './api';
 
@@ -76,6 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // This device stops getting this person's notifications.
+    await detach();
     try {
       await post('/api/auth/logout');
     } catch {

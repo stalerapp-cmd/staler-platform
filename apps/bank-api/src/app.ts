@@ -1,4 +1,5 @@
 import express, { type Express } from 'express';
+import { pushRouter } from './modules/push.js';
 import { realIpMiddleware } from './lib/realIp.js';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
@@ -101,6 +102,7 @@ export function createApp(): Express {
   });
 
   app.use('/api/auth', noStore, authRouter);
+  app.use('/api/push', noStore, pushRouter);
   app.use('/api/withdrawals', noStore, withdrawalsRouter);
   app.use('/api', noStore, supportRouter);
   app.use('/api/admin', noStore, adminRouter);

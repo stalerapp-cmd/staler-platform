@@ -4,6 +4,7 @@
  * TalerBank — keep both copies identical.
  */
 const AR: Record<string, string> = {
+  'Bad push address': 'عنوان الإشعارات مش صالح',
   'Messages are between customers — staff answer in support': 'الرسائل بين الزباين — الموظفين بيردوا بالدعم',
   'Message is empty': 'الرسالة فاضية',
   'Message is too long': 'الرسالة طويلة كثير',

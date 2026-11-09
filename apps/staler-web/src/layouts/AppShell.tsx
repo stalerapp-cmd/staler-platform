@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -60,6 +60,7 @@ import { localize, targetOf, type Notice } from '../lib/notifications';
 import { InviteButtons } from '../components/PrivacySettings';
 import { RichText, plainText } from '../components/Mentions';
 import { CallOverlay } from '../components/CallOverlay';
+import { AlertCenter } from '../components/AlertCenter';
 import { useToast } from '../components/Toast';
 import { Logo, StitchBand } from '../components/Tatreez';
 import { StitchCorner } from '../components/HeaderStitch';
@@ -371,6 +372,12 @@ function MessagesButton() {
     }
   };
   useEffect(() => void load(), []);
+  useEffect(() => {
+    const on = () => void load();
+    window.addEventListener('app:notices-changed', on);
+    return () => window.removeEventListener('app:notices-changed', on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   usePolling(load, 30_000);
   return (
     <NavLink
@@ -391,24 +398,24 @@ function MessagesButton() {
 
 function Notifications() {
   const { t, lang } = useI18n();
-  const toast = useToast();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<{ notifications: Notice[]; unread: number } | null>(null);
-  const seen = useRef<string | null>(null);
   const load = async () => {
     try {
       const d = await get<{ notifications: Notice[]; unread: number }>('/api/notifications');
-      // Something new arrived while the app is open: show it right away.
-      const newest = d.notifications[0];
-      if (seen.current && newest && newest.id !== seen.current && !newest.is_read) toast(plainText(localize(newest, lang).title));
-      seen.current = newest?.id ?? '';
       setData(d);
     } catch {
       /* offline */
     }
   };
   useEffect(() => void load(), []);
+  useEffect(() => {
+    const on = () => void load();
+    window.addEventListener('app:notices-changed', on);
+    return () => window.removeEventListener('app:notices-changed', on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   usePolling(load, 15_000);
   return (
     <>
@@ -639,6 +646,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
               <MessagesButton />
               <Notifications />
               <CallOverlay />
+              <AlertCenter />
               <button onClick={signOut} className="hbtn hidden text-muted hover:bg-stitch/10 hover:text-stitch sm:grid" aria-label={t.common.signOut} title={t.common.signOut}>
                 <LogOut className="h-[19px] w-[19px] flip-rtl" />
               </button>

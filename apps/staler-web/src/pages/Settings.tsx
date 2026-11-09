@@ -9,6 +9,7 @@ import { applySession, assetUrl, del, patch, post, put, upload } from '../lib/ap
 import { useAuth } from '../lib/auth';
 import { RoleBadge } from '../components/RoleBadge';
 import { BioToggle } from '../components/AppLock';
+import { AlertSettings } from '../components/AlertSettings';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/hooks';
@@ -337,6 +338,9 @@ export default function Settings() {
         </div>
         <p className="mb-2 mt-5 text-sm font-medium text-ink/80">{t.settings.appearance}</p>
         <ThemePicker theme={theme} onChange={setTheme} />
+      </Section>
+      <Section title={lang === 'ar' ? 'الإشعارات على هالجهاز' : 'Notifications on this device'} icon={BellRing} tone="bg-sky/15 text-sky">
+        <AlertSettings />
       </Section>
       <StoreNotifications />
         </>

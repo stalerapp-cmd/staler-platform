@@ -9,6 +9,7 @@ import { reconcilePending } from './modules/bank.js';
 import { housekeeping } from './modules/housekeeping.js';
 import { runPayouts } from './modules/people.js';
 import { iceServers } from './modules/calls.js';
+import { startPushDispatcher } from './modules/push.js';
 
 async function main() {
   if (env.RUN_MIGRATIONS) await migrate();
@@ -35,6 +36,8 @@ async function main() {
     runPayouts().catch((err) => logger.warn({ err }, 'payouts failed'));
   }, 2 * 60_000);
   payouts.unref();
+  // Device notifications for people who turned them on.
+  startPushDispatcher();
   // Check the call relay once at start, so the logs say whether calls have TURN.
   if (process.env.ICE_URL) void iceServers();
   // TalerBank sleeps after a quiet spell on the hosting plan; while S-Taler is awake, keep it awake too.

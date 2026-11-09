@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ScrollCue } from '../components/ScrollCue';
 import { CallOverlay } from '../components/CallOverlay';
+import { AlertCenter } from '../components/AlertCenter';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -317,6 +318,12 @@ function Notifications() {
     }
   };
   useEffect(() => void load(), []);
+  useEffect(() => {
+    const on = () => void load();
+    window.addEventListener('app:notices-changed', on);
+    return () => window.removeEventListener('app:notices-changed', on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   usePolling(load, 30_000);
   return (
     <>
@@ -594,6 +601,7 @@ export default function AppShell({ children }: { children?: ReactNode }) {
       </div>
       <SupportSheet open={support} onClose={() => setSupport(false)} />
       <CallOverlay />
+      <AlertCenter />
     </div>
   );
 }

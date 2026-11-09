@@ -9,6 +9,7 @@ import {
   KeyRound,
   Landmark,
   LifeBuoy,
+  BellRing,
   Contact,
   MessagesSquare,
   PhoneCall,
@@ -130,6 +131,18 @@ const TOPICS: Topic[] = [
     steps: [
       ['Pick what it’s about and write. One team member takes it and stays with you; you see who.', 'اختار موضوعك واكتب. حدا من الفريق بيستلمه وبيضل معك، وبتشوف مين.'],
       ['When it’s closed, rate the help. Write again any time to start a new conversation.', 'لما تتسكّر قيّم المساعدة. واكتب وقت ما بدك لتبلّش محادثة جديدة.'],
+    ],
+  },
+  {
+    id: 'alerts',
+    who: 'all',
+    icon: BellRing,
+    title: ['Pop-up notifications and sound', 'إشعارات منبثقة وصوت'],
+    to: '/app/settings',
+    steps: [
+      ['Off until you turn them on, per device: Settings → “Notifications on this device”. Your browser or phone asks you to allow them.', 'مطفية لحد ما تشغّلها، لكل جهاز لحاله: الإعدادات ← «الإشعارات على هالجهاز». المتصفح أو الجوال بيسألك تسمح.'],
+      ['Transfers, messages and support replies then pop up right away — in another tab, on the laptop, in the phone’s browser or the app. Inside the app they slide in at the top; tap one to open it.', 'بعدها الحوالات والرسائل وردود الدعم بتطلعلك فورًا — بتاب ثانية، عاللابتوب، بمتصفح الجوال أو بالتطبيق. وجوا التطبيق بتنزل من فوق، واكبس عليها لتفتحها.'],
+      ['Add a short chime if you like, and press “Try it”. On iPhone, add the site to the Home Screen first. Signing out stops them on that device.', 'وبتقدر تضيف نغمة قصيرة واكبس «جرّب». عالآيفون، ضيف الموقع عالشاشة الرئيسية أول. ولما تطلع من حسابك بتوقف على هالجهاز.'],
     ],
   },
   {

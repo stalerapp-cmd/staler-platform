@@ -1,5 +1,6 @@
 import { env } from './config/env.js';
 import { startScheduledRunner } from './modules/scheduled.js';
+import { startPushDispatcher } from './modules/push.js';
 import { createApp } from './app.js';
 import { migrate } from './db/migrate.js';
 import { bootstrap } from './db/bootstrap.js';
@@ -33,6 +34,8 @@ async function main() {
   }, 10 * 60_000);
   timer.unref();
   startScheduledRunner();
+  // Device notifications for people who turned them on.
+  startPushDispatcher();
 
   const shutdown = (sig: string) => {
     logger.info({ sig }, 'shutting down');
